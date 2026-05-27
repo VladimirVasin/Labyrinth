@@ -238,7 +238,7 @@ namespace Labyrinth.UI
         {
             var availableWidth = Mathf.Max(330f, Screen.width - HeroPanelX - 18f);
             var width = Mathf.Min(480f, availableWidth);
-            var height = Mathf.Min(660f, Screen.height - 78f);
+            var height = Mathf.Min(720f, Screen.height - 78f);
             return new Rect(HeroPanelX, 66f, width, height);
         }
 
@@ -582,6 +582,18 @@ namespace Labyrinth.UI
                 return true;
             }
 
+            if (HeroInventory.IsDeathTokenItem(itemName))
+            {
+                DrawDeathTokenIcon(rect);
+                return true;
+            }
+
+            if (itemName == HeroInventory.ReturnStoneItemName)
+            {
+                DrawReturnStoneIcon(rect);
+                return true;
+            }
+
             if (IsFootwearItem(itemName))
             {
                 DrawBootIcon(rect);
@@ -618,6 +630,22 @@ namespace Labyrinth.UI
             FillRect(new Rect(rect.x + rect.width * 0.14f, rect.y + rect.height * 0.34f, rect.width * 0.72f, rect.height * 0.42f), new Color(1f, 0.68f, 0.15f));
             FillRect(new Rect(rect.x + rect.width * 0.24f, rect.y + rect.height * 0.22f, rect.width * 0.52f, rect.height * 0.18f), new Color(1f, 0.84f, 0.3f));
             FillRect(new Rect(rect.x + rect.width * 0.18f, rect.y + rect.height * 0.66f, rect.width * 0.64f, rect.height * 0.08f), new Color(0.62f, 0.34f, 0.05f));
+        }
+
+        private void DrawDeathTokenIcon(Rect rect)
+        {
+            DrawCircle(new Rect(rect.x + rect.width * 0.16f, rect.y + rect.height * 0.18f, rect.width * 0.68f, rect.height * 0.62f), new Color(0.82f, 0.78f, 0.58f));
+            FillRect(new Rect(rect.x + rect.width * 0.46f, rect.y + rect.height * 0.08f, rect.width * 0.08f, rect.height * 0.82f), new Color(0.32f, 0.19f, 0.12f));
+            FillRect(new Rect(rect.x + rect.width * 0.3f, rect.y + rect.height * 0.46f, rect.width * 0.4f, rect.height * 0.08f), new Color(0.34f, 0.24f, 0.15f));
+            DrawCircle(new Rect(rect.x + rect.width * 0.34f, rect.y + rect.height * 0.34f, rect.width * 0.32f, rect.height * 0.3f), new Color(0.96f, 0.9f, 0.68f));
+        }
+
+        private void DrawReturnStoneIcon(Rect rect)
+        {
+            DrawCircle(new Rect(rect.x + rect.width * 0.12f, rect.y + rect.height * 0.12f, rect.width * 0.76f, rect.height * 0.76f), new Color(0.34f, 0.58f, 1f));
+            DrawCircle(new Rect(rect.x + rect.width * 0.28f, rect.y + rect.height * 0.28f, rect.width * 0.44f, rect.height * 0.44f), new Color(0.9f, 0.96f, 1f));
+            FillRect(new Rect(rect.x + rect.width * 0.47f, rect.y + rect.height * 0.05f, rect.width * 0.06f, rect.height * 0.28f), new Color(0.78f, 0.9f, 1f));
+            FillRect(new Rect(rect.x + rect.width * 0.47f, rect.y + rect.height * 0.67f, rect.width * 0.06f, rect.height * 0.28f), new Color(0.78f, 0.9f, 1f));
         }
 
         private static void DrawBootIcon(Rect rect)

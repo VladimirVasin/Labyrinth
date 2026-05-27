@@ -25,6 +25,7 @@ namespace Labyrinth.Core
         private MazeGenerator generator;
         private MazeRenderer mazeRenderer;
         private MazeTerrain mazeTerrain;
+        private TerrainDecorationController terrainDecorations;
         private LabyrinthCameraController cameraController;
         private TimeScaleController timeScaleController;
         private ResourceWallet resources;
@@ -34,6 +35,7 @@ namespace Labyrinth.Core
         private ResourceProductionController productionController;
         private HeroConsumableAutomation consumableAutomation;
         private GoldIngotManager goldIngotManager;
+        private HeroDeathTokenManager deathTokenManager;
         private TaxCollectorController taxCollectorController;
         private DungeonFortificationController dungeonFortificationController;
         private MineConstructionController mineConstructionController;
@@ -82,8 +84,12 @@ namespace Labyrinth.Core
             generator = new MazeGenerator();
             mazeTerrain = gameObject.AddComponent<MazeTerrain>();
             mazeRenderer = gameObject.AddComponent<MazeRenderer>();
+            terrainDecorations = gameObject.AddComponent<TerrainDecorationController>();
+            baseDevelopment.ConfigurePlacementBlocker((position, footprintRadius) => terrainDecorations.BlocksBuilding(position, footprintRadius));
             baseAmbience = gameObject.AddComponent<BaseAmbienceController>();
+            baseAmbience.Configure(terrainDecorations);
             cityAmbience = gameObject.AddComponent<CityAmbienceController>();
+            cityAmbience.Configure(terrainDecorations);
             cameraController = gameObject.AddComponent<LabyrinthCameraController>();
             timeScaleController = gameObject.AddComponent<TimeScaleController>();
             productionController = gameObject.AddComponent<ResourceProductionController>();
@@ -91,6 +97,7 @@ namespace Labyrinth.Core
             consumableAutomation = new HeroConsumableAutomation(resources, baseDevelopment, mazeRenderer);
             goldIngotManager = gameObject.AddComponent<GoldIngotManager>();
             goldIngotManager.Configure(resources);
+            deathTokenManager = gameObject.AddComponent<HeroDeathTokenManager>();
             taxCollectorController = gameObject.AddComponent<TaxCollectorController>();
             taxCollectorController.Configure(resources, baseDevelopment, mazeRenderer);
             dungeonFortificationController = gameObject.AddComponent<DungeonFortificationController>();
@@ -422,6 +429,10 @@ namespace Labyrinth.Core
                 GetMarketStatus,
                 CanBuildMarket,
                 GetMarketCost,
+                BuildAntiquaryFromBase,
+                GetAntiquaryStatus,
+                CanBuildAntiquary,
+                GetAntiquaryCost,
                 GetHeroHouseStatus,
                 CreateHeroFromBase,
                 CanCreateHero,
@@ -463,9 +474,11 @@ namespace Labyrinth.Core
             victoryHud.Hide();
             cameraController.SetInteractionEnabled(false);
             mazeTerrain.Clear();
+            terrainDecorations.Clear();
             mazeRenderer.Clear();
             fogOfWarView.Clear();
             goldIngotManager.Clear();
+            deathTokenManager.Clear();
             taxCollectorController.Clear();
             dungeonFortificationController.Clear();
             mineConstructionController.Clear();
@@ -504,6 +517,7 @@ namespace Labyrinth.Core
             mazeTerrain.Render(currentMaze, mazeRenderer.CellSize);
             mazeTerrain.SetVisualVisible(true);
             currentBase = mazeRenderer.Render(currentMaze);
+            terrainDecorations.Render(currentMaze, mazeRenderer, baseDevelopment);
             baseAmbience.Initialize(currentMaze, mazeRenderer);
             cityAmbience.Initialize(currentMaze, mazeRenderer);
             taxCollectorController.Initialize(currentMaze);
@@ -524,6 +538,7 @@ namespace Labyrinth.Core
             var mobPositions = new HashSet<Vector2Int>();
             mobManager.CollectOccupiedPositions(mobPositions);
             goldIngotManager.Spawn(currentMaze, mazeRenderer, mobPositions);
+            deathTokenManager.Initialize(currentMaze, mazeRenderer, GetHeroHouseView);
             cameraController.Focus(mainCamera, currentMaze, mazeRenderer.CellSize, true);
             state = GameState.Playing;
             SetGameHudVisible(true);
@@ -587,11 +602,13 @@ namespace Labyrinth.Core
             combatController.CancelCombat();
             mobManager.Clear();
             goldIngotManager.Clear();
+            deathTokenManager.Clear();
             taxCollectorController.Clear();
             dungeonFortificationController.Clear();
             mineConstructionController.Clear();
             cameraController.SetInteractionEnabled(false);
             mazeTerrain.Clear();
+            terrainDecorations.Clear();
             mazeRenderer.Clear();
             fogOfWarView.Clear();
             baseAmbience.Clear();
@@ -704,6 +721,7 @@ namespace Labyrinth.Core
 
             if (resources.TrySpend(cost))
             {
+                ClearTerrainDecorationsAround(farmPosition, BaseDevelopment.FarmFootprintRadiusCells);
                 mazeRenderer.RenderFarm(farmPosition);
                 RefreshAllBuildingUpgradeVisuals();
                 baseAmbience.RegisterBuilding(BuildingType.Farm, farmPosition);
@@ -743,6 +761,7 @@ namespace Labyrinth.Core
 
             if (resources.TrySpend(cost))
             {
+                ClearTerrainDecorationsAround(shopPosition, BaseDevelopment.AlchemistShopFootprintRadiusCells);
                 mazeRenderer.RenderAlchemistShop(shopPosition);
                 RefreshAllBuildingUpgradeVisuals();
                 baseAmbience.RegisterBuilding(BuildingType.AlchemistShop, shopPosition);
@@ -783,6 +802,7 @@ namespace Labyrinth.Core
 
             if (resources.TrySpend(cost))
             {
+                ClearTerrainDecorationsAround(tavernPosition, BaseDevelopment.TavernFootprintRadiusCells);
                 mazeRenderer.RenderTavern(tavernPosition);
                 RefreshAllBuildingUpgradeVisuals();
                 baseAmbience.RegisterBuilding(BuildingType.Tavern, tavernPosition);

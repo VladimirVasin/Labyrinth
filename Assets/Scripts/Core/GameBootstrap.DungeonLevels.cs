@@ -335,6 +335,7 @@ namespace Labyrinth.Core
             cartographerMemory = GetCartographerMemoryForLevel(currentDungeonLevel, target.Grid);
 
             mazeTerrain.Clear();
+            terrainDecorations.Clear();
             mazeRenderer.Clear();
             fogOfWarView.Clear();
             mobManager.Clear();
@@ -360,6 +361,7 @@ namespace Labyrinth.Core
 
             if (includeBase)
             {
+                terrainDecorations.Render(target, mazeRenderer, baseDevelopment);
                 baseAmbience.Initialize(target, mazeRenderer);
                 cityAmbience.Initialize(target, mazeRenderer);
                 taxCollectorController.Initialize(target);
@@ -373,6 +375,7 @@ namespace Labyrinth.Core
             var mobPositions = new HashSet<Vector2Int>();
             mobManager.CollectOccupiedPositions(mobPositions);
             goldIngotManager.Spawn(target, mazeRenderer, mobPositions);
+            deathTokenManager.Initialize(target, mazeRenderer, GetHeroHouseView);
         }
 
         private HeroMemory GetCartographerMemoryForLevel(int levelNumber, MazeGrid grid)
@@ -417,7 +420,7 @@ namespace Labyrinth.Core
                     continue;
                 }
 
-                hero.TransferToLevel(currentMaze, start, mazeRenderer, goldIngotManager, SyncHeroKnowledgeAtEntrance, HandleDownStairsOpened);
+                hero.TransferToLevel(currentMaze, start, mazeRenderer, goldIngotManager, deathTokenManager, SyncHeroKnowledgeAtEntrance, HandleDownStairsOpened);
                 hero.SetFortifiedCellProvider(IsHeroMovementFortifiedCell);
             }
         }
@@ -503,6 +506,12 @@ namespace Labyrinth.Core
             {
                 MarketRenderer.Render(mazeRenderer, baseDevelopment.MarketPosition);
                 RegisterExistingBuilding(BuildingType.Market, baseDevelopment.MarketPosition);
+            }
+
+            if (baseDevelopment.HasAntiquary)
+            {
+                AntiquaryRenderer.Render(mazeRenderer, baseDevelopment.AntiquaryPosition);
+                RegisterExistingBuilding(BuildingType.Antiquary, baseDevelopment.AntiquaryPosition);
             }
 
             RefreshAllBuildingUpgradeVisuals();

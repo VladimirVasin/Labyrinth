@@ -1,4 +1,5 @@
 using System;
+using Labyrinth.Combat;
 using Labyrinth.Core;
 using Labyrinth.Maze;
 using UnityEngine;
@@ -14,6 +15,7 @@ namespace Labyrinth.Hero
         private const float ActivityTraceInterval = 8f;
 
         private MazeGrid grid;
+        private MazeRenderer mazeRenderer;
         private HeroExplorer explorer;
         private HeroView heroView;
         private HeroMemoryView memoryView;
@@ -50,12 +52,13 @@ namespace Labyrinth.Hero
             HeroMemory memory,
             HeroMemoryView memoryView,
             GoldIngotManager goldIngotManager,
+            HeroDeathTokenManager deathTokenManager,
             Action<HeroModel, int> entranceKnowledgeSync,
             Action<HeroModel, int, DungeonStairsModel> downStairsOpened)
         {
             var controllerObject = new GameObject("HeroController");
             var controller = controllerObject.AddComponent<HeroController>();
-            controller.Initialize(result, startPosition, displayNumber, mazeRenderer, memory, memoryView, goldIngotManager, entranceKnowledgeSync, downStairsOpened);
+            controller.Initialize(result, startPosition, displayNumber, mazeRenderer, memory, memoryView, goldIngotManager, deathTokenManager, entranceKnowledgeSync, downStairsOpened);
             return controller;
         }
 
@@ -149,6 +152,28 @@ namespace Labyrinth.Hero
             heroView.SetGridPositionImmediate(position);
         }
 
+        public bool TryUseReturnStoneToEntrance()
+        {
+            if (Model == null || explorer == null || mazeRenderer == null || !explorer.TryUseReturnStoneToEntrance())
+            {
+                return false;
+            }
+
+            RefreshVisibility();
+            RefreshMemoryView();
+            heroView.SetGridPositionImmediate(Model.Position);
+            timeUntilNextStep = GetCurrentStepInterval();
+            DamageNumberView.CreateText(
+                mazeRenderer,
+                Model.Position,
+                HeroInventory.ReturnStoneItemName,
+                new Color(0.58f, 0.82f, 1f),
+                2.1f);
+            GameAudioController.Play(GameSfx.LevelSwitch, mazeRenderer.GridToWorld(Model.Position), 0.78f);
+            LogStateChangeIfNeeded("return-stone");
+            return true;
+        }
+
         public void FaceGridPosition(Vector2Int position)
         {
             heroView.FaceGridPosition(position);
@@ -186,6 +211,15 @@ namespace Labyrinth.Hero
             }
 
             if (explorationPaused)
+            {
+                LogActivityTrace();
+                return;
+            }
+
+            if ((Model.State == HeroState.ReturningToCastle || Model.State == HeroState.Stuck)
+                && Model.Inventory != null
+                && Model.Inventory.HasReturnStone
+                && TryUseReturnStoneToEntrance())
             {
                 LogActivityTrace();
                 return;
@@ -232,14 +266,16 @@ namespace Labyrinth.Hero
             HeroMemory memory,
             HeroMemoryView sharedMemoryView,
             GoldIngotManager goldIngotManager,
+            HeroDeathTokenManager deathTokenManager,
             Action<HeroModel, int> entranceKnowledgeSync,
             Action<HeroModel, int, DungeonStairsModel> downStairsOpened)
         {
             grid = result.Grid;
+            this.mazeRenderer = mazeRenderer;
             entrancePosition = startPosition;
             DisplayNumber = displayNumber;
             Model = new HeroModel(startPosition, memory);
-            explorer = new HeroExplorer(result, Model, startPosition, displayNumber, mazeRenderer, goldIngotManager, entranceKnowledgeSync, downStairsOpened);
+            explorer = new HeroExplorer(result, Model, startPosition, displayNumber, mazeRenderer, goldIngotManager, deathTokenManager, entranceKnowledgeSync, downStairsOpened);
             corpseExpired = false;
             corpseVisibilityRemaining = 0f;
 
@@ -261,6 +297,7 @@ namespace Labyrinth.Hero
             Vector2Int startPosition,
             MazeRenderer mazeRenderer,
             GoldIngotManager goldIngotManager,
+            HeroDeathTokenManager deathTokenManager,
             Action<HeroModel, int> entranceKnowledgeSync,
             Action<HeroModel, int, DungeonStairsModel> downStairsOpened)
         {
@@ -270,6 +307,7 @@ namespace Labyrinth.Hero
             }
 
             grid = result.Grid;
+            this.mazeRenderer = mazeRenderer;
             entrancePosition = startPosition;
             Model.Memory.Reset(result.Grid);
             Model.Memory.Remember(startPosition);
@@ -278,7 +316,7 @@ namespace Labyrinth.Hero
             Model.ClearExpeditionBlessings();
             Model.SetState(HeroState.Exploring);
             Model.Visibility.Clear();
-            explorer = new HeroExplorer(result, Model, startPosition, DisplayNumber, mazeRenderer, goldIngotManager, entranceKnowledgeSync, downStairsOpened);
+            explorer = new HeroExplorer(result, Model, startPosition, DisplayNumber, mazeRenderer, goldIngotManager, deathTokenManager, entranceKnowledgeSync, downStairsOpened);
             corpseExpired = false;
             corpseVisibilityRemaining = 0f;
             explorationPaused = false;

@@ -34,6 +34,7 @@ namespace Labyrinth.Core
                 return;
             }
 
+            ClearTerrainDecorationsAround(guildPosition, BaseDevelopment.MinersGuildFootprintRadiusCells);
             MinersGuildRenderer.Render(mazeRenderer, guildPosition);
             baseAmbience.RegisterBuilding(BuildingType.MinersGuild, guildPosition);
             cityAmbience.RegisterBuilding(BuildingType.MinersGuild, guildPosition);

@@ -17,7 +17,8 @@ namespace Labyrinth.Base
         CartographerHouse,
         Chapel,
         MinersGuild,
-        Market
+        Market,
+        Antiquary
     }
 
     public sealed class BuildingView : MonoBehaviour
@@ -167,6 +168,7 @@ namespace Labyrinth.Base
                 case BuildingType.Chapel:
                 case BuildingType.MinersGuild:
                 case BuildingType.Market:
+                case BuildingType.Antiquary:
                 case BuildingType.HeroHouse:
                 case BuildingType.Tavern:
                     return 4.25f;
@@ -199,6 +201,8 @@ namespace Labyrinth.Base
                     return "Шахтёры";
                 case BuildingType.Market:
                     return "Рынок";
+                case BuildingType.Antiquary:
+                    return "Антиквариат";
                 case BuildingType.PeasantHut:
                     return "Лачуга";
                 default:

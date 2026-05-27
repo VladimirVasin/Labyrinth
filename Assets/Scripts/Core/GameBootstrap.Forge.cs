@@ -30,6 +30,7 @@ namespace Labyrinth.Core
 
             if (resources.TrySpend(cost))
             {
+                ClearTerrainDecorationsAround(forgePosition, BaseDevelopment.ForgeFootprintRadiusCells);
                 ForgeRenderer.Render(mazeRenderer, forgePosition);
                 RefreshAllBuildingUpgradeVisuals();
                 baseAmbience.RegisterBuilding(BuildingType.Forge, forgePosition);

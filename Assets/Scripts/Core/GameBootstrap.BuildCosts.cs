@@ -47,6 +47,11 @@ namespace Labyrinth.Core
             return BaseDevelopment.MinersGuildCost;
         }
 
+        private BuildingCost GetAntiquaryCost()
+        {
+            return BaseDevelopment.AntiquaryCost;
+        }
+
         private BuildingCost GetHeroCost()
         {
             return BaseDevelopment.HeroCost;

@@ -137,13 +137,13 @@ namespace Labyrinth.Mobs
             switch (species)
             {
                 case MobSpecies.Orc:
-                    return new MobStats(44, 10, 4);
+                    return new MobStats(38, 8, 3);
                 case MobSpecies.Goblin:
-                    return new MobStats(24, 7, 2);
+                    return new MobStats(18, 5, 1);
                 case MobSpecies.Rat:
-                    return new MobStats(12, 4, 0);
+                    return new MobStats(9, 3, 0);
                 default:
-                    return new MobStats(24, 7, 2);
+                    return new MobStats(18, 5, 1);
             }
         }
 

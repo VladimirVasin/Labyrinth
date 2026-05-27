@@ -63,7 +63,9 @@
     <Compile Include="Assets\Scripts\Core\ObjectMicroHudTarget.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.Upgrades.cs" />
     <Compile Include="Assets\Scripts\Base\BuildingView.cs" />
+    <Compile Include="Assets\Scripts\Core\HeroDeathTokenManager.cs" />
     <Compile Include="Assets\Scripts\Maze\ChestView.cs" />
+    <Compile Include="Assets\Scripts\Core\GameBootstrap.Antiquary.cs" />
     <Compile Include="Assets\Scripts\Maze\MarketRenderer.cs" />
     <Compile Include="Assets\Scripts\Mobs\MobManager.SpawnSelection.cs" />
     <Compile Include="Assets\Scripts\Core\DungeonFortificationController.cs" />
@@ -90,6 +92,7 @@
     <Compile Include="Assets\Scripts\Core\CityAmbienceController.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.LumberjackCamp.cs" />
     <Compile Include="Assets\Scripts\UI\BuildingMicroHudView.cs" />
+    <Compile Include="Assets\Scripts\Core\GameBootstrap.TerrainDecorations.cs" />
     <Compile Include="Assets\Scripts\UI\ObjectMicroHudView.cs" />
     <Compile Include="Assets\Scripts\UI\MapHudView.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.Market.cs" />
@@ -115,14 +118,17 @@
     <Compile Include="Assets\Scripts\Maze\BuildingUpgradeVisuals.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
     <Compile Include="Assets\Scripts\Core\GoldIngotManager.cs" />
+    <Compile Include="Assets\Scripts\Core\HeroDeathTokenModel.cs" />
     <Compile Include="Assets\Scripts\Maze\ForgeRenderer.cs" />
     <Compile Include="Assets\Scripts\Maze\BuildingDetailRenderer.cs" />
+    <Compile Include="Assets\Scripts\Maze\AntiquaryRenderer.cs" />
     <Compile Include="Assets\Scripts\UI\BuildingServiceCatalog.cs" />
     <Compile Include="Assets\Scripts\Core\MineConstructionController.Runtime.cs" />
     <Compile Include="Assets\Scripts\Mobs\MobModel.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.PeasantHuts.cs" />
     <Compile Include="Assets\Scripts\Core\ResourceProductionController.cs" />
     <Compile Include="Assets\Scripts\Core\MazeGenerationSettings.cs" />
+    <Compile Include="Assets\Scripts\Maze\TerrainDecorationController.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.Selection.cs" />
     <Compile Include="Assets\Scripts\UI\MobHudView.cs" />
     <Compile Include="Assets\Scripts\Core\MarketExchange.cs" />

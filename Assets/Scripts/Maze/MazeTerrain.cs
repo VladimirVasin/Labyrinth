@@ -1,3 +1,4 @@
+using Labyrinth.Core;
 using UnityEngine;
 
 namespace Labyrinth.Maze
@@ -9,8 +10,9 @@ namespace Labyrinth.Maze
         private const int DiffuseTextureSize = 128;
         public const int PaddingCells = 24;
         private const float SurfaceYOffset = -0.08f;
-        private const float VisualSurfaceYOffset = -0.062f;
+        private const float VisualSurfaceYOffset = -0.09f;
         private const float TerrainHeight = 0.16f;
+        private const float VisualHillHeightFactor = 0.055f;
 
         private GameObject terrainObject;
         private GameObject visualGroundObject;
@@ -38,7 +40,7 @@ namespace Labyrinth.Maze
                 size = new Vector3(bounds.width, TerrainHeight, bounds.depth)
             };
 
-            terrainData.SetHeights(0, 0, CreateGroundHeights());
+            terrainData.SetHeights(0, 0, CreateGroundHeights(result));
             terrainLayer = CreateTerrainLayer(cellSize);
             terrainData.terrainLayers = new[] { terrainLayer };
             terrainData.SetAlphamaps(0, 0, CreateFullAlphamap());
@@ -63,7 +65,7 @@ namespace Labyrinth.Maze
                 collider.terrainData = terrainData;
             }
 
-            visualGroundObject = CreateVisualGround(bounds, terrainLayer.tileSize.x);
+            visualGroundObject = CreateVisualGround(bounds, terrainLayer.tileSize.x, result, cellSize);
         }
 
         public void Clear()
@@ -132,27 +134,56 @@ namespace Labyrinth.Maze
             };
         }
 
-        private GameObject CreateVisualGround(TerrainBounds bounds, float tileSize)
+        private GameObject CreateVisualGround(TerrainBounds bounds, float tileSize, MazeGenerationResult result, float cellSize)
         {
             visualGroundMesh = new Mesh
             {
                 name = "Terrain Meadow Visual Mesh"
             };
-            visualGroundMesh.vertices = new[]
+
+            var cellsX = result.Grid.Width + PaddingCells * 2;
+            var cellsZ = result.Grid.Height + PaddingCells * 2;
+            var verticesX = cellsX + 1;
+            var verticesZ = cellsZ + 1;
+            var vertices = new Vector3[verticesX * verticesZ];
+            var uvs = new Vector2[vertices.Length];
+
+            for (var z = 0; z < verticesZ; z++)
             {
-                new Vector3(0f, 0f, 0f),
-                new Vector3(bounds.width, 0f, 0f),
-                new Vector3(0f, 0f, bounds.depth),
-                new Vector3(bounds.width, 0f, bounds.depth)
-            };
-            visualGroundMesh.triangles = new[] { 0, 2, 1, 2, 3, 1 };
-            visualGroundMesh.uv = new[]
+                for (var x = 0; x < verticesX; x++)
+                {
+                    var index = z * verticesX + x;
+                    var localX = x * cellSize;
+                    var localZ = z * cellSize;
+                    var gridX = x - PaddingCells - 0.5f;
+                    var gridY = z - PaddingCells - 0.5f;
+                    vertices[index] = new Vector3(localX, SampleVisualGroundHeight(result, gridX, gridY, cellSize), localZ);
+                    uvs[index] = new Vector2(localX / tileSize, localZ / tileSize);
+                }
+            }
+
+            var triangles = new int[cellsX * cellsZ * 6];
+            var triangleIndex = 0;
+            for (var z = 0; z < cellsZ; z++)
             {
-                new Vector2(0f, 0f),
-                new Vector2(bounds.width / tileSize, 0f),
-                new Vector2(0f, bounds.depth / tileSize),
-                new Vector2(bounds.width / tileSize, bounds.depth / tileSize)
-            };
+                for (var x = 0; x < cellsX; x++)
+                {
+                    var a = z * verticesX + x;
+                    var b = a + 1;
+                    var c = a + verticesX;
+                    var d = c + 1;
+                    triangles[triangleIndex++] = a;
+                    triangles[triangleIndex++] = c;
+                    triangles[triangleIndex++] = b;
+                    triangles[triangleIndex++] = b;
+                    triangles[triangleIndex++] = c;
+                    triangles[triangleIndex++] = d;
+                }
+            }
+
+            visualGroundMesh.vertices = vertices;
+            visualGroundMesh.triangles = triangles;
+            visualGroundMesh.uv = uvs;
             visualGroundMesh.RecalculateNormals();
             visualGroundMesh.RecalculateBounds();
 
@@ -166,15 +197,15 @@ namespace Labyrinth.Maze
 
         private Material CreateVisualGroundMaterial()
         {
-            var shader = Shader.Find("Universal Render Pipeline/Unlit");
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
             if (shader == null)
             {
-                shader = Shader.Find("Unlit/Texture");
+                shader = Shader.Find("Standard");
             }
 
             if (shader == null)
             {
-                shader = Shader.Find("Standard");
+                shader = Shader.Find("Unlit/Texture");
             }
 
             visualGroundMaterial = new Material(shader)
@@ -220,7 +251,7 @@ namespace Labyrinth.Maze
             return texture;
         }
 
-        private static float[,] CreateGroundHeights()
+        private static float[,] CreateGroundHeights(MazeGenerationResult result)
         {
             var heights = new float[HeightmapResolution, HeightmapResolution];
             for (var y = 0; y < HeightmapResolution; y++)
@@ -229,13 +260,80 @@ namespace Labyrinth.Maze
                 {
                     var u = (float)x / (HeightmapResolution - 1);
                     var v = (float)y / (HeightmapResolution - 1);
-                    var broad = Mathf.PerlinNoise(u * 3.2f + 11.7f, v * 3.2f + 4.9f);
-                    var fine = Mathf.PerlinNoise(u * 12.5f + 2.1f, v * 12.5f + 18.6f);
-                    heights[y, x] = Mathf.Clamp01((broad * 0.62f + fine * 0.38f - 0.28f) * 0.08f);
+                    var gridX = Mathf.Lerp(-PaddingCells - 0.5f, result.Grid.Width - 0.5f + PaddingCells, u);
+                    var gridY = Mathf.Lerp(-PaddingCells - 0.5f, result.Grid.Height - 0.5f + PaddingCells, v);
+                    var mask = CalculateHillMask(result, gridX, gridY);
+                    var broad = Mathf.PerlinNoise((gridX + SeedOffset(result, 13)) * 0.075f, (gridY - SeedOffset(result, 29)) * 0.075f);
+                    var fine = Mathf.PerlinNoise((gridX - SeedOffset(result, 41)) * 0.18f, (gridY + SeedOffset(result, 53)) * 0.18f);
+                    heights[y, x] = Mathf.Clamp01((broad * 0.72f + fine * 0.28f - 0.34f) * 0.2f * mask);
                 }
             }
 
             return heights;
+        }
+
+        private static float SampleVisualGroundHeight(MazeGenerationResult result, float gridX, float gridY, float cellSize)
+        {
+            var mask = CalculateHillMask(result, gridX, gridY);
+            if (mask <= 0.001f)
+            {
+                return 0f;
+            }
+
+            var broad = Mathf.PerlinNoise((gridX + SeedOffset(result, 7)) * 0.07f, (gridY + SeedOffset(result, 17)) * 0.07f);
+            var medium = Mathf.PerlinNoise((gridX - SeedOffset(result, 31)) * 0.15f, (gridY + SeedOffset(result, 43)) * 0.15f);
+            var ridge = Mathf.Clamp01((broad - 0.43f) * 1.75f);
+            var height = (ridge * 0.78f + medium * 0.22f) * cellSize * VisualHillHeightFactor;
+            return height * mask;
+        }
+
+        private static float CalculateHillMask(MazeGenerationResult result, float gridX, float gridY)
+        {
+            var mazeDistance = DistanceOutsideRect(
+                gridX,
+                gridY,
+                -1.5f,
+                result.Grid.Width + 0.5f,
+                -1.5f,
+                result.Grid.Height + 0.5f);
+            var mazeMask = Mathf.InverseLerp(2.5f, 8f, mazeDistance);
+
+            var baseDistance = Mathf.Max(Mathf.Abs(gridX - result.BasePosition.x), Mathf.Abs(gridY - result.BasePosition.y));
+            var baseMask = Mathf.InverseLerp(
+                BaseDevelopment.CastleFootprintRadiusCells + 2.5f,
+                BaseDevelopment.CastleFootprintRadiusCells + 8f,
+                baseDistance);
+
+            var roadMask = CalculateEntranceRoadMask(result, gridX, gridY);
+            return Mathf.Clamp01(Mathf.Min(mazeMask, baseMask, roadMask));
+        }
+
+        private static float CalculateEntranceRoadMask(MazeGenerationResult result, float gridX, float gridY)
+        {
+            var minX = Mathf.Min(result.BasePosition.x, result.EntrancePosition.x) - 2.25f;
+            var maxX = Mathf.Max(result.BasePosition.x, result.EntrancePosition.x) + 2.25f;
+            var minY = Mathf.Min(result.BasePosition.y, result.EntrancePosition.y) - 2.25f;
+            var maxY = Mathf.Max(result.BasePosition.y, result.EntrancePosition.y) + 2.25f;
+            var distance = DistanceOutsideRect(gridX, gridY, minX, maxX, minY, maxY);
+            return Mathf.InverseLerp(0.5f, 4f, distance);
+        }
+
+        private static float DistanceOutsideRect(float x, float y, float minX, float maxX, float minY, float maxY)
+        {
+            var dx = Mathf.Max(minX - x, 0f, x - maxX);
+            var dy = Mathf.Max(minY - y, 0f, y - maxY);
+            return Mathf.Sqrt(dx * dx + dy * dy);
+        }
+
+        private static float SeedOffset(MazeGenerationResult result, int salt)
+        {
+            unchecked
+            {
+                var hash = result.Settings.Seed ^ salt * 16777619;
+                hash ^= hash >> 13;
+                hash *= 1274126177;
+                return (hash & 0x7fffffff) * 0.000002f;
+            }
         }
 
         private static Color SampleGroundColor(float u, float v, int x, int y)

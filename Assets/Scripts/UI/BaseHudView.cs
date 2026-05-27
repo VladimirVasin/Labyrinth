@@ -18,6 +18,7 @@ namespace Labyrinth.UI
         private Action buildChapelRequested;
         private Action buildMinersGuildRequested;
         private Action buildMarketRequested;
+        private Action buildAntiquaryRequested;
         private Action createHeroRequested;
         private Action mineSelectionRequested;
         private Action<BuildingUpgradeType> upgradeRequested;
@@ -31,6 +32,7 @@ namespace Labyrinth.UI
         private Func<string> chapelStatusProvider;
         private Func<string> minersGuildStatusProvider;
         private Func<string> marketStatusProvider;
+        private Func<string> antiquaryStatusProvider;
         private Func<string> mineStatusProvider;
         private Func<string> heroHouseStatusProvider;
         private Func<BuildingCost> farmCostProvider;
@@ -43,6 +45,7 @@ namespace Labyrinth.UI
         private Func<BuildingCost> chapelCostProvider;
         private Func<BuildingCost> minersGuildCostProvider;
         private Func<BuildingCost> marketCostProvider;
+        private Func<BuildingCost> antiquaryCostProvider;
         private Func<BuildingCost> heroCostProvider;
         private Func<bool> canBuildFarmProvider;
         private Func<bool> canBuildLumberjackCampProvider;
@@ -54,6 +57,7 @@ namespace Labyrinth.UI
         private Func<bool> canBuildChapelProvider;
         private Func<bool> canBuildMinersGuildProvider;
         private Func<bool> canBuildMarketProvider;
+        private Func<bool> canBuildAntiquaryProvider;
         private Func<bool> canStartMineSelectionProvider;
         private Func<bool> canCreateHeroProvider;
         private Func<BuildingUpgradeType, string> upgradeStatusProvider;
@@ -139,6 +143,10 @@ namespace Labyrinth.UI
             Func<string> onMarketStatusRequested,
             Func<bool> onCanBuildMarketRequested,
             Func<BuildingCost> onMarketCostRequested,
+            Action onBuildAntiquaryRequested,
+            Func<string> onAntiquaryStatusRequested,
+            Func<bool> onCanBuildAntiquaryRequested,
+            Func<BuildingCost> onAntiquaryCostRequested,
             Func<string> onHeroHouseStatusRequested,
             Action onCreateHeroRequested,
             Func<bool> onCanCreateHeroRequested,
@@ -162,6 +170,7 @@ namespace Labyrinth.UI
             buildChapelRequested = onBuildChapelRequested;
             buildMinersGuildRequested = onBuildMinersGuildRequested;
             buildMarketRequested = onBuildMarketRequested;
+            buildAntiquaryRequested = onBuildAntiquaryRequested;
             farmStatusProvider = onFarmStatusRequested;
             canBuildFarmProvider = onCanBuildFarmRequested;
             farmCostProvider = onFarmCostRequested;
@@ -192,6 +201,9 @@ namespace Labyrinth.UI
             marketStatusProvider = onMarketStatusRequested;
             canBuildMarketProvider = onCanBuildMarketRequested;
             marketCostProvider = onMarketCostRequested;
+            antiquaryStatusProvider = onAntiquaryStatusRequested;
+            canBuildAntiquaryProvider = onCanBuildAntiquaryRequested;
+            antiquaryCostProvider = onAntiquaryCostRequested;
             heroHouseStatusProvider = onHeroHouseStatusRequested;
             createHeroRequested = onCreateHeroRequested;
             canCreateHeroProvider = onCanCreateHeroRequested;
@@ -378,6 +390,17 @@ namespace Labyrinth.UI
                 CanBuildMarket(),
                 GetMarketStatus().StartsWith("построен") ? "Построено" : "Построить",
                 buildMarketRequested);
+
+            DrawActionCard(
+                new Rect(rightX, y, cardWidth, cardHeight),
+                "◆",
+                "Антиквариат",
+                "Редкие артефакты",
+                CleanStatus(GetAntiquaryStatus(), GetAntiquaryCost()),
+                GetAntiquaryCost(),
+                CanBuildAntiquary(),
+                GetAntiquaryStatus().StartsWith("построен") ? "Построено" : "Построить",
+                buildAntiquaryRequested);
         }
 
         private void DrawHeroesTab(Rect rect)
@@ -539,6 +562,11 @@ namespace Labyrinth.UI
             return marketStatusProvider != null ? marketStatusProvider.Invoke() : "не построен";
         }
 
+        private string GetAntiquaryStatus()
+        {
+            return antiquaryStatusProvider != null ? antiquaryStatusProvider.Invoke() : "не построен";
+        }
+
         private string GetMineStatus()
         {
             return mineStatusProvider != null ? mineStatusProvider.Invoke() : "нужна Гильдия шахтёров";
@@ -648,6 +676,16 @@ namespace Labyrinth.UI
         private BuildingCost GetMarketCost()
         {
             return marketCostProvider != null ? marketCostProvider.Invoke() : BaseDevelopment.MarketCost;
+        }
+
+        private bool CanBuildAntiquary()
+        {
+            return canBuildAntiquaryProvider == null || canBuildAntiquaryProvider.Invoke();
+        }
+
+        private BuildingCost GetAntiquaryCost()
+        {
+            return antiquaryCostProvider != null ? antiquaryCostProvider.Invoke() : BaseDevelopment.AntiquaryCost;
         }
 
         private bool CanStartMineSelection()

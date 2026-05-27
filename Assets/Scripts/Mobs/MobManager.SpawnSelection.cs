@@ -62,11 +62,11 @@ namespace Labyrinth.Mobs
             }
 
             var distanceRatio = distance / (float)maxDistanceFromEntrance;
-            var goblinChance = distanceRatio <= 0.45f
-                ? 0.7
+            var goblinChance = distanceRatio <= 0.4f
+                ? 0.88
                 : distanceRatio <= 0.7f
-                    ? 0.45
-                    : 0.2;
+                    ? 0.58
+                    : 0.25;
             return random.NextDouble() < goblinChance ? MobSpecies.Goblin : MobSpecies.Orc;
         }
 
@@ -110,11 +110,11 @@ namespace Labyrinth.Mobs
             switch (stage)
             {
                 case MobThreatStage.Early:
-                    return new RespawnWeights(55, 35, 10);
+                    return new RespawnWeights(68, 28, 4);
                 case MobThreatStage.RatFade:
-                    return new RespawnWeights(30, 55, 15);
+                    return new RespawnWeights(38, 50, 12);
                 case MobThreatStage.GoblinCore:
-                    return new RespawnWeights(10, 65, 25);
+                    return new RespawnWeights(15, 62, 23);
                 case MobThreatStage.OrcRise:
                     return new RespawnWeights(0, 55, 45);
                 case MobThreatStage.OrcDominant:
@@ -153,22 +153,22 @@ namespace Labyrinth.Mobs
 
             var averageLevel = totalLevel / (float)aliveCount;
             var threatLevel = Mathf.Max(averageLevel, highestLevel - 2f);
-            if (threatLevel <= 2f)
+            if (threatLevel <= 3f)
             {
                 return MobThreatStage.Early;
             }
 
-            if (threatLevel <= 5f)
+            if (threatLevel <= 6f)
             {
                 return MobThreatStage.RatFade;
             }
 
-            if (threatLevel <= 8f)
+            if (threatLevel <= 9f)
             {
                 return MobThreatStage.GoblinCore;
             }
 
-            return threatLevel <= 12f ? MobThreatStage.OrcRise : MobThreatStage.OrcDominant;
+            return threatLevel <= 13f ? MobThreatStage.OrcRise : MobThreatStage.OrcDominant;
         }
 
         private static bool IsRatSection(MazeGenerationResult result, Vector2Int position)

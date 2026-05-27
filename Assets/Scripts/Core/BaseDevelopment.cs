@@ -27,8 +27,11 @@ namespace Labyrinth.Core
         public const int MinersGuildWoodCost = 25;
         public const int MarketGoldCost = 70;
         public const int MarketWoodCost = 20;
+        public const int AntiquaryGoldCost = 80;
+        public const int AntiquaryWoodCost = 25;
         public const int HeroGoldCost = 25;
         public const int HeroFoodCost = 10;
+        public const int ReturnStoneGoldCost = 100;
         public const int HealthPotionGoldCost = 10;
         public const int HealthPotionBaseHealAmount = 5;
         public const int HealthPotionUpgradedHealAmount = 7;
@@ -67,6 +70,7 @@ namespace Labyrinth.Core
         public const int ChapelFootprintRadiusCells = 2;
         public const int MinersGuildFootprintRadiusCells = 2;
         public const int MarketFootprintRadiusCells = 2;
+        public const int AntiquaryFootprintRadiusCells = 2;
         public const int BuildingVisibilityPaddingCells = 1;
 
         private const int MinimumBuildingGapCells = 1;
@@ -84,6 +88,8 @@ namespace Labyrinth.Core
         private Vector2Int? chapelPosition;
         private Vector2Int? minersGuildPosition;
         private Vector2Int? marketPosition;
+        private Vector2Int? antiquaryPosition;
+        private Func<Vector2Int, int, bool> buildingPlacementBlocker;
         private int castleLevel = 1;
         private int farmLevel = 1;
         private int lumberjackCampLevel = 1;
@@ -140,7 +146,8 @@ namespace Labyrinth.Core
             + (HasCartographerHouse ? 1 : 0)
             + (HasChapel ? 1 : 0)
             + (HasMinersGuild ? 1 : 0)
-            + (HasMarket ? 1 : 0);
+            + (HasMarket ? 1 : 0)
+            + (HasAntiquary ? 1 : 0);
 
         public int RequiredPeasantHutCount => ActivePlayerBuildingCount / 2;
 
@@ -159,6 +166,8 @@ namespace Labyrinth.Core
         public bool HasMinersGuild => minersGuildPosition.HasValue;
 
         public bool HasMarket => marketPosition.HasValue;
+
+        public bool HasAntiquary => antiquaryPosition.HasValue;
 
         public int FoodPerTimeUnit => FarmCount;
 
@@ -188,7 +197,14 @@ namespace Labyrinth.Core
 
         public Vector2Int MarketPosition => marketPosition ?? Vector2Int.zero;
 
+        public Vector2Int AntiquaryPosition => antiquaryPosition ?? Vector2Int.zero;
+
         public string LastBuildMessage { get; private set; } = string.Empty;
+
+        public void ConfigurePlacementBlocker(Func<Vector2Int, int, bool> blocker)
+        {
+            buildingPlacementBlocker = blocker;
+        }
 
         public static BuildingCost FarmCost => new BuildingCost(FarmGoldCost, FarmWoodCost);
 
@@ -207,6 +223,8 @@ namespace Labyrinth.Core
         public static BuildingCost MinersGuildCost => new BuildingCost(MinersGuildGoldCost, MinersGuildWoodCost);
 
         public static BuildingCost MarketCost => new BuildingCost(MarketGoldCost, MarketWoodCost);
+
+        public static BuildingCost AntiquaryCost => new BuildingCost(AntiquaryGoldCost, AntiquaryWoodCost);
 
         public static BuildingCost HeroCost => new BuildingCost(HeroGoldCost, 0, HeroFoodCost);
 
@@ -471,6 +489,25 @@ namespace Labyrinth.Core
             return true;
         }
 
+        public bool TryBuildAntiquary(MazeGenerationResult result, out Vector2Int antiquary)
+        {
+            antiquary = Vector2Int.zero;
+            if (HasAntiquary)
+            {
+                LastBuildMessage = "антиквариат уже построен";
+                return false;
+            }
+
+            if (!TryBuild(result, AntiquaryFootprintRadiusCells, 887, out antiquary))
+            {
+                return false;
+            }
+
+            antiquaryPosition = antiquary;
+            LastBuildMessage = $"антиквариат построен ({antiquary.x}, {antiquary.y})";
+            return true;
+        }
+
         public void Reset()
         {
             farmPositions.Clear();
@@ -485,6 +522,7 @@ namespace Labyrinth.Core
             chapelPosition = null;
             minersGuildPosition = null;
             marketPosition = null;
+            antiquaryPosition = null;
             castleLevel = 1;
             farmLevel = 1;
             lumberjackCampLevel = 1;
@@ -742,6 +780,11 @@ namespace Labyrinth.Core
                 return false;
             }
 
+            if (buildingPlacementBlocker != null && buildingPlacementBlocker(position, footprintRadius))
+            {
+                return false;
+            }
+
             if (IsTooClose(result.BasePosition, CastleFootprintRadiusCells, position, footprintRadius))
             {
                 return false;
@@ -827,6 +870,12 @@ namespace Labyrinth.Core
                 return false;
             }
 
+            if (antiquaryPosition.HasValue
+                && IsTooClose(antiquaryPosition.Value, AntiquaryFootprintRadiusCells, position, footprintRadius))
+            {
+                return false;
+            }
+
             return true;
         }
 
@@ -848,6 +897,7 @@ namespace Labyrinth.Core
                     ^ (HasChapel ? 32452843 : 0)
                     ^ (HasMinersGuild ? 67867967 : 0)
                     ^ (HasMarket ? 86028121 : 0)
+                    ^ (HasAntiquary ? 98602363 : 0)
                     ^ (result.BasePosition.y * 1274126177);
             }
         }

@@ -361,7 +361,8 @@ namespace Labyrinth.Core
                 || (baseDevelopment.HasCartographerHouse && IsInsideFootprint(baseDevelopment.CartographerHousePosition, BaseDevelopment.CartographerHouseFootprintRadiusCells, position))
                 || (baseDevelopment.HasChapel && IsInsideFootprint(baseDevelopment.ChapelPosition, BaseDevelopment.ChapelFootprintRadiusCells, position))
                 || (baseDevelopment.HasMinersGuild && IsInsideFootprint(baseDevelopment.MinersGuildPosition, BaseDevelopment.MinersGuildFootprintRadiusCells, position))
-                || (baseDevelopment.HasMarket && IsInsideFootprint(baseDevelopment.MarketPosition, BaseDevelopment.MarketFootprintRadiusCells, position));
+                || (baseDevelopment.HasMarket && IsInsideFootprint(baseDevelopment.MarketPosition, BaseDevelopment.MarketFootprintRadiusCells, position))
+                || (baseDevelopment.HasAntiquary && IsInsideFootprint(baseDevelopment.AntiquaryPosition, BaseDevelopment.AntiquaryFootprintRadiusCells, position));
         }
 
         private bool IsInsideTerrain(Vector2Int position)

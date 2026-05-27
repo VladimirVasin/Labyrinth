@@ -21,6 +21,7 @@ namespace Labyrinth.Core
                     return;
                 }
 
+                ClearTerrainDecorationsAround(hutPosition, BaseDevelopment.PeasantHutFootprintRadiusCells);
                 var view = PeasantHutRenderer.Render(mazeRenderer, hutPosition);
                 taxCollectorController.RegisterHut(hutPosition, view);
                 baseAmbience.RegisterBuilding(BuildingType.PeasantHut, hutPosition);
@@ -105,6 +106,11 @@ namespace Labyrinth.Core
             if (baseDevelopment.HasMarket)
             {
                 RegisterExistingBuilding(BuildingType.Market, baseDevelopment.MarketPosition);
+            }
+
+            if (baseDevelopment.HasAntiquary)
+            {
+                RegisterExistingBuilding(BuildingType.Antiquary, baseDevelopment.AntiquaryPosition);
             }
         }
 

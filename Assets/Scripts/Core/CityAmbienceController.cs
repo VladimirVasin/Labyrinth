@@ -42,6 +42,7 @@ namespace Labyrinth.Core
 
         private MazeGenerationResult result;
         private MazeRenderer mazeRenderer;
+        private TerrainDecorationController terrainDecorations;
         private Transform root;
         private Material villagerBodyMaterial;
         private Material villagerHeadMaterial;
@@ -62,6 +63,11 @@ namespace Labyrinth.Core
         private Material redMaterial;
         private Material potionMaterial;
         private Material parchmentMaterial;
+
+        public void Configure(TerrainDecorationController decorations)
+        {
+            terrainDecorations = decorations;
+        }
 
         public void Initialize(MazeGenerationResult generationResult, MazeRenderer renderer)
         {
@@ -402,6 +408,7 @@ namespace Labyrinth.Core
             return result != null
                 && result.Grid != null
                 && !result.Grid.InBounds(cell)
+                && (terrainDecorations == null || !terrainDecorations.BlocksCityWalker(cell))
                 && !IsInsideAnyBuildingFootprint(cell)
                 && cell.x >= -MazeTerrain.PaddingCells + 1
                 && cell.y >= -MazeTerrain.PaddingCells + 1
@@ -535,6 +542,8 @@ namespace Labyrinth.Core
                     return BaseDevelopment.MinersGuildFootprintRadiusCells;
                 case BuildingType.Market:
                     return BaseDevelopment.MarketFootprintRadiusCells;
+                case BuildingType.Antiquary:
+                    return BaseDevelopment.AntiquaryFootprintRadiusCells;
                 case BuildingType.Castle:
                 default:
                     return BaseDevelopment.CastleFootprintRadiusCells;
@@ -570,6 +579,7 @@ namespace Labyrinth.Core
                 case BuildingType.MinersGuild:
                     return CityWalkerRole.Lumberjack;
                 case BuildingType.Market:
+                case BuildingType.Antiquary:
                     return CityWalkerRole.Villager;
                 default:
                     return CityWalkerRole.Villager;

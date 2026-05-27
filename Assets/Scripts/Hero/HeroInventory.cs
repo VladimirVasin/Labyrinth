@@ -10,6 +10,7 @@ namespace Labyrinth.Hero
         Footwear,
         Potion,
         Ration,
+        Artifact,
         Empty
     }
 
@@ -96,8 +97,12 @@ namespace Labyrinth.Hero
         public const string HealthPotionHoverInfo = "+5 HP при использовании";
         public const string RationItemName = "Паёк";
         public const string RationHoverInfo = "+10 выносливости при использовании";
+        public const string ReturnStoneItemName = "Камень возвращения";
+        public const string ReturnStoneHoverInfo = "Одноразово переносит рыцаря ко входу, когда он возвращается из подземелья";
         public const string GoldIngotItemName = "Золотой слиток";
         public const string GoldIngotHoverInfo = "Доставить к входу: +20 зол. в казну, +5 XP";
+        public const string DeathTokenItemPrefix = "Жетон Рыцаря ";
+        public const string DeathTokenHoverInfo = "Вернуть к входу: жетон прикрепится к дому погибшего рыцаря, +10 XP";
         public const int SteelSwordAttackBonus = 3;
         public const int ChainmailArmorBonus = 2;
         public const int KnightSwordAttackBonus = 5;
@@ -131,6 +136,10 @@ namespace Labyrinth.Hero
 
         public bool CanAddRation => RationCount < MaxRationCount;
 
+        public bool HasReturnStone => HasItem(ReturnStoneItemName);
+
+        public bool CanAddReturnStone => !HasReturnStone && IsSlotEmpty(HeroInventorySlotType.Artifact);
+
         public int AttackBonus => GetEquipmentBonus(HeroInventorySlotType.Weapon, true);
 
         public int ArmorBonus => GetEquipmentBonus(HeroInventorySlotType.Armor, false);
@@ -161,6 +170,19 @@ namespace Labyrinth.Hero
 
         public bool HasGoldIngot => HasItem(GoldIngotItemName);
 
+        public bool HasDeathToken => TryGetDeathTokenItemName(out _);
+
+        public static string BuildDeathTokenItemName(int heroNumber)
+        {
+            return $"{DeathTokenItemPrefix}{Math.Max(0, heroNumber)}";
+        }
+
+        public static bool IsDeathTokenItem(string itemName)
+        {
+            return !string.IsNullOrEmpty(itemName)
+                && itemName.StartsWith(DeathTokenItemPrefix, StringComparison.Ordinal);
+        }
+
         public static HeroInventory CreateDefault()
         {
             return new HeroInventory(new[]
@@ -170,6 +192,7 @@ namespace Labyrinth.Hero
                 new HeroInventorySlot(HeroInventorySlotType.Footwear, "Обувь", SandalsItemName, "0% буста к скорости", 1, 1),
                 new HeroInventorySlot(HeroInventorySlotType.Potion, "Расходники", string.Empty),
                 new HeroInventorySlot(HeroInventorySlotType.Ration, "Расходники", string.Empty),
+                new HeroInventorySlot(HeroInventorySlotType.Artifact, "Артефакт", string.Empty),
                 new HeroInventorySlot(HeroInventorySlotType.Empty, "Слот", string.Empty)
             });
         }
@@ -184,6 +207,23 @@ namespace Labyrinth.Hero
                 }
             }
 
+            return false;
+        }
+
+        public bool TryGetDeathTokenItemName(out string itemName)
+        {
+            for (var i = 0; i < slots.Length; i++)
+            {
+                if (!IsDeathTokenItem(slots[i].ItemName))
+                {
+                    continue;
+                }
+
+                itemName = slots[i].ItemName;
+                return true;
+            }
+
+            itemName = string.Empty;
             return false;
         }
 
@@ -370,6 +410,11 @@ namespace Labyrinth.Hero
             return TryAddStack(HeroInventorySlotType.Ration, RationItemName, BuildRationHover(restoreAmount), maxCount);
         }
 
+        public bool TryAddReturnStone()
+        {
+            return TrySetUniqueSlot(HeroInventorySlotType.Artifact, ReturnStoneItemName, ReturnStoneHoverInfo);
+        }
+
         public bool TryConsumeHealthPotion()
         {
             return TryConsumeStack(HeroInventorySlotType.Potion, HealthPotionItemName, HealthPotionHoverInfo);
@@ -388,6 +433,23 @@ namespace Labyrinth.Hero
         public bool TryConsumeRation(int restoreAmount)
         {
             return TryConsumeStack(HeroInventorySlotType.Ration, RationItemName, BuildRationHover(restoreAmount));
+        }
+
+        public bool TryConsumeReturnStone()
+        {
+            for (var i = 0; i < slots.Length; i++)
+            {
+                if (slots[i].Type != HeroInventorySlotType.Artifact
+                    || slots[i].ItemName != ReturnStoneItemName)
+                {
+                    continue;
+                }
+
+                slots[i] = new HeroInventorySlot(slots[i].Type, slots[i].Label, string.Empty);
+                return true;
+            }
+
+            return false;
         }
 
         private static string BuildHealthPotionHover(int healAmount)
@@ -439,6 +501,35 @@ namespace Labyrinth.Hero
 
                 slots[i] = new HeroInventorySlot(slots[i].Type, slots[i].Label, itemName, hoverInfo, slots[i].Count + 1);
                 return true;
+            }
+
+            return false;
+        }
+
+        private bool TrySetUniqueSlot(HeroInventorySlotType slotType, string itemName, string hoverInfo)
+        {
+            for (var i = 0; i < slots.Length; i++)
+            {
+                if (slots[i].Type != slotType || slots[i].HasItem)
+                {
+                    continue;
+                }
+
+                slots[i] = new HeroInventorySlot(slots[i].Type, slots[i].Label, itemName, hoverInfo);
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool IsSlotEmpty(HeroInventorySlotType slotType)
+        {
+            for (var i = 0; i < slots.Length; i++)
+            {
+                if (slots[i].Type == slotType)
+                {
+                    return !slots[i].HasItem;
+                }
             }
 
             return false;

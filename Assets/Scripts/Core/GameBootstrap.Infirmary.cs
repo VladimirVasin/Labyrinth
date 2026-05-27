@@ -34,6 +34,7 @@ namespace Labyrinth.Core
                 return;
             }
 
+            ClearTerrainDecorationsAround(infirmaryPosition, BaseDevelopment.InfirmaryFootprintRadiusCells);
             InfirmaryRenderer.Render(mazeRenderer, infirmaryPosition);
             baseAmbience.RegisterBuilding(BuildingType.Infirmary, infirmaryPosition);
             cityAmbience.RegisterBuilding(BuildingType.Infirmary, infirmaryPosition);

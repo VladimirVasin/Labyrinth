@@ -19,6 +19,7 @@ namespace Labyrinth.Hero
         private readonly MazeGrid grid;
         private readonly MazeRenderer mazeRenderer;
         private readonly GoldIngotManager goldIngotManager;
+        private readonly HeroDeathTokenManager deathTokenManager;
         private readonly HeroModel model;
         private readonly Vector2Int entrancePosition;
         private readonly int heroNumber;
@@ -38,6 +39,7 @@ namespace Labyrinth.Hero
             int heroNumber,
             MazeRenderer mazeRenderer,
             GoldIngotManager goldIngotManager,
+            HeroDeathTokenManager deathTokenManager,
             Action<HeroModel, int> entranceKnowledgeSync,
             Action<HeroModel, int, DungeonStairsModel> downStairsOpened)
         {
@@ -45,6 +47,7 @@ namespace Labyrinth.Hero
             grid = result.Grid;
             this.mazeRenderer = mazeRenderer;
             this.goldIngotManager = goldIngotManager;
+            this.deathTokenManager = deathTokenManager;
             this.model = model;
             this.entrancePosition = entrancePosition;
             this.heroNumber = heroNumber;
@@ -78,6 +81,11 @@ namespace Labyrinth.Hero
             }
 
             model.Memory.Remember(model.Position);
+            if (TryHandleDeathTokenOnCurrentCell())
+            {
+                return;
+            }
+
             if (TryHandleGoldIngotOnCurrentCell())
             {
                 return;
@@ -157,6 +165,28 @@ namespace Labyrinth.Hero
             }
 
             HandleNoFrontierFallback();
+        }
+
+        public bool TryUseReturnStoneToEntrance()
+        {
+            if (model == null
+                || !model.IsAlive
+                || (model.State != HeroState.ReturningToCastle && model.State != HeroState.Stuck)
+                || model.Position == entrancePosition
+                || model.Inventory == null
+                || !model.Inventory.TryConsumeReturnStone())
+            {
+                return false;
+            }
+
+            var from = model.Position;
+            model.SetPosition(entrancePosition);
+            model.Memory.Remember(entrancePosition);
+            RestoreAtCastle();
+            GameDebugLog.Info(
+                "Hero",
+                $"{HeroLogName} used {HeroInventory.ReturnStoneItemName}: from={GameDebugLog.Position(from)} to={GameDebugLog.Position(entrancePosition)}, stamina={model.Stamina}/{model.MaxStamina}, gold={model.Gold}.");
+            return true;
         }
 
         private void BeginReturnToCastle()
@@ -254,6 +284,7 @@ namespace Labyrinth.Hero
 
         private void RestoreAtCastle()
         {
+            deathTokenManager?.TryDeliver(model, entrancePosition);
             goldIngotManager?.TryDeliver(model);
             entranceKnowledgeSync?.Invoke(model, heroNumber);
             var staminaBefore = model.Stamina;
@@ -294,6 +325,11 @@ namespace Labyrinth.Hero
                 return;
             }
 
+            if (TryHandleDeathTokenOnCurrentCell())
+            {
+                return;
+            }
+
             TryHandleGoldIngotOnCurrentCell();
         }
 
@@ -303,6 +339,11 @@ namespace Labyrinth.Hero
             model.Memory.Remember(position);
             TryOpenChestInCurrentCave();
             if (TryCollectKey())
+            {
+                return;
+            }
+
+            if (TryHandleDeathTokenOnCurrentCell())
             {
                 return;
             }
@@ -384,6 +425,48 @@ namespace Labyrinth.Hero
             if (model.Position == entrancePosition)
             {
                 goldIngotManager.TryDeliver(model);
+            }
+            else
+            {
+                BeginReturnToCastle();
+            }
+
+            return true;
+        }
+
+        private bool TryHandleDeathTokenOnCurrentCell()
+        {
+            if (deathTokenManager == null)
+            {
+                return false;
+            }
+
+            if (deathTokenManager.TryDeliver(model, entrancePosition))
+            {
+                returnPath.Clear();
+                SetExplorationState();
+                return true;
+            }
+
+            if (deathTokenManager.HasCarriedToken(model))
+            {
+                if (model.Position != entrancePosition && model.State != HeroState.ReturningToCastle)
+                {
+                    BeginReturnToCastle();
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (!deathTokenManager.TryPickUp(model))
+            {
+                return false;
+            }
+
+            if (model.Position == entrancePosition)
+            {
+                deathTokenManager.TryDeliver(model, entrancePosition);
             }
             else
             {

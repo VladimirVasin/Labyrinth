@@ -154,6 +154,8 @@ namespace Labyrinth.UI
                     return "Гильдия шахтёров";
                 case BuildingType.Market:
                     return "Рынок";
+                case BuildingType.Antiquary:
+                    return "Антиквариат";
                 default:
                     return "Здание";
             }
@@ -397,6 +399,12 @@ namespace Labyrinth.UI
                     FillRect(new Rect(rect.x + 10f, rect.y + 8f, 24f, 5f), new Color(0.94f, 0.78f, 0.28f));
                     DrawCircle(new Rect(rect.x + 15f, rect.y + 24f, 8f, 8f), new Color(1f, 0.74f, 0.2f));
                     DrawCircle(new Rect(rect.x + 23f, rect.y + 24f, 8f, 8f), new Color(1f, 0.74f, 0.2f));
+                    return;
+                case BuildingType.Antiquary:
+                    FillRect(new Rect(rect.x + 9f, rect.y + 20f, 26f, 17f), new Color(0.36f, 0.28f, 0.22f));
+                    FillRect(new Rect(rect.x + 7f, rect.y + 11f, 30f, 10f), new Color(0.18f, 0.1f, 0.16f));
+                    DrawCircle(new Rect(rect.x + 15f, rect.y + 18f, 14f, 14f), new Color(0.38f, 0.72f, 1f));
+                    FillRect(new Rect(rect.x + 20f, rect.y + 7f, 4f, 28f), new Color(0.92f, 0.66f, 0.22f));
                     return;
                 default:
                     FillRect(new Rect(rect.x + 9f, rect.y + 19f, 26f, 18f), new Color(0.54f, 0.38f, 0.22f));

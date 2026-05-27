@@ -113,6 +113,14 @@ namespace Labyrinth.UI
                 "Покупка и продажа пищи, дерева и железа за золото. Чем ниже запас ресурса, тем выше его цена.")
         };
 
+        private static readonly BuildingServiceEntry[] AntiquaryEntries =
+        {
+            new BuildingServiceEntry(
+                HeroInventory.ReturnStoneItemName,
+                $"{BaseDevelopment.ReturnStoneGoldCost} зол.",
+                "Рыцарь покупает у входа, если свободен слот артефакта. Одноразово переносит его ко входу при возвращении из подземелья.")
+        };
+
         public static BuildingServiceEntry[] Get(BuildingType type, int buildingLevel = 1)
         {
             var level = ClampLevel(buildingLevel);
@@ -138,6 +146,8 @@ namespace Labyrinth.UI
                     return MinersGuildEntries;
                 case BuildingType.Market:
                     return MarketEntries;
+                case BuildingType.Antiquary:
+                    return AntiquaryEntries;
                 default:
                     return System.Array.Empty<BuildingServiceEntry>();
             }

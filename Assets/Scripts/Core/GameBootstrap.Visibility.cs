@@ -207,6 +207,11 @@ namespace Labyrinth.Core
                 AddBuildingVisibility(visibleCells, baseDevelopment.MarketPosition, BaseDevelopment.MarketFootprintRadiusCells + BaseDevelopment.BuildingVisibilityPaddingCells);
             }
 
+            if (baseDevelopment.HasAntiquary)
+            {
+                AddBuildingVisibility(visibleCells, baseDevelopment.AntiquaryPosition, BaseDevelopment.AntiquaryFootprintRadiusCells + BaseDevelopment.BuildingVisibilityPaddingCells);
+            }
+
             dungeonFortificationController?.AddTorchLitCells(visibleCells);
             mineConstructionController?.AddTorchLitCells(visibleCells);
             return visibleCells;

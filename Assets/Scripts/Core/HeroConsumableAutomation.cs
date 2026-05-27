@@ -31,7 +31,8 @@ namespace Labyrinth.Core
                     && !baseDevelopment.HasTavern
                     && !baseDevelopment.HasForge
                     && !baseDevelopment.HasInfirmary
-                    && !baseDevelopment.HasChapel))
+                    && !baseDevelopment.HasChapel
+                    && !baseDevelopment.HasAntiquary))
             {
                 return;
             }
@@ -52,9 +53,11 @@ namespace Labyrinth.Core
                     StockRations(hero);
                     StockForgeEquipment(hero);
                     StockChapelBlessings(hero);
+                    StockAntiquaryArtifacts(hero);
                 }
 
                 UseAvailableHealthPotions(hero);
+                UseReturnStoneIfReturning(hero);
                 UseAvailableRations(hero);
             }
         }
@@ -113,6 +116,11 @@ namespace Labyrinth.Core
             TryBuySteelSword(hero);
             TryBuyChainmail(hero);
             TryBuyLeatherBoots(hero);
+        }
+
+        private void StockAntiquaryArtifacts(HeroController hero)
+        {
+            TryBuyReturnStone(hero);
         }
 
         private void RefreshChapelBlessings(HeroController hero)
@@ -282,6 +290,36 @@ namespace Labyrinth.Core
             GameDebugLog.Info(
                 "Hero",
                 $"Hero bought ration: foodSpent={BaseDevelopment.RationFoodCost}, goldPaid={BaseDevelopment.RationGoldCost}, heroGold={hero.Model.Gold}, treasuryGold={resources.Gold}, food={resources.Food}");
+            return true;
+        }
+
+        private bool TryBuyReturnStone(HeroController hero)
+        {
+            if (!baseDevelopment.HasAntiquary
+                || hero.Model.Inventory == null
+                || !hero.Model.Inventory.CanAddReturnStone
+                || !hero.Model.TrySpendGold(BaseDevelopment.ReturnStoneGoldCost))
+            {
+                return false;
+            }
+
+            if (!hero.Model.Inventory.TryAddReturnStone())
+            {
+                hero.Model.AddGold(BaseDevelopment.ReturnStoneGoldCost);
+                return false;
+            }
+
+            resources.AddGold(BaseDevelopment.ReturnStoneGoldCost);
+            DamageNumberView.CreateText(
+                mazeRenderer,
+                baseDevelopment.AntiquaryPosition,
+                HeroInventory.ReturnStoneItemName,
+                new Color(0.58f, 0.82f, 1f),
+                2.25f);
+            GameAudioController.Play(GameSfx.Purchase, mazeRenderer.GridToWorld(baseDevelopment.AntiquaryPosition), 0.92f);
+            GameDebugLog.Info(
+                "Hero",
+                $"Hero bought return stone for {BaseDevelopment.ReturnStoneGoldCost} gold. heroGold={hero.Model.Gold}, treasuryGold={resources.Gold}");
             return true;
         }
 
@@ -551,6 +589,16 @@ namespace Labyrinth.Core
                 "Hero",
                 $"Hero used ration: restored={restored}, stamina={hero.Model.Stamina}/{hero.Model.MaxStamina}");
             return true;
+        }
+
+        private static bool UseReturnStoneIfReturning(HeroController hero)
+        {
+            return hero != null
+                && hero.Model != null
+                && (hero.Model.State == HeroState.ReturningToCastle || hero.Model.State == HeroState.Stuck)
+                && hero.Model.Inventory != null
+                && hero.Model.Inventory.HasReturnStone
+                && hero.TryUseReturnStoneToEntrance();
         }
 
         private static bool ShouldUseHealthPotion(HeroModel model, int healAmount)

@@ -34,6 +34,7 @@ namespace Labyrinth.Core
                 return;
             }
 
+            ClearTerrainDecorationsAround(housePosition, BaseDevelopment.CartographerHouseFootprintRadiusCells);
             CartographerHouseRenderer.Render(mazeRenderer, housePosition);
             baseAmbience.RegisterBuilding(BuildingType.CartographerHouse, housePosition);
             cityAmbience.RegisterBuilding(BuildingType.CartographerHouse, housePosition);

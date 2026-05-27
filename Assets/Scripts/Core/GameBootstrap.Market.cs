@@ -37,6 +37,7 @@ namespace Labyrinth.Core
                 return;
             }
 
+            ClearTerrainDecorationsAround(marketPosition, BaseDevelopment.MarketFootprintRadiusCells);
             MarketRenderer.Render(mazeRenderer, marketPosition);
             baseAmbience.RegisterBuilding(BuildingType.Market, marketPosition);
             cityAmbience.RegisterBuilding(BuildingType.Market, marketPosition);

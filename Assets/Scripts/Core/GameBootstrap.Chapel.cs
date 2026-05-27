@@ -35,6 +35,7 @@ namespace Labyrinth.Core
                 return;
             }
 
+            ClearTerrainDecorationsAround(chapelPosition, BaseDevelopment.ChapelFootprintRadiusCells);
             ChapelRenderer.Render(mazeRenderer, chapelPosition);
             baseAmbience.RegisterBuilding(BuildingType.Chapel, chapelPosition);
             cityAmbience.RegisterBuilding(BuildingType.Chapel, chapelPosition);

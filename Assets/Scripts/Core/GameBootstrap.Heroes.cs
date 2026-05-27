@@ -42,6 +42,7 @@ namespace Labyrinth.Core
                 return;
             }
 
+            ClearTerrainDecorationsAround(housePosition, BaseDevelopment.HeroHouseFootprintRadiusCells);
             var houseView = mazeRenderer.RenderHeroHouse(housePosition, heroNumber);
             if (houseView != null)
             {
@@ -86,6 +87,7 @@ namespace Labyrinth.Core
                 personalMemory,
                 null,
                 goldIngotManager,
+                deathTokenManager,
                 SyncHeroKnowledgeAtEntrance,
                 HandleDownStairsOpened);
             hero.SetFortifiedCellProvider(IsHeroMovementFortifiedCell);
@@ -175,8 +177,11 @@ namespace Labyrinth.Core
                 }
 
                 heroes.RemoveAt(i);
+                var housePosition = GetHeroHousePositionOrFallback(hero);
                 goldIngotManager?.DropCarriedIngot(hero.Model);
-                RemoveHeroHouseForDefeatedHero(hero);
+                deathTokenManager?.DropCarriedToken(hero.Model);
+                MarkHeroHouseForDefeatedHero(hero);
+                deathTokenManager?.CreateTokenForDefeatedHero(hero, housePosition);
                 fallenHeroes.Add(hero);
                 hero.SetSelected(false);
                 if (selectedHero == hero)
@@ -232,6 +237,23 @@ namespace Labyrinth.Core
             }
         }
 
+        private BuildingView GetHeroHouseView(int heroNumber)
+        {
+            return heroHouseViewsByHeroNumber.TryGetValue(heroNumber, out var houseView) ? houseView : null;
+        }
+
+        private UnityEngine.Vector2Int GetHeroHousePositionOrFallback(HeroController hero)
+        {
+            if (hero != null
+                && heroHouseViewsByHeroNumber.TryGetValue(hero.DisplayNumber, out var houseView)
+                && houseView != null)
+            {
+                return houseView.GridPosition;
+            }
+
+            return currentMaze != null ? currentMaze.BasePosition : UnityEngine.Vector2Int.zero;
+        }
+
         private void DestroyHeroes()
         {
             selectedHero = null;
@@ -244,21 +266,16 @@ namespace Labyrinth.Core
             nextHeroNumber = 1;
         }
 
-        private void RemoveHeroHouseForDefeatedHero(HeroController hero)
+        private void MarkHeroHouseForDefeatedHero(HeroController hero)
         {
             if (hero == null || !heroHouseViewsByHeroNumber.TryGetValue(hero.DisplayNumber, out var houseView) || houseView == null)
             {
                 return;
             }
 
-            var housePosition = houseView.GridPosition;
-            heroHouseViewsByHeroNumber.Remove(hero.DisplayNumber);
-            buildingMicroHud.Hide();
-            Destroy(houseView.gameObject);
-            baseDevelopment.RemoveHeroHouse(housePosition);
-            RebuildBaseAmbienceFromDevelopment();
+            houseView.SetEffectText($"Рыцарь {hero.DisplayNumber} погиб: жетон не возвращен");
             RefreshSelectedHeroVisibility();
-            GameDebugLog.Info("Hero", $"Removed hero house for defeated hero #{hero.DisplayNumber} at {GameDebugLog.Position(housePosition)}.");
+            GameDebugLog.Info("Hero", $"Marked hero house for defeated hero #{hero.DisplayNumber} at {GameDebugLog.Position(houseView.GridPosition)}.");
         }
 
         private void DestroyHeroList(IReadOnlyList<HeroController> source)

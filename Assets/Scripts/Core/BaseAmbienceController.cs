@@ -29,6 +29,7 @@ namespace Labyrinth.Core
 
         private MazeGenerationResult result;
         private MazeRenderer mazeRenderer;
+        private TerrainDecorationController terrainDecorations;
         private Transform root;
         private Material roadMaterial;
         private Material cartWoodMaterial;
@@ -36,6 +37,11 @@ namespace Labyrinth.Core
         private Material cartCargoMaterial;
 
         public event System.Action<Vector2Int, Vector2Int, int> FarmCartDelivered;
+
+        public void Configure(TerrainDecorationController decorations)
+        {
+            terrainDecorations = decorations;
+        }
 
         public void Initialize(MazeGenerationResult generationResult, MazeRenderer renderer)
         {
@@ -328,6 +334,7 @@ namespace Labyrinth.Core
             segment.GetComponent<Renderer>().sharedMaterial = roadMaterial;
             RemoveCollider(segment);
             road.Segments.Add(segment);
+            terrainDecorations?.RegisterRoadSegment(from, to);
         }
 
         private void SpawnCart(RoadConnection road, int foodAmount)
@@ -790,6 +797,8 @@ namespace Labyrinth.Core
                     return BaseDevelopment.MinersGuildFootprintRadiusCells;
                 case BuildingType.Market:
                     return BaseDevelopment.MarketFootprintRadiusCells;
+                case BuildingType.Antiquary:
+                    return BaseDevelopment.AntiquaryFootprintRadiusCells;
                 case BuildingType.Castle:
                 default:
                     return BaseDevelopment.CastleFootprintRadiusCells;

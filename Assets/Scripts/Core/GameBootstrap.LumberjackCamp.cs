@@ -32,6 +32,7 @@ namespace Labyrinth.Core
 
             if (resources.TrySpend(cost))
             {
+                ClearTerrainDecorationsAround(campPosition, BaseDevelopment.LumberjackCampFootprintRadiusCells);
                 LumberjackCampRenderer.Render(mazeRenderer, campPosition);
                 RefreshAllBuildingUpgradeVisuals();
                 baseAmbience.RegisterBuilding(BuildingType.LumberjackCamp, campPosition);
