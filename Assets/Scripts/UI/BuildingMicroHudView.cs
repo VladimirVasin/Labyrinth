@@ -25,17 +25,20 @@ namespace Labyrinth.UI
         private Func<BuildingType, int> buildingLevelProvider;
         private Func<BuildingType, int, BuildingServiceEntry[]> buildingServicesProvider;
         private Action<BuildingType, int> buildingServiceActionHandler;
+        private Action<BuildingView> heroLineageRequestHandler;
 
         public bool IsVisible => selectedBuilding != null;
 
         public void Configure(
             Func<BuildingType, int> getBuildingLevel,
             Func<BuildingType, int, BuildingServiceEntry[]> getBuildingServices = null,
-            Action<BuildingType, int> onBuildingServiceAction = null)
+            Action<BuildingType, int> onBuildingServiceAction = null,
+            Action<BuildingView> onHeroLineageRequested = null)
         {
             buildingLevelProvider = getBuildingLevel;
             buildingServicesProvider = getBuildingServices;
             buildingServiceActionHandler = onBuildingServiceAction;
+            heroLineageRequestHandler = onHeroLineageRequested;
         }
 
         public bool ContainsScreenPoint(Vector2 screenPosition)
@@ -101,6 +104,17 @@ namespace Labyrinth.UI
             y += 36f;
             DrawEffectBox(new Rect(contentX, y, contentWidth, 58f), selectedBuilding.EffectText);
             y += 72f;
+
+            if (selectedBuilding.Type == BuildingType.HeroHouse)
+            {
+                if (GUI.Button(new Rect(contentX, y, contentWidth, 30f), "Родословная", serviceButtonStyle))
+                {
+                    GameAudioController.PlayUi(GameSfx.HudClick);
+                    heroLineageRequestHandler?.Invoke(selectedBuilding);
+                }
+
+                y += 40f;
+            }
 
             if (services.Length > 0)
             {
@@ -172,9 +186,10 @@ namespace Labyrinth.UI
         {
             var serviceCount = GetSelectedBuildingServices().Length;
             var width = Mathf.Min(420f, Screen.width - 80f);
+            var heroHouseExtraHeight = selectedBuilding != null && selectedBuilding.Type == BuildingType.HeroHouse ? 40f : 0f;
             var wantedHeight = servicesVisible && serviceCount > 0
-                ? 360f + serviceCount * 30f
-                : 314f;
+                ? 360f + heroHouseExtraHeight + serviceCount * 30f
+                : 314f + heroHouseExtraHeight;
             var height = Mathf.Min(wantedHeight, Screen.height - 96f);
             return new Rect(Screen.width - width - 18f, Screen.height - height - 18f, width, height);
         }

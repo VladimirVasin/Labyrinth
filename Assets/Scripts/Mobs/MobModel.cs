@@ -1,3 +1,4 @@
+using Labyrinth.Core;
 using UnityEngine;
 
 namespace Labyrinth.Mobs
@@ -18,13 +19,13 @@ namespace Labyrinth.Mobs
 
     public sealed class MobModel
     {
-        public MobModel(Vector2Int startPosition, MobSpecies species, MobRank rank, int dungeonLevel = 1)
+        public MobModel(Vector2Int startPosition, MobSpecies species, MobRank rank, int dungeonLevel = 1, int statSeed = 0)
         {
             Species = species;
             Rank = rank;
             DungeonLevel = Mathf.Max(1, dungeonLevel);
             Position = startPosition;
-            var stats = BuildStats(species, rank, DungeonLevel);
+            var stats = BuildStats(species, rank, DungeonLevel, statSeed);
             MaxHitPoints = stats.MaxHitPoints;
             HitPoints = MaxHitPoints;
             AttackPoints = stats.AttackPoints;
@@ -85,65 +86,66 @@ namespace Labyrinth.Mobs
             SpawnedFromDarkness = true;
         }
 
-        private static MobStats BuildStats(MobSpecies species, MobRank rank, int dungeonLevel)
+        private static MobStats BuildStats(MobSpecies species, MobRank rank, int dungeonLevel, int statSeed)
         {
+            var random = new System.Random(statSeed);
             MobStats stats;
             if (rank == MobRank.MiniBoss)
             {
-                stats = BuildMiniBossStats(species);
+                stats = BuildMiniBossStats(species).Roll(random);
             }
             else if (rank == MobRank.Boss)
             {
-                stats = BuildBossStats(species);
+                stats = BuildBossStats(species).Roll(random);
             }
             else
             {
-                stats = BuildRegularStats(species);
+                stats = BuildRegularStats(species).Roll(random);
             }
 
             return ApplyDungeonLevelMultiplier(stats, dungeonLevel);
         }
 
-        private static MobStats BuildMiniBossStats(MobSpecies species)
+        private static MobStatRange BuildMiniBossStats(MobSpecies species)
         {
             switch (species)
             {
                 case MobSpecies.Rat:
-                    return new MobStats(30, 5, 1);
+                    return new MobStatRange(new IntRange(44, 54), new IntRange(6, 8), new IntRange(1, 3));
                 case MobSpecies.Goblin:
-                    return new MobStats(48, 7, 3);
+                    return new MobStatRange(new IntRange(62, 76), new IntRange(8, 11), new IntRange(3, 5));
                 case MobSpecies.Orc:
                 default:
-                    return new MobStats(72, 10, 4);
+                    return new MobStatRange(new IntRange(88, 108), new IntRange(12, 15), new IntRange(5, 7));
             }
         }
 
-        private static MobStats BuildBossStats(MobSpecies species)
+        private static MobStatRange BuildBossStats(MobSpecies species)
         {
             switch (species)
             {
                 case MobSpecies.Rat:
-                    return new MobStats(78, 8, 3);
+                    return new MobStatRange(new IntRange(100, 122), new IntRange(10, 13), new IntRange(4, 6));
                 case MobSpecies.Goblin:
-                    return new MobStats(104, 9, 5);
+                    return new MobStatRange(new IntRange(132, 160), new IntRange(12, 15), new IntRange(6, 8));
                 case MobSpecies.Orc:
                 default:
-                    return new MobStats(142, 12, 6);
+                    return new MobStatRange(new IntRange(178, 215), new IntRange(15, 18), new IntRange(8, 10));
             }
         }
 
-        private static MobStats BuildRegularStats(MobSpecies species)
+        private static MobStatRange BuildRegularStats(MobSpecies species)
         {
             switch (species)
             {
                 case MobSpecies.Orc:
-                    return new MobStats(38, 8, 3);
+                    return new MobStatRange(new IntRange(44, 54), new IntRange(9, 12), new IntRange(3, 5));
                 case MobSpecies.Goblin:
-                    return new MobStats(18, 5, 1);
+                    return new MobStatRange(new IntRange(20, 25), new IntRange(5, 7), new IntRange(1, 3));
                 case MobSpecies.Rat:
-                    return new MobStats(9, 3, 0);
+                    return new MobStatRange(new IntRange(12, 16), new IntRange(3, 5), new IntRange(0, 1));
                 default:
-                    return new MobStats(18, 5, 1);
+                    return new MobStatRange(new IntRange(20, 25), new IntRange(5, 7), new IntRange(1, 3));
             }
         }
 
@@ -174,6 +176,30 @@ namespace Labyrinth.Mobs
             public int AttackPoints { get; }
 
             public int ArmorPoints { get; }
+        }
+
+        private readonly struct MobStatRange
+        {
+            public MobStatRange(IntRange maxHitPoints, IntRange attackPoints, IntRange armorPoints)
+            {
+                MaxHitPoints = maxHitPoints;
+                AttackPoints = attackPoints;
+                ArmorPoints = armorPoints;
+            }
+
+            private IntRange MaxHitPoints { get; }
+
+            private IntRange AttackPoints { get; }
+
+            private IntRange ArmorPoints { get; }
+
+            public MobStats Roll(System.Random random)
+            {
+                return new MobStats(
+                    MaxHitPoints.Roll(random),
+                    AttackPoints.Roll(random),
+                    ArmorPoints.Roll(random));
+            }
         }
     }
 }

@@ -12,6 +12,8 @@ namespace Labyrinth.Hero
         private const float CorpseVisibilityDuration = 5f;
         private const float VowOfReturnStepIntervalMultiplier = 0.45f;
         private const float FortifiedCellSpeedMultiplier = 1.2f;
+        private const float VengeanceTokenReturnSpeedMultiplier = 1.1f;
+        private const float VengeanceBarrierPathSpeedMultiplier = 1.1f;
         private const float ActivityTraceInterval = 8f;
 
         private MazeGrid grid;
@@ -35,6 +37,8 @@ namespace Labyrinth.Hero
 
         public int DisplayNumber { get; private set; }
 
+        public string DisplayName { get; private set; }
+
         public bool ProvidesVisibility => Model != null && (Model.IsAlive || !corpseExpired);
 
         public bool IsExpiredCorpse => Model != null && !Model.IsAlive && corpseExpired;
@@ -48,17 +52,19 @@ namespace Labyrinth.Hero
             MazeGenerationResult result,
             Vector2Int startPosition,
             int displayNumber,
+            string displayName,
             MazeRenderer mazeRenderer,
             HeroMemory memory,
             HeroMemoryView memoryView,
             GoldIngotManager goldIngotManager,
             HeroDeathTokenManager deathTokenManager,
             Action<HeroModel, int> entranceKnowledgeSync,
-            Action<HeroModel, int, DungeonStairsModel> downStairsOpened)
+            Action<HeroModel, int, DungeonStairsModel> downStairsOpened,
+            int statSeed = 0)
         {
             var controllerObject = new GameObject("HeroController");
             var controller = controllerObject.AddComponent<HeroController>();
-            controller.Initialize(result, startPosition, displayNumber, mazeRenderer, memory, memoryView, goldIngotManager, deathTokenManager, entranceKnowledgeSync, downStairsOpened);
+            controller.Initialize(result, startPosition, displayNumber, displayName, mazeRenderer, memory, memoryView, goldIngotManager, deathTokenManager, entranceKnowledgeSync, downStairsOpened, statSeed);
             return controller;
         }
 
@@ -262,19 +268,23 @@ namespace Labyrinth.Hero
             MazeGenerationResult result,
             Vector2Int startPosition,
             int displayNumber,
+            string displayName,
             MazeRenderer mazeRenderer,
             HeroMemory memory,
             HeroMemoryView sharedMemoryView,
             GoldIngotManager goldIngotManager,
             HeroDeathTokenManager deathTokenManager,
             Action<HeroModel, int> entranceKnowledgeSync,
-            Action<HeroModel, int, DungeonStairsModel> downStairsOpened)
+            Action<HeroModel, int, DungeonStairsModel> downStairsOpened,
+            int statSeed)
         {
             grid = result.Grid;
             this.mazeRenderer = mazeRenderer;
             entrancePosition = startPosition;
             DisplayNumber = displayNumber;
-            Model = new HeroModel(startPosition, memory);
+            DisplayName = string.IsNullOrWhiteSpace(displayName) ? $"Рыцарь {displayNumber}" : displayName;
+            Model = new HeroModel(startPosition, memory, statSeed);
+            Model.SetDungeonLevel(result.LevelNumber);
             explorer = new HeroExplorer(result, Model, startPosition, displayNumber, mazeRenderer, goldIngotManager, deathTokenManager, entranceKnowledgeSync, downStairsOpened);
             corpseExpired = false;
             corpseVisibilityRemaining = 0f;
@@ -309,6 +319,7 @@ namespace Labyrinth.Hero
             grid = result.Grid;
             this.mazeRenderer = mazeRenderer;
             entrancePosition = startPosition;
+            Model.SetDungeonLevel(result.LevelNumber);
             Model.Memory.Reset(result.Grid);
             Model.Memory.Remember(startPosition);
             Model.SetPosition(startPosition);
@@ -438,6 +449,7 @@ namespace Labyrinth.Hero
             }
 
             interval = ApplyFootwearSpeedBonus(interval);
+            interval = ApplyVengeanceMovementBonus(interval);
             return ApplyFortifiedCellSpeedBonus(interval);
         }
 
@@ -450,6 +462,30 @@ namespace Labyrinth.Hero
             }
 
             return interval / (1f + bonusPercent / 100f);
+        }
+
+        private float ApplyVengeanceMovementBonus(float interval)
+        {
+            if (Model == null || Model.VengeanceQuest == null || !Model.VengeanceQuest.IsCompleted)
+            {
+                return interval;
+            }
+
+            if (Model.State == HeroState.ReturningToCastle
+                && Model.Inventory != null
+                && Model.Inventory.HasDeathToken
+                && Model.HasCompletedVengeance(HeroVengeanceKind.CarriedName))
+            {
+                interval /= VengeanceTokenReturnSpeedMultiplier;
+            }
+
+            if (Model.State == HeroState.ReturningToDoor
+                && Model.HasCompletedVengeance(HeroVengeanceKind.ClosedDoor))
+            {
+                interval /= VengeanceBarrierPathSpeedMultiplier;
+            }
+
+            return interval;
         }
 
         private float ApplyFortifiedCellSpeedBonus(float interval)

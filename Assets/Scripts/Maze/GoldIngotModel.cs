@@ -53,7 +53,16 @@ namespace Labyrinth.Maze
         {
             Position = position;
             State = GoldIngotState.Available;
-            SetVisualActive(false);
+            DestroyVisual();
+        }
+
+        private void DestroyVisual()
+        {
+            if (visualObject != null)
+            {
+                Object.Destroy(visualObject);
+            }
+
             visualObject = null;
         }
 

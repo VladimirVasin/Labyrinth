@@ -26,6 +26,9 @@ namespace Labyrinth.Core
         private Material shadowMaterial;
         private int nextTokenId;
 
+        public event Action<HeroDeathTokenModel> TokenDelivered;
+        public event Action<HeroModel> TokenDeliveredByHero;
+
         public void Initialize(
             MazeGenerationResult generationResult,
             MazeRenderer renderer,
@@ -66,28 +69,45 @@ namespace Labyrinth.Core
             return TryGetCarriedToken(hero, out _);
         }
 
-        public void CreateTokenForDefeatedHero(HeroController hero, Vector2Int housePosition)
+        public void ClearTokensForHero(int heroNumber)
+        {
+            for (var i = tokens.Count - 1; i >= 0; i--)
+            {
+                var token = tokens[i];
+                if (token == null || token.HeroNumber != heroNumber)
+                {
+                    continue;
+                }
+
+                RemoveCarriedReferences(token);
+                token.DestroyVisual();
+                if (houseTokenVisuals.TryGetValue(token.Id, out var tokenVisual) && tokenVisual != null)
+                {
+                    Destroy(tokenVisual);
+                }
+
+                houseTokenVisuals.Remove(token.Id);
+                tokens.RemoveAt(i);
+            }
+        }
+
+        public HeroDeathTokenModel CreateTokenForDefeatedHero(HeroController hero, Vector2Int housePosition)
         {
             if (hero == null || hero.Model == null || result == null)
             {
-                return;
-            }
-
-            if (FindTokenByHeroNumber(hero.DisplayNumber) != null)
-            {
-                return;
+                return null;
             }
 
             var dropPosition = FindDropPosition(hero.Model.Position);
             var token = new HeroDeathTokenModel(
                 ++nextTokenId,
                 hero.DisplayNumber,
+                hero.DisplayName,
                 result.LevelNumber,
                 dropPosition,
                 housePosition);
             tokens.Add(token);
             RenderToken(token);
-            RefreshHouseMemorial(token);
             DamageNumberView.CreateText(
                 mazeRenderer,
                 dropPosition,
@@ -96,7 +116,8 @@ namespace Labyrinth.Core
                 1.75f);
             GameDebugLog.Info(
                 "Hero",
-                $"Created death token #{token.Id} for hero #{hero.DisplayNumber}: level={token.LevelNumber}, drop={GameDebugLog.Position(dropPosition)}, house={GameDebugLog.Position(housePosition)}.");
+                $"Created death token #{token.Id} for hero #{hero.DisplayNumber} ({token.FallenHeroName}): level={token.LevelNumber}, drop={GameDebugLog.Position(dropPosition)}, house={GameDebugLog.Position(housePosition)}.");
+            return token;
         }
 
         public bool TryPickUp(HeroModel hero)
@@ -112,7 +133,8 @@ namespace Labyrinth.Core
                 return false;
             }
 
-            if (!hero.Inventory.TryPlaceInEmptySlot(token.ItemName, HeroInventory.DeathTokenHoverInfo))
+            var hoverInfo = $"{token.FallenHeroName}: вернуть к входу, жетон прикрепится к дому, +{DeliveryExperienceReward} XP";
+            if (!hero.Inventory.TryPlaceInEmptySlot(token.ItemName, hoverInfo))
             {
                 GameDebugLog.Warning(
                     "Hero",
@@ -122,7 +144,6 @@ namespace Labyrinth.Core
 
             token.PickUp();
             carriedTokens[hero] = token;
-            RefreshHouseMemorial(token);
             DamageNumberView.CreateText(
                 mazeRenderer,
                 hero.Position,
@@ -130,7 +151,7 @@ namespace Labyrinth.Core
                 new Color(0.92f, 0.88f, 0.72f),
                 1.75f);
             GameAudioController.Play(GameSfx.KeyPickup, mazeRenderer.GridToWorld(hero.Position), 0.7f);
-            GameDebugLog.Info("Hero", $"Hero picked up death token #{token.Id} for hero #{token.HeroNumber} at {GameDebugLog.Position(hero.Position)}.");
+            GameDebugLog.Info("Hero", $"Hero picked up death token #{token.Id} for hero #{token.HeroNumber} ({token.FallenHeroName}) at {GameDebugLog.Position(hero.Position)}.");
             return true;
         }
 
@@ -158,8 +179,10 @@ namespace Labyrinth.Core
             token.Deliver();
             carriedTokens.Remove(hero);
             var gainedLevels = hero.AddExperience(DeliveryExperienceReward);
+            var vengeanceProgress = hero.ApplyDeathTokenDeliveryVengeance();
+            gainedLevels += vengeanceProgress.GainedLevels;
             AttachTokenToHouse(token);
-            RefreshHouseMemorial(token);
+            TokenDelivered?.Invoke(token);
             DamageNumberView.CreateText(
                 mazeRenderer,
                 deliveryPosition,
@@ -172,6 +195,7 @@ namespace Labyrinth.Core
                 $"+{DeliveryExperienceReward} XP",
                 new Color(0.55f, 0.86f, 1f),
                 2.2f);
+            ShowVengeanceProgress(hero, deliveryPosition, vengeanceProgress, 2.5f);
             GameAudioController.Play(GameSfx.IngotDeposit, mazeRenderer.GridToWorld(deliveryPosition), 0.78f);
             if (gainedLevels > 0)
             {
@@ -180,7 +204,8 @@ namespace Labyrinth.Core
 
             GameDebugLog.Info(
                 "Hero",
-                $"Hero delivered death token #{token.Id} for hero #{token.HeroNumber}: xp={hero.Experience}/{hero.ExperienceForNextLevel}, level={hero.Level}, gainedLevels={gainedLevels}.");
+                $"Hero delivered death token #{token.Id} for hero #{token.HeroNumber} ({token.FallenHeroName}): vengeanceXP={vengeanceProgress.BonusExperience}, xp={hero.Experience}/{hero.ExperienceForNextLevel}, level={hero.Level}, gainedLevels={gainedLevels}.");
+            TokenDeliveredByHero?.Invoke(hero);
             return true;
         }
 
@@ -199,10 +224,9 @@ namespace Labyrinth.Core
             var dropPosition = FindDropPosition(hero.Position);
             token.Drop(dropPosition, result.LevelNumber);
             RenderToken(token);
-            RefreshHouseMemorial(token);
             GameDebugLog.Info(
                 "Hero",
-                $"Hero dropped carried death token #{token.Id} for hero #{token.HeroNumber} at {GameDebugLog.Position(dropPosition)} after death.");
+                $"Hero dropped carried death token #{token.Id} for hero #{token.HeroNumber} ({token.FallenHeroName}) at {GameDebugLog.Position(dropPosition)} after death.");
             return true;
         }
 
@@ -218,25 +242,11 @@ namespace Labyrinth.Core
         {
             for (var i = 0; i < tokens.Count; i++)
             {
-                RefreshHouseMemorial(tokens[i]);
                 if (tokens[i].IsDelivered)
                 {
                     AttachTokenToHouse(tokens[i]);
                 }
             }
-        }
-
-        private void RefreshHouseMemorial(HeroDeathTokenModel token)
-        {
-            var house = GetHouse(token);
-            if (house == null)
-            {
-                return;
-            }
-
-            house.SetEffectText(token.IsDelivered
-                ? $"Жетон Рыцаря {token.HeroNumber} возвращен"
-                : $"Рыцарь {token.HeroNumber} погиб: жетон не возвращен");
         }
 
         private void RenderToken(HeroDeathTokenModel token)
@@ -284,13 +294,13 @@ namespace Labyrinth.Core
 
             var hudTarget = tokenRoot.AddComponent<ObjectMicroHudTarget>();
             hudTarget.Configure(
-                $"Жетон Рыцаря {token.HeroNumber}",
+                $"Жетон {token.FallenHeroName}",
                 "память героя",
                 "Жетон",
                 token.Position,
                 new Color(0.92f, 0.88f, 0.72f),
                 () => token.IsAvailable ? "лежит в лабиринте" : token.State == HeroDeathTokenState.Carried ? "у рыцаря" : "прикреплен к дому",
-                () => $"Вернуть к входу: жетон прикрепится к дому Рыцаря {token.HeroNumber}, рыцарь-подборщик получит +{DeliveryExperienceReward} XP.");
+                () => $"Вернуть к входу: жетон прикрепится к дому {token.FallenHeroName}, рыцарь-подборщик получит +{DeliveryExperienceReward} XP.");
             var collider = tokenRoot.AddComponent<BoxCollider>();
             collider.center = new Vector3(0f, mazeRenderer.CellSize * 0.12f, 0f);
             collider.size = new Vector3(mazeRenderer.CellSize * 0.5f, mazeRenderer.CellSize * 0.26f, mazeRenderer.CellSize * 0.42f);
@@ -305,15 +315,21 @@ namespace Labyrinth.Core
                 return;
             }
 
-            if (houseTokenVisuals.TryGetValue(token.HeroNumber, out var existing) && existing != null)
+            if (houseTokenVisuals.TryGetValue(token.Id, out var existing) && existing != null)
             {
                 Destroy(existing);
             }
 
             var unit = mazeRenderer != null ? mazeRenderer.CellSize : 1.65f;
-            var plaqueRoot = new GameObject($"Returned Token {token.HeroNumber}");
+            var plaqueIndex = CountDeliveredTokensForHeroUpTo(token);
+            var plaqueColumn = plaqueIndex % 3;
+            var plaqueRow = plaqueIndex / 3;
+            var plaqueRoot = new GameObject($"Returned Token {token.Id}");
             plaqueRoot.transform.SetParent(house.transform, false);
-            plaqueRoot.transform.localPosition = new Vector3(unit * 0.58f, unit * 1.08f, unit * -0.32f);
+            plaqueRoot.transform.localPosition = new Vector3(
+                unit * (0.48f + plaqueColumn * 0.18f),
+                unit * (1.08f + plaqueRow * 0.16f),
+                unit * -0.32f);
 
             CreateCube(
                 "House Token Plaque",
@@ -329,7 +345,36 @@ namespace Labyrinth.Core
                 strapMaterial,
                 plaqueRoot.transform,
                 null);
-            houseTokenVisuals[token.HeroNumber] = plaqueRoot;
+            houseTokenVisuals[token.Id] = plaqueRoot;
+        }
+
+        private void ShowVengeanceProgress(HeroModel hero, Vector2Int position, HeroVengeanceProgressResult progress, float delay)
+        {
+            if (!progress.HasAnyFeedback || hero == null)
+            {
+                return;
+            }
+
+            if (progress.Completed)
+            {
+                DamageNumberView.CreateText(
+                    mazeRenderer,
+                    position,
+                    progress.Message,
+                    new Color(1f, 0.72f, 0.28f),
+                    delay);
+                delay += 0.3f;
+            }
+
+            if (progress.BonusExperience > 0)
+            {
+                DamageNumberView.CreateText(
+                    mazeRenderer,
+                    position,
+                    $"+{progress.BonusExperience} XP клятвы",
+                    new Color(0.55f, 0.86f, 1f),
+                    delay);
+            }
         }
 
         private bool TryGetCarriedToken(HeroModel hero, out HeroDeathTokenModel token)
@@ -360,6 +405,25 @@ namespace Labyrinth.Core
             return true;
         }
 
+        private void RemoveCarriedReferences(HeroDeathTokenModel token)
+        {
+            var heroesToClear = new List<HeroModel>();
+            foreach (var pair in carriedTokens)
+            {
+                if (pair.Value == token)
+                {
+                    heroesToClear.Add(pair.Key);
+                }
+            }
+
+            for (var i = 0; i < heroesToClear.Count; i++)
+            {
+                var hero = heroesToClear[i];
+                hero?.Inventory?.TryRemoveItem(token.ItemName);
+                carriedTokens.Remove(hero);
+            }
+        }
+
         private HeroDeathTokenModel FindTokenByItemName(string itemName)
         {
             for (var i = 0; i < tokens.Count; i++)
@@ -373,17 +437,24 @@ namespace Labyrinth.Core
             return null;
         }
 
-        private HeroDeathTokenModel FindTokenByHeroNumber(int heroNumber)
+        private int CountDeliveredTokensForHeroUpTo(HeroDeathTokenModel token)
         {
+            var count = 0;
             for (var i = 0; i < tokens.Count; i++)
             {
-                if (tokens[i] != null && tokens[i].HeroNumber == heroNumber)
+                var candidate = tokens[i];
+                if (candidate == null
+                    || !candidate.IsDelivered
+                    || candidate.HeroNumber != token.HeroNumber
+                    || candidate.Id > token.Id)
                 {
-                    return tokens[i];
+                    continue;
                 }
+
+                count++;
             }
 
-            return null;
+            return Mathf.Max(0, count - 1);
         }
 
         private HeroDeathTokenModel FindAvailableAt(Vector2Int position)

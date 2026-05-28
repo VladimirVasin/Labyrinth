@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Labyrinth.UI
 {
-    public sealed class HeroHudView : MonoBehaviour
+    public sealed partial class HeroHudView : MonoBehaviour
     {
         private const float HeroCardX = 16f;
         private const float HeroCardY = 76f;
@@ -140,100 +140,6 @@ namespace Labyrinth.UI
             }
         }
 
-        private void DrawHeroPanel(HeroController hero, int heroNumber)
-        {
-            var rect = CalculatePanelRect();
-
-            DrawPanel(rect);
-            var title = heroNumber > 0 ? $"Рыцарь {heroNumber}" : "Рыцарь";
-            var contentX = rect.x + 18f;
-            var contentWidth = rect.width - 36f;
-
-            var y = rect.y + 16f;
-            DrawHeroHeader(new Rect(contentX, y, contentWidth, 92f), title, hero);
-            y += 106f;
-
-            DrawSection(new Rect(contentX, y, contentWidth, 18f), "Состояние");
-            y += 24f;
-            DrawProgressBar(
-                new Rect(contentX, y, contentWidth, 34f),
-                "HP",
-                hero.Model.HitPoints,
-                hero.Model.MaxHitPoints,
-                new Color(0.92f, 0.34f, 0.28f));
-            y += 42f;
-            DrawProgressBar(
-                new Rect(contentX, y, contentWidth, 34f),
-                "Выносливость",
-                hero.Model.Stamina,
-                hero.Model.MaxStamina,
-                new Color(0.34f, 0.72f, 1f));
-            y += 46f;
-
-            var chipWidth = (contentWidth - 12f) / 2f;
-            DrawInfoChip(new Rect(contentX, y, chipWidth, 38f), "Золото", hero.Model.Gold.ToString(), new Color(1f, 0.84f, 0.26f));
-            DrawInfoChip(new Rect(contentX + chipWidth + 12f, y, chipWidth, 38f), "Уровень", hero.Model.Level.ToString(), new Color(0.72f, 1f, 0.42f));
-            y += 48f;
-
-            string hoveredItemName = null;
-            string hoveredInfo = null;
-            var hoveredRect = Rect.zero;
-            var blessingRect = new Rect(contentX, y, contentWidth, 50f);
-            DrawBlessingCard(blessingRect, hero.Model.BlessingText);
-            if (blessingRect.Contains(Event.current.mousePosition)
-                && TryGetActiveBlessing(hero.Model, out var activeBlessing))
-            {
-                hoveredItemName = activeBlessing.DisplayName;
-                hoveredInfo = activeBlessing.Description;
-                hoveredRect = blessingRect;
-            }
-
-            y += 62f;
-
-            DrawSection(new Rect(contentX, y, contentWidth, 18f), "Боевые параметры");
-            y += 24f;
-            DrawCombatCard(new Rect(contentX, y, chipWidth, 52f), "Attack Points", hero.Model.AttackPoints.ToString(), new Color(0.98f, 0.76f, 0.34f));
-            DrawCombatCard(new Rect(contentX + chipWidth + 12f, y, chipWidth, 52f), "Armor Points", hero.Model.ArmorPoints.ToString(), new Color(0.55f, 0.78f, 1f));
-            y += 66f;
-
-            DrawSection(new Rect(contentX, y, contentWidth, 18f), "Инвентарь");
-            y += 24f;
-
-            var slots = hero.Model.Inventory.Slots;
-            const float inventoryGap = 8f;
-            var slotWidth = (contentWidth - inventoryGap) * 0.5f;
-            const float slotHeight = 40f;
-            for (var i = 0; i < slots.Count; i++)
-            {
-                var slot = slots[i];
-                var column = i % 2;
-                var row = i / 2;
-                var slotRect = new Rect(
-                    contentX + column * (slotWidth + inventoryGap),
-                    y + row * (slotHeight + inventoryGap),
-                    slotWidth,
-                    slotHeight);
-                DrawInventorySlot(slotRect, slot);
-                if (slotRect.Contains(Event.current.mousePosition) && !string.IsNullOrEmpty(slot.HoverInfo))
-                {
-                    hoveredItemName = slot.DisplayItem;
-                    hoveredInfo = slot.HoverInfo;
-                    hoveredRect = slotRect;
-                }
-            }
-
-            if (!string.IsNullOrEmpty(hoveredInfo))
-            {
-                DrawInventoryTooltip(hoveredRect, rect, hoveredItemName, hoveredInfo);
-            }
-
-            var closeRect = new Rect(contentX, rect.yMax - 42f, contentWidth, 31f);
-            if (GUI.Button(closeRect, "Закрыть", closeButtonStyle))
-            {
-                Hide();
-            }
-        }
-
         private Rect CalculatePanelRect()
         {
             var availableWidth = Mathf.Max(330f, Screen.width - HeroPanelX - 18f);
@@ -313,6 +219,28 @@ namespace Labyrinth.UI
             return hero != null && hero.DisplayNumber > 0 ? hero.DisplayNumber : fallbackNumber;
         }
 
+        private static string BuildHeroTitle(HeroController hero, int fallbackNumber)
+        {
+            if (hero != null && !string.IsNullOrEmpty(hero.DisplayName))
+            {
+                return hero.DisplayName;
+            }
+
+            return fallbackNumber > 0 ? $"Рыцарь {fallbackNumber}" : "Рыцарь";
+        }
+
+        private static string BuildHeroIconTitle(HeroController hero, int fallbackNumber)
+        {
+            var title = BuildHeroTitle(hero, fallbackNumber);
+            var words = title.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length >= 4 && words[0] == "Сэр")
+            {
+                return $"{words[0]} {words[1]}\n{words[words.Length - 1]}";
+            }
+
+            return title;
+        }
+
         private void DrawSelectionFrame(Rect iconRect, bool isSelected)
         {
             if (!isSelected)
@@ -335,8 +263,8 @@ namespace Labyrinth.UI
             DrawKnightIcon(new Rect(rect.x + 10f, rect.y + 14f, 40f, 44f), isSelected);
             var textX = rect.x + 58f;
             var textWidth = rect.width - 68f;
-            GUI.Label(new Rect(textX, rect.y + 12f, textWidth, 22f), $"Рыцарь {heroNumber}", iconNameStyle);
-            GUI.Label(new Rect(textX, rect.y + 36f, textWidth, 20f), GetStateShortText(hero), iconCaptionStyle);
+            DrawFittedLabel(new Rect(textX, rect.y + 8f, textWidth, 38f), BuildHeroIconTitle(hero, heroNumber), iconNameStyle, 9, true);
+            DrawFittedLabel(new Rect(textX, rect.y + 48f, textWidth, 20f), GetStateShortText(hero), iconCaptionStyle, 10, false);
 
             DrawIconStatBar(
                 new Rect(rect.x + 10f, rect.y + rect.height - 26f, rect.width - 20f, 7f),
@@ -472,21 +400,22 @@ namespace Labyrinth.UI
             DrawKnightIcon(new Rect(rect.x + 12f, rect.y + 16f, 48f, 52f), true);
             var textX = rect.x + 74f;
             var statusWidth = Mathf.Min(132f, rect.width * 0.32f);
-            GUI.Label(new Rect(textX, rect.y + 10f, rect.width - statusWidth - 90f, 28f), title, headerNameStyle);
-            GUI.Label(new Rect(textX, rect.y + 37f, rect.width - 96f, 18f), "герой-исследователь", subtitleStyle);
+            DrawFittedLabel(new Rect(textX, rect.y + 7f, rect.width - statusWidth - 90f, 46f), title, headerNameStyle, 14, true);
+            DrawFittedLabel(new Rect(textX, rect.y + 54f, rect.width - 96f, 18f), "герой-исследователь", subtitleStyle, 10, false);
             DrawStatusBadge(
                 new Rect(rect.xMax - statusWidth - 12f, rect.y + 14f, statusWidth, 26f),
                 BuildStateText(hero.Model.State),
                 BuildStateColor(hero.Model.State));
-            DrawHeaderXpBar(new Rect(textX, rect.y + 63f, rect.width - 92f, 15f), hero.Model.Experience, hero.Model.ExperienceForNextLevel);
+            DrawHeaderXpBar(new Rect(textX, rect.y + 72f, rect.width - 92f, 15f), hero.Model.Experience, hero.Model.ExperienceForNextLevel);
         }
 
-        private void DrawBlessingCard(Rect rect, string blessingText)
+        private void DrawTraitCard(Rect rect, string title, string value)
         {
             FillRect(rect, new Color(0.87f, 0.72f, 0.34f, 0.07f));
             DrawOutline(rect, new Color(0.87f, 0.72f, 0.34f, 0.18f));
-            GUI.Label(new Rect(rect.x + 10f, rect.y + 4f, rect.width - 20f, 14f), "Благословение", chipLabelStyle);
-            GUI.Label(new Rect(rect.x + 10f, rect.y + 18f, rect.width - 20f, 28f), string.IsNullOrEmpty(blessingText) ? "нет" : blessingText, blessingValueStyle);
+            DrawTraitIcon(new Rect(rect.x + 9f, rect.y + 5f, 12f, 12f), title);
+            DrawFittedLabel(new Rect(rect.x + 25f, rect.y + 4f, rect.width - 34f, 14f), title, chipLabelStyle, 10, false);
+            DrawFittedLabel(new Rect(rect.x + 10f, rect.y + 18f, rect.width - 20f, 28f), string.IsNullOrEmpty(value) ? "нет" : value, blessingValueStyle, 10, true);
         }
 
         private void DrawStatusBadge(Rect rect, string text, Color color)
@@ -511,7 +440,8 @@ namespace Labyrinth.UI
         {
             FillRect(rect, new Color(1f, 1f, 1f, 0.045f));
             DrawOutline(rect, new Color(1f, 1f, 1f, 0.08f));
-            GUI.Label(new Rect(rect.x + 10f, rect.y + 2f, rect.width - 20f, 16f), label, barLabelStyle);
+            DrawProgressIcon(new Rect(rect.x + 9f, rect.y + 3f, 14f, 14f), label);
+            GUI.Label(new Rect(rect.x + 29f, rect.y + 2f, rect.width - 39f, 16f), label, barLabelStyle);
 
             var barRect = new Rect(rect.x + 10f, rect.y + 21f, rect.width - 20f, 8f);
             FillRect(barRect, new Color(0f, 0f, 0f, 0.45f));
@@ -524,10 +454,11 @@ namespace Labyrinth.UI
         {
             FillRect(rect, new Color(1f, 1f, 1f, 0.055f));
             DrawOutline(rect, new Color(1f, 1f, 1f, 0.1f));
-            GUI.Label(new Rect(rect.x + 10f, rect.y + 4f, rect.width - 20f, 14f), label, chipLabelStyle);
+            DrawInfoChipIcon(new Rect(rect.x + 8f, rect.y + 10f, 18f, 18f), label);
+            GUI.Label(new Rect(rect.x + 31f, rect.y + 4f, rect.width - 39f, 14f), label, chipLabelStyle);
             var previousColor = GUI.color;
             GUI.color = valueColor;
-            GUI.Label(new Rect(rect.x + 10f, rect.y + 17f, rect.width - 20f, 18f), value, chipValueStyle);
+            GUI.Label(new Rect(rect.x + 31f, rect.y + 17f, rect.width - 39f, 18f), value, chipValueStyle);
             GUI.color = previousColor;
         }
 
@@ -535,11 +466,12 @@ namespace Labyrinth.UI
         {
             FillRect(rect, new Color(1f, 1f, 1f, 0.055f));
             DrawOutline(rect, new Color(1f, 1f, 1f, 0.1f));
+            DrawCombatIcon(new Rect(rect.x + 10f, rect.y + 14f, 22f, 22f), label);
             var previousColor = GUI.color;
             GUI.color = valueColor;
-            GUI.Label(new Rect(rect.x + 10f, rect.y + 7f, rect.width - 20f, 24f), value, combatValueStyle);
+            GUI.Label(new Rect(rect.x + 36f, rect.y + 7f, rect.width - 44f, 24f), value, combatValueStyle);
             GUI.color = previousColor;
-            GUI.Label(new Rect(rect.x + 10f, rect.y + 29f, rect.width - 20f, 18f), label, combatLabelStyle);
+            GUI.Label(new Rect(rect.x + 36f, rect.y + 29f, rect.width - 44f, 18f), label, combatLabelStyle);
         }
 
         private void DrawInventorySlot(Rect rect, HeroInventorySlot slot)
@@ -547,19 +479,32 @@ namespace Labyrinth.UI
             FillRect(rect, slot.HasItem ? new Color(0.18f, 0.17f, 0.15f, 0.95f) : new Color(0.08f, 0.08f, 0.08f, 0.7f));
             DrawOutline(rect, slot.HasItem ? new Color(0.75f, 0.63f, 0.36f, 0.45f) : new Color(1f, 1f, 1f, 0.16f));
 
-            var labelWidth = rect.width * 0.42f;
-            GUI.Label(new Rect(rect.x + 9f, rect.y, labelWidth - 9f, rect.height), slot.Label, slotLabelStyle);
+            var labelWidth = rect.width * 0.36f;
+            DrawFittedLabel(new Rect(rect.x + 9f, rect.y, labelWidth - 9f, rect.height), slot.Label, slotLabelStyle, 10, false);
 
             var itemX = rect.x + labelWidth;
-            if (slot.HasItem && DrawInventoryItemIcon(new Rect(itemX + 4f, rect.y + 4f, 19f, 19f), slot.ItemName))
+            var iconRect = new Rect(itemX + 4f, rect.y + 9f, 18f, 18f);
+            if (slot.HasItem)
             {
+                if (!DrawInventoryItemIcon(iconRect, slot.ItemName))
+                {
+                    DrawInventorySlotTypeIcon(iconRect, slot.Type);
+                }
+
+                itemX += 28f;
+            }
+            else
+            {
+                DrawInventorySlotTypeIcon(iconRect, slot.Type);
                 itemX += 28f;
             }
 
-            GUI.Label(
+            DrawFittedLabel(
                 new Rect(itemX, rect.y, rect.xMax - itemX - 8f, rect.height),
                 slot.DisplayItem,
-                slot.HasItem ? slotItemStyle : emptySlotStyle);
+                slot.HasItem ? slotItemStyle : emptySlotStyle,
+                10,
+                false);
         }
 
         private bool DrawInventoryItemIcon(Rect rect, string itemName)
@@ -597,6 +542,18 @@ namespace Labyrinth.UI
             if (IsFootwearItem(itemName))
             {
                 DrawBootIcon(rect);
+                return true;
+            }
+
+            if (IsWeaponItem(itemName))
+            {
+                DrawSwordIcon(rect, new Color(0.96f, 0.78f, 0.38f));
+                return true;
+            }
+
+            if (IsArmorItem(itemName))
+            {
+                DrawShieldIcon(rect, new Color(0.58f, 0.75f, 0.96f));
                 return true;
             }
 
@@ -662,8 +619,8 @@ namespace Labyrinth.UI
         {
             const float tooltipWidth = 260f;
             const float gap = 18f;
-            var bodyHeight = Mathf.Clamp(tooltipBodyStyle.CalcHeight(new GUIContent(info), tooltipWidth - 20f), 22f, 110f);
-            var tooltipHeight = Mathf.Clamp(bodyHeight + 43f, 66f, 150f);
+            var bodyHeight = Mathf.Clamp(tooltipBodyStyle.CalcHeight(new GUIContent(info), tooltipWidth - 20f), 22f, 180f);
+            var tooltipHeight = Mathf.Clamp(bodyHeight + 43f, 66f, 230f);
             var showOnRight = true;
             var x = sourceRect.xMax + gap;
             if (x + tooltipWidth > Screen.width - 10f)
@@ -747,8 +704,9 @@ namespace Labyrinth.UI
             iconNameStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleLeft,
-                fontSize = 15,
-                fontStyle = FontStyle.Bold
+                fontSize = 12,
+                fontStyle = FontStyle.Bold,
+                wordWrap = true
             };
             iconNameStyle.normal.textColor = new Color(0.96f, 0.92f, 0.82f);
             titleStyle = new GUIStyle(GUI.skin.label)
@@ -767,9 +725,10 @@ namespace Labyrinth.UI
             subtitleStyle.normal.textColor = new Color(0.72f, 0.7f, 0.64f);
             headerNameStyle = new GUIStyle(GUI.skin.label)
             {
-                alignment = TextAnchor.MiddleLeft,
-                fontSize = 23,
-                fontStyle = FontStyle.Bold
+                alignment = TextAnchor.UpperLeft,
+                fontSize = 20,
+                fontStyle = FontStyle.Bold,
+                wordWrap = true
             };
             headerNameStyle.normal.textColor = new Color(0.96f, 0.93f, 0.86f);
             statusBadgeStyle = new GUIStyle(GUI.skin.label)
@@ -852,16 +811,19 @@ namespace Labyrinth.UI
             slotLabelStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleLeft,
-                fontSize = 14,
-                fontStyle = FontStyle.Bold
+                fontSize = 12,
+                fontStyle = FontStyle.Bold,
+                wordWrap = false,
+                clipping = TextClipping.Clip
             };
             slotLabelStyle.normal.textColor = new Color(0.95f, 0.89f, 0.72f);
             slotItemStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleRight,
-                fontSize = 13,
+                fontSize = 12,
                 fontStyle = FontStyle.Bold,
-                wordWrap = true
+                wordWrap = false,
+                clipping = TextClipping.Clip
             };
             slotItemStyle.normal.textColor = Color.white;
             emptySlotStyle = new GUIStyle(slotItemStyle);

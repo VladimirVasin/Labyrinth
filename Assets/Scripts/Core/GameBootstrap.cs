@@ -31,6 +31,7 @@ namespace Labyrinth.Core
         private ResourceWallet resources;
         private BaseDevelopment baseDevelopment;
         private BaseAmbienceController baseAmbience;
+        private HeroHouseFundCourierController houseFundCouriers;
         private CityAmbienceController cityAmbience;
         private ResourceProductionController productionController;
         private HeroConsumableAutomation consumableAutomation;
@@ -46,6 +47,7 @@ namespace Labyrinth.Core
         private HeroHudView heroHud;
         private MobHudView mobHud;
         private BuildingMicroHudView buildingMicroHud;
+        private HeroLineageHudView heroLineageHud;
         private ObjectMicroHudView objectMicroHud;
         private VictoryHudView victoryHud;
         private TopHudView topHud;
@@ -88,6 +90,8 @@ namespace Labyrinth.Core
             baseDevelopment.ConfigurePlacementBlocker((position, footprintRadius) => terrainDecorations.BlocksBuilding(position, footprintRadius));
             baseAmbience = gameObject.AddComponent<BaseAmbienceController>();
             baseAmbience.Configure(terrainDecorations);
+            houseFundCouriers = gameObject.AddComponent<HeroHouseFundCourierController>();
+            houseFundCouriers.Configure(mazeRenderer, baseAmbience);
             cityAmbience = gameObject.AddComponent<CityAmbienceController>();
             cityAmbience.Configure(terrainDecorations);
             cameraController = gameObject.AddComponent<LabyrinthCameraController>();
@@ -97,7 +101,10 @@ namespace Labyrinth.Core
             consumableAutomation = new HeroConsumableAutomation(resources, baseDevelopment, mazeRenderer);
             goldIngotManager = gameObject.AddComponent<GoldIngotManager>();
             goldIngotManager.Configure(resources);
+            goldIngotManager.IngotDeliveredByHero += HandleHeroCarryObjectiveDelivered;
             deathTokenManager = gameObject.AddComponent<HeroDeathTokenManager>();
+            deathTokenManager.TokenDelivered += HandleHeroDeathTokenDelivered;
+            deathTokenManager.TokenDeliveredByHero += HandleHeroCarryObjectiveDelivered;
             taxCollectorController = gameObject.AddComponent<TaxCollectorController>();
             taxCollectorController.Configure(resources, baseDevelopment, mazeRenderer);
             dungeonFortificationController = gameObject.AddComponent<DungeonFortificationController>();
@@ -113,7 +120,9 @@ namespace Labyrinth.Core
             heroHud.Configure(() => heroes, () => selectedHero, SelectHero);
             mobHud = gameObject.AddComponent<MobHudView>();
             buildingMicroHud = gameObject.AddComponent<BuildingMicroHudView>();
-            buildingMicroHud.Configure(GetBuildingMicroHudLevel, GetBuildingMicroHudServices, HandleBuildingMicroHudServiceAction);
+            buildingMicroHud.Configure(GetBuildingMicroHudLevel, GetBuildingMicroHudServices, HandleBuildingMicroHudServiceAction, ShowHeroHouseLineage);
+            heroLineageHud = gameObject.AddComponent<HeroLineageHudView>();
+            heroLineageHud.Configure(GetActiveHeroByNumber);
             objectMicroHud = gameObject.AddComponent<ObjectMicroHudView>();
             victoryHud = gameObject.AddComponent<VictoryHudView>();
             topHud = gameObject.AddComponent<TopHudView>();
@@ -275,83 +284,6 @@ namespace Labyrinth.Core
             ShowBuildingHud(buildingView);
         }
 
-        private bool TryCloseOpenRuntimeHudFromOutsideClick()
-        {
-            if (!HasOpenClosableRuntimeHud() || !TryReadPrimaryClick(out var screenPosition))
-            {
-                return false;
-            }
-
-            if (IsPointerInsideRuntimeHud(screenPosition))
-            {
-                return false;
-            }
-
-            CloseOpenRuntimeHud();
-            return true;
-        }
-
-        private bool TryCloseOpenRuntimeHud()
-        {
-            if (!HasOpenClosableRuntimeHud())
-            {
-                return false;
-            }
-
-            CloseOpenRuntimeHud();
-            return true;
-        }
-
-        private bool HasOpenClosableRuntimeHud()
-        {
-            return baseHud.IsVisible
-                || heroHud.IsVisible
-                || buildingMicroHud.IsVisible
-                || mobHud.IsVisible
-                || objectMicroHud.IsVisible
-                || victoryHud.IsVisible
-                || mapHud.IsExpanded;
-        }
-
-        private void CloseOpenRuntimeHud()
-        {
-            var wasBaseHudOpen = baseHud.IsVisible;
-
-            baseHud.Hide();
-            heroHud.Hide();
-            buildingMicroHud.Hide();
-            objectMicroHud.Hide();
-            mobHud.Hide();
-            victoryHud.Hide();
-            mapHud.HideExpanded();
-            ClearSelectedMob();
-
-            if (wasBaseHudOpen && state == GameState.BaseHudOpen)
-            {
-                state = GameState.Playing;
-                cameraController.SetInteractionEnabled(true);
-            }
-        }
-
-        private bool IsPointerInsideRuntimeHud(Vector2 screenPosition)
-        {
-            return baseHud.ContainsScreenPoint(screenPosition)
-                || heroHud.ContainsScreenPoint(screenPosition)
-                || buildingMicroHud.ContainsScreenPoint(screenPosition)
-                || mobHud.ContainsScreenPoint(screenPosition)
-                || objectMicroHud.ContainsScreenPoint(screenPosition)
-                || victoryHud.ContainsScreenPoint(screenPosition)
-                || mapHud.ContainsScreenPoint(screenPosition);
-        }
-
-        private void HideWorldHuds()
-        {
-            buildingMicroHud.Hide();
-            mobHud.Hide();
-            objectMicroHud.Hide();
-            ClearSelectedMob();
-        }
-
         private bool IsObjectHudTargetVisible(ObjectMicroHudTarget target)
         {
             if (target == null || currentMaze == null || currentMaze.Grid == null)
@@ -372,6 +304,10 @@ namespace Labyrinth.Core
             mobHud.Hide();
             objectMicroHud.Hide();
             ClearSelectedMob();
+            if (buildingView.Type != BuildingType.HeroHouse)
+            {
+                heroLineageHud.Hide();
+            }
 
             if (buildingView.Type != BuildingType.Castle)
             {
@@ -470,6 +406,7 @@ namespace Labyrinth.Core
             heroHud.Hide();
             mobHud.Hide();
             buildingMicroHud.Hide();
+            heroLineageHud.Hide();
             objectMicroHud.Hide();
             victoryHud.Hide();
             cameraController.SetInteractionEnabled(false);
@@ -483,6 +420,7 @@ namespace Labyrinth.Core
             dungeonFortificationController.Clear();
             mineConstructionController.Clear();
             baseAmbience.Clear();
+            houseFundCouriers.Clear();
             cityAmbience.Clear();
             DestroyHeroes();
             DestroyHeroMemoryView();
@@ -519,6 +457,7 @@ namespace Labyrinth.Core
             currentBase = mazeRenderer.Render(currentMaze);
             terrainDecorations.Render(currentMaze, mazeRenderer, baseDevelopment);
             baseAmbience.Initialize(currentMaze, mazeRenderer);
+            houseFundCouriers.Clear();
             cityAmbience.Initialize(currentMaze, mazeRenderer);
             taxCollectorController.Initialize(currentMaze);
             cartographerMemory = new HeroMemory(currentMaze.Grid);
@@ -568,6 +507,7 @@ namespace Labyrinth.Core
             heroHud.Hide();
             mobHud.Hide();
             buildingMicroHud.Hide();
+            heroLineageHud.Hide();
             objectMicroHud.Hide();
             SetGameHudVisible(false);
             cameraController.SetInteractionEnabled(false);
@@ -595,6 +535,7 @@ namespace Labyrinth.Core
             heroHud.Hide();
             mobHud.Hide();
             buildingMicroHud.Hide();
+            heroLineageHud.Hide();
             objectMicroHud.Hide();
             victoryHud.Hide();
             GameAudioController.StopMenuMusic();
@@ -612,6 +553,7 @@ namespace Labyrinth.Core
             mazeRenderer.Clear();
             fogOfWarView.Clear();
             baseAmbience.Clear();
+            houseFundCouriers.Clear();
             cityAmbience.Clear();
             DestroyHeroes();
             DestroyHeroMemoryView();
@@ -645,11 +587,12 @@ namespace Labyrinth.Core
             ReturnToMainMenu();
         }
 
-        private void HandleMobDefeated(MobController defeatedMob)
+        private void HandleMobDefeated(HeroController victoriousHero, MobController defeatedMob)
         {
             var defeatedBoss = defeatedMob != null && defeatedMob.Model != null && defeatedMob.Model.IsBoss;
             var defeatedMiniBoss = defeatedMob != null && defeatedMob.Model != null && defeatedMob.Model.IsMiniBoss;
             mobManager.Remove(defeatedMob);
+            RefreshHeroHouseEffect(victoriousHero != null ? victoriousHero.DisplayNumber : 0);
             if (defeatedMiniBoss)
             {
                 UnsealCentralExitDoorAfterMiniBoss();

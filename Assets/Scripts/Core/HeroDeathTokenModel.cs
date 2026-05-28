@@ -16,12 +16,14 @@ namespace Labyrinth.Core
         public HeroDeathTokenModel(
             int id,
             int heroNumber,
+            string fallenHeroName,
             int levelNumber,
             Vector2Int position,
             Vector2Int housePosition)
         {
             Id = id;
             HeroNumber = heroNumber;
+            FallenHeroName = string.IsNullOrWhiteSpace(fallenHeroName) ? $"Рыцарь {heroNumber}" : fallenHeroName;
             LevelNumber = levelNumber;
             Position = position;
             HousePosition = housePosition;
@@ -32,6 +34,8 @@ namespace Labyrinth.Core
 
         public int HeroNumber { get; }
 
+        public string FallenHeroName { get; }
+
         public int LevelNumber { get; private set; }
 
         public Vector2Int Position { get; private set; }
@@ -40,7 +44,7 @@ namespace Labyrinth.Core
 
         public HeroDeathTokenState State { get; private set; }
 
-        public string ItemName => Labyrinth.Hero.HeroInventory.BuildDeathTokenItemName(HeroNumber);
+        public string ItemName => Labyrinth.Hero.HeroInventory.BuildDeathTokenItemName(Id);
 
         public bool IsAvailable => State == HeroDeathTokenState.Available;
 
@@ -72,6 +76,11 @@ namespace Labyrinth.Core
             Position = position;
             LevelNumber = levelNumber;
             State = HeroDeathTokenState.Available;
+            DestroyVisual();
+        }
+
+        public void DestroyVisual()
+        {
             if (visualObject != null)
             {
                 Object.Destroy(visualObject);

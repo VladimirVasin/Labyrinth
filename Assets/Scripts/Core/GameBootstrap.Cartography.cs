@@ -9,6 +9,8 @@ namespace Labyrinth.Core
     {
         private void SyncHeroKnowledgeAtEntrance(HeroModel heroModel, int heroNumber)
         {
+            TryContributeHeroHouseFundAtEntrance(heroModel, heroNumber);
+
             if (heroModel == null || cartographerMemory == null || !baseDevelopment.HasCartographerHouse)
             {
                 return;

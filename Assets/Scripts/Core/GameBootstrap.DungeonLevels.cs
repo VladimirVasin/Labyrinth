@@ -29,6 +29,7 @@ namespace Labyrinth.Core
             levelTwoEntryAnchor = stairs.Position;
             EnsureDungeonLevel(stairs.TargetLevel);
             unlockedDungeonLevel = Mathf.Max(unlockedDungeonLevel, stairs.TargetLevel);
+            RefreshHeroHouseEffect(heroNumber);
             victoryHud.Show($"Спуск открыт. Доступен уровень {stairs.TargetLevel}.");
             GameAudioController.Play(GameSfx.LevelSwitch, mazeRenderer.GridToWorld(stairs.Position), 0.9f);
             GameDebugLog.Info(
@@ -447,6 +448,7 @@ namespace Labyrinth.Core
                 if (house != null)
                 {
                     heroHouseViewsByHeroNumber[heroNumber] = house;
+                    house.SetEffectText(GetHeroHouseEffectText(heroNumber));
                 }
 
                 RegisterExistingBuilding(BuildingType.HeroHouse, housePosition);

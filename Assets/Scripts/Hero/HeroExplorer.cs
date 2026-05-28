@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Labyrinth.Hero
 {
-    public sealed class HeroExplorer
+    public sealed partial class HeroExplorer
     {
         private delegate bool EquipmentEquipHandler(out string previousItem);
 
@@ -315,8 +315,9 @@ namespace Labyrinth.Hero
             model.MoveTo(position);
             if (model.Memory.Remember(position))
             {
-                var gainedLevels = model.RewardNewCellExploration();
+                var gainedLevels = model.RewardNewCellExploration(out var vengeanceProgress);
                 LogExplorationProgress(position, gainedLevels);
+                ShowVengeanceProgress(vengeanceProgress, position, 2.1f);
             }
 
             TryOpenChestInCurrentCave();
@@ -694,6 +695,29 @@ namespace Labyrinth.Hero
                 $"{HeroLogName} exploration progress: newCell={GameDebugLog.Position(position)}, memory={model.Memory.RememberedCount}, walls={model.Memory.RememberedWallCount}, stamina={model.Stamina}/{model.MaxStamina}, gold={model.Gold}, xp={model.Experience}/{model.ExperienceForNextLevel}, level={model.Level}, gainedLevels={gainedLevels}.");
         }
 
+        private void ShowVengeanceProgress(HeroVengeanceProgressResult result, Vector2Int position, float delay)
+        {
+            if (!result.HasAnyFeedback)
+            {
+                return;
+            }
+
+            if (result.Completed)
+            {
+                DamageNumberView.CreateText(
+                    mazeRenderer,
+                    position,
+                    result.Message,
+                    new Color(1f, 0.72f, 0.28f),
+                    delay);
+                GameAudioController.Play(GameSfx.LevelUp, mazeRenderer.GridToWorld(position), 0.62f);
+            }
+
+            GameDebugLog.Info(
+                "Hero",
+                $"{HeroLogName} vengeance progress: {result.Message}, goldBonus={result.BonusGold}, xpBonus={result.BonusExperience}, hpBonus={result.MaxHitPointBonus}, staminaBonus={result.MaxStaminaBonus}.");
+        }
+
         private void LogMissingDoorPathOnce(CentralDoorModel door)
         {
             if (!doorPathWarningPositions.Add(door.Position))
@@ -740,6 +764,7 @@ namespace Labyrinth.Hero
             targetDoor = null;
             model.SetState(HeroState.OpeningDoor);
             GameAudioController.Play(GameSfx.DoorOpen, mazeRenderer.GridToWorld(door.Position));
+            ShowVengeanceProgress(model.RegisterVengeanceBarrierOpened(door.Position, false), door.Position, 1.8f);
             GameDebugLog.Info("Hero", $"{HeroLogName} opened {door.Name} at {GameDebugLog.Position(door.Position)} using {HeroInventory.CentralRoomKeyItemName}.");
             return true;
         }
@@ -790,6 +815,7 @@ namespace Labyrinth.Hero
             targetDoor = null;
             model.SetState(HeroState.OpeningDoor);
             GameAudioController.Play(GameSfx.StairsOpen, mazeRenderer.GridToWorld(stairs.Position));
+            ShowVengeanceProgress(model.RegisterVengeanceBarrierOpened(stairs.Position, true), stairs.Position, 1.8f);
             GameDebugLog.Info("Hero", $"{HeroLogName} opened {stairs.DisplayName} at {GameDebugLog.Position(stairs.Position)} using {HeroInventory.DescentKeyItemName}.");
             downStairsOpened?.Invoke(model, heroNumber, stairs);
             return true;
@@ -880,238 +906,14 @@ namespace Labyrinth.Hero
 
                 if (model.Memory.Remember(cellPosition))
                 {
-                    var gainedLevels = model.RewardNewCellExploration();
+                    var gainedLevels = model.RewardNewCellExploration(out var vengeanceProgress);
                     LogExplorationProgress(cellPosition, gainedLevels);
+                    ShowVengeanceProgress(vengeanceProgress, cellPosition, 2.1f);
                     rememberedCells++;
                 }
             }
 
             return rememberedCells;
-        }
-
-        private bool TryFindUnrememberedNeighbor(Vector2Int position, out Vector2Int next)
-        {
-            foreach (var neighbor in grid.WalkableNeighbors(position))
-            {
-                if (!model.Memory.IsRemembered(neighbor))
-                {
-                    next = neighbor;
-                    return true;
-                }
-            }
-
-            next = default;
-            return false;
-        }
-
-        private bool TryBuildPathToNearestFrontier(out Queue<Vector2Int> path)
-        {
-            path = new Queue<Vector2Int>();
-            var queue = new Queue<Vector2Int>();
-            var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
-
-            queue.Enqueue(model.Position);
-            cameFrom[model.Position] = model.Position;
-
-            while (queue.Count > 0)
-            {
-                var current = queue.Dequeue();
-                if (current != model.Position && HasUnrememberedNeighbor(current))
-                {
-                    path = BuildPath(cameFrom, model.Position, current);
-                    return true;
-                }
-
-                foreach (var neighbor in grid.WalkableNeighbors(current))
-                {
-                    if (!model.Memory.IsRemembered(neighbor) || cameFrom.ContainsKey(neighbor))
-                    {
-                        continue;
-                    }
-
-                    cameFrom[neighbor] = current;
-                    queue.Enqueue(neighbor);
-                }
-            }
-
-            return false;
-        }
-
-        private bool TryBuildRememberedPath(Vector2Int start, Vector2Int target, out Queue<Vector2Int> path)
-        {
-            path = new Queue<Vector2Int>();
-            var queue = new Queue<Vector2Int>();
-            var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
-
-            queue.Enqueue(start);
-            cameFrom[start] = start;
-
-            while (queue.Count > 0)
-            {
-                var current = queue.Dequeue();
-                if (current == target)
-                {
-                    path = BuildPath(cameFrom, start, target);
-                    return true;
-                }
-
-                foreach (var neighbor in grid.WalkableNeighbors(current))
-                {
-                    if (!model.Memory.IsRemembered(neighbor) || cameFrom.ContainsKey(neighbor))
-                    {
-                        continue;
-                    }
-
-                    cameFrom[neighbor] = current;
-                    queue.Enqueue(neighbor);
-                }
-            }
-
-            return false;
-        }
-
-        private bool TryBuildRememberedPathToDoor(CentralDoorModel door, out Queue<Vector2Int> path)
-        {
-            path = new Queue<Vector2Int>();
-            var queue = new Queue<Vector2Int>();
-            var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
-
-            queue.Enqueue(model.Position);
-            cameFrom[model.Position] = model.Position;
-
-            while (queue.Count > 0)
-            {
-                var current = queue.Dequeue();
-                if (GridDistance(current, door.Position) <= 1)
-                {
-                    path = BuildPath(cameFrom, model.Position, current);
-                    return true;
-                }
-
-                foreach (var neighbor in grid.WalkableNeighbors(current))
-                {
-                    if (!model.Memory.IsRemembered(neighbor) || cameFrom.ContainsKey(neighbor))
-                    {
-                        continue;
-                    }
-
-                    cameFrom[neighbor] = current;
-                    queue.Enqueue(neighbor);
-                }
-            }
-
-            return false;
-        }
-
-        private bool TryBuildRememberedPathToStairs(DungeonStairsModel stairs, out Queue<Vector2Int> path)
-        {
-            path = new Queue<Vector2Int>();
-            var queue = new Queue<Vector2Int>();
-            var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
-
-            queue.Enqueue(model.Position);
-            cameFrom[model.Position] = model.Position;
-
-            while (queue.Count > 0)
-            {
-                var current = queue.Dequeue();
-                if (GridDistance(current, stairs.Position) <= 1)
-                {
-                    path = BuildPath(cameFrom, model.Position, current);
-                    return true;
-                }
-
-                foreach (var neighbor in grid.WalkableNeighbors(current))
-                {
-                    if (!model.Memory.IsRemembered(neighbor) || cameFrom.ContainsKey(neighbor))
-                    {
-                        continue;
-                    }
-
-                    cameFrom[neighbor] = current;
-                    queue.Enqueue(neighbor);
-                }
-            }
-
-            return false;
-        }
-
-        private bool TryBuildPathToFarthestRememberedCell(out Queue<Vector2Int> path)
-        {
-            path = new Queue<Vector2Int>();
-            var queue = new Queue<Vector2Int>();
-            var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
-            var farthest = model.Position;
-            var farthestDistance = 0;
-
-            queue.Enqueue(model.Position);
-            cameFrom[model.Position] = model.Position;
-
-            while (queue.Count > 0)
-            {
-                var current = queue.Dequeue();
-                var currentDistance = GridDistance(model.Position, current);
-                if (currentDistance > farthestDistance)
-                {
-                    farthestDistance = currentDistance;
-                    farthest = current;
-                }
-
-                foreach (var neighbor in grid.WalkableNeighbors(current))
-                {
-                    if (!model.Memory.IsRemembered(neighbor) || cameFrom.ContainsKey(neighbor))
-                    {
-                        continue;
-                    }
-
-                    cameFrom[neighbor] = current;
-                    queue.Enqueue(neighbor);
-                }
-            }
-
-            if (farthest == model.Position)
-            {
-                return false;
-            }
-
-            path = BuildPath(cameFrom, model.Position, farthest);
-            return path.Count > 0;
-        }
-
-        private bool HasUnrememberedNeighbor(Vector2Int position)
-        {
-            foreach (var neighbor in grid.WalkableNeighbors(position))
-            {
-                if (!model.Memory.IsRemembered(neighbor))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static Queue<Vector2Int> BuildPath(
-            IReadOnlyDictionary<Vector2Int, Vector2Int> cameFrom,
-            Vector2Int start,
-            Vector2Int target)
-        {
-            var reversed = new List<Vector2Int>();
-            var current = target;
-
-            while (current != start)
-            {
-                reversed.Add(current);
-                current = cameFrom[current];
-            }
-
-            reversed.Reverse();
-            return new Queue<Vector2Int>(reversed);
-        }
-
-        private static int GridDistance(Vector2Int a, Vector2Int b)
-        {
-            return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
         }
 
         private string HeroLogName => $"Hero #{heroNumber}";

@@ -34,6 +34,8 @@ namespace Labyrinth.Core
         private Material shadowMaterial;
         private int nextIngotId;
 
+        public event System.Action<HeroModel> IngotDeliveredByHero;
+
         public int AvailableCount
         {
             get
@@ -169,6 +171,8 @@ namespace Labyrinth.Core
 
             resources.AddGold(TreasuryGoldReward);
             var gainedLevels = hero.AddExperience(DeliveryExperienceReward);
+            var vengeanceProgress = hero.ApplyGoldIngotDeliveryVengeance();
+            gainedLevels += vengeanceProgress.GainedLevels;
             if (carriedIngots.TryGetValue(hero, out var ingot))
             {
                 ingot.Deliver();
@@ -187,6 +191,7 @@ namespace Labyrinth.Core
                 $"+{DeliveryExperienceReward} XP",
                 new Color(0.55f, 0.86f, 1f),
                 2.05f);
+            ShowVengeanceProgress(hero, vengeanceProgress, 2.35f);
             GameAudioController.Play(GameSfx.IngotDeposit, mazeRenderer.GridToWorld(result.EntrancePosition));
             if (gainedLevels > 0)
             {
@@ -195,7 +200,8 @@ namespace Labyrinth.Core
 
             GameDebugLog.Info(
                 "Hero",
-                $"Hero delivered gold ingot: treasuryGold={resources.Gold}, heroXP={hero.Experience}/{hero.ExperienceForNextLevel}, heroLevel={hero.Level}, gainedLevels={gainedLevels}.");
+                $"Hero delivered gold ingot: treasuryGold={resources.Gold}, vengeanceGold={vengeanceProgress.BonusGold}, vengeanceXP={vengeanceProgress.BonusExperience}, heroGold={hero.Gold}, heroXP={hero.Experience}/{hero.ExperienceForNextLevel}, heroLevel={hero.Level}, gainedLevels={gainedLevels}.");
+            IngotDeliveredByHero?.Invoke(hero);
             return true;
         }
 
@@ -492,6 +498,46 @@ namespace Labyrinth.Core
             collider.center = new Vector3(0f, mazeRenderer.CellSize * 0.14f, 0f);
             collider.size = new Vector3(mazeRenderer.CellSize * 0.52f, mazeRenderer.CellSize * 0.28f, mazeRenderer.CellSize * 0.38f);
             ingot.AttachVisual(ingotRoot);
+        }
+
+        private void ShowVengeanceProgress(HeroModel hero, HeroVengeanceProgressResult progress, float delay)
+        {
+            if (!progress.HasAnyFeedback || hero == null)
+            {
+                return;
+            }
+
+            if (progress.Completed)
+            {
+                DamageNumberView.CreateText(
+                    mazeRenderer,
+                    result.EntrancePosition,
+                    progress.Message,
+                    new Color(1f, 0.72f, 0.28f),
+                    delay);
+                delay += 0.3f;
+            }
+
+            if (progress.BonusGold > 0)
+            {
+                DamageNumberView.CreateText(
+                    mazeRenderer,
+                    result.EntrancePosition,
+                    $"+{progress.BonusGold} личн. зол.",
+                    new Color(1f, 0.84f, 0.26f),
+                    delay);
+                delay += 0.3f;
+            }
+
+            if (progress.BonusExperience > 0)
+            {
+                DamageNumberView.CreateText(
+                    mazeRenderer,
+                    result.EntrancePosition,
+                    $"+{progress.BonusExperience} XP клятвы",
+                    new Color(0.55f, 0.86f, 1f),
+                    delay);
+            }
         }
 
         private static GameObject CreateCube(

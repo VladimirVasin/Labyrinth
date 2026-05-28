@@ -12,21 +12,42 @@ namespace Labyrinth.Combat
         private const float FirstHitDelay = 0.38f;
         private const float TurnDelay = 0.78f;
         private const float FinishDelay = 0.55f;
-        private const int MinOrcGoldReward = 14;
-        private const int MaxOrcGoldReward = 24;
-        private const int OrcExperienceReward = 14;
-        private const int MinGoblinGoldReward = 7;
-        private const int MaxGoblinGoldReward = 13;
-        private const int GoblinExperienceReward = 7;
-        private const int MinRatGoldReward = 3;
-        private const int MaxRatGoldReward = 6;
-        private const int RatExperienceReward = 2;
-        private const int MinMiniBossGoldReward = 36;
-        private const int MaxMiniBossGoldReward = 64;
-        private const int MiniBossExperienceReward = 48;
-        private const int MinBossGoldReward = 110;
-        private const int MaxBossGoldReward = 170;
-        private const int BossExperienceReward = 125;
+        private const int MinOrcGoldReward = 18;
+        private const int MaxOrcGoldReward = 32;
+        private const int MinOrcExperienceReward = 15;
+        private const int MaxOrcExperienceReward = 20;
+        private const int MinGoblinGoldReward = 8;
+        private const int MaxGoblinGoldReward = 16;
+        private const int MinGoblinExperienceReward = 7;
+        private const int MaxGoblinExperienceReward = 10;
+        private const int MinRatGoldReward = 4;
+        private const int MaxRatGoldReward = 8;
+        private const int MinRatExperienceReward = 2;
+        private const int MaxRatExperienceReward = 4;
+        private const int MinMiniBossRatGoldReward = 44;
+        private const int MaxMiniBossRatGoldReward = 76;
+        private const int MinMiniBossRatExperienceReward = 50;
+        private const int MaxMiniBossRatExperienceReward = 62;
+        private const int MinMiniBossGoblinGoldReward = 48;
+        private const int MaxMiniBossGoblinGoldReward = 82;
+        private const int MinMiniBossGoblinExperienceReward = 55;
+        private const int MaxMiniBossGoblinExperienceReward = 68;
+        private const int MinMiniBossOrcGoldReward = 55;
+        private const int MaxMiniBossOrcGoldReward = 95;
+        private const int MinMiniBossOrcExperienceReward = 62;
+        private const int MaxMiniBossOrcExperienceReward = 78;
+        private const int MinBossRatGoldReward = 120;
+        private const int MaxBossRatGoldReward = 200;
+        private const int MinBossRatExperienceReward = 125;
+        private const int MaxBossRatExperienceReward = 150;
+        private const int MinBossGoblinGoldReward = 135;
+        private const int MaxBossGoblinGoldReward = 215;
+        private const int MinBossGoblinExperienceReward = 135;
+        private const int MaxBossGoblinExperienceReward = 160;
+        private const int MinBossOrcGoldReward = 155;
+        private const int MaxBossOrcGoldReward = 250;
+        private const int MinBossOrcExperienceReward = 155;
+        private const int MaxBossOrcExperienceReward = 185;
 
         private readonly System.Random rewardRandom = new System.Random();
         private HeroController hero;
@@ -36,9 +57,10 @@ namespace Labyrinth.Combat
         private bool heroTurn;
         private bool finishing;
         private bool heroOpeningAttackUsed;
+        private bool mobOpeningAttackUsed;
         private float timer;
 
-        public event Action<MobController> MobDefeated;
+        public event Action<HeroController, MobController> MobDefeated;
 
         public bool IsActive { get; private set; }
 
@@ -71,6 +93,7 @@ namespace Labyrinth.Combat
             heroTurn = true;
             finishing = false;
             heroOpeningAttackUsed = false;
+            mobOpeningAttackUsed = false;
             timer = FirstHitDelay;
             IsActive = true;
 
@@ -113,6 +136,7 @@ namespace Labyrinth.Combat
             {
                 var attack = hero.Model.AttackPoints;
                 var firstHitBonus = 0;
+                var isOpeningAttack = !heroOpeningAttackUsed;
                 if (!heroOpeningAttackUsed)
                 {
                     firstHitBonus = hero.Model.FirstHitBlessingBonus;
@@ -120,6 +144,8 @@ namespace Labyrinth.Combat
                     heroOpeningAttackUsed = true;
                 }
 
+                var vengeanceBonus = hero.Model.GetVengeanceAttackBonus(mob.Model, isOpeningAttack, attack);
+                attack += vengeanceBonus;
                 var hpBefore = mob.Model.HitPoints;
                 var damage = mob.ReceiveDamage(attack);
                 hero.PlayAttack(mob.Position);
@@ -127,7 +153,7 @@ namespace Labyrinth.Combat
                 GameAudioController.Play(GameSfx.CombatHit, mazeRenderer.GridToWorld(mob.Position));
                 GameDebugLog.Info(
                     "Combat",
-                    $"Hero #{hero.DisplayNumber} hit {mob.DebugName}: attack={attack}, firstHitBonus={firstHitBonus}, mobArmor={mob.Model.ArmorPoints}, damage={damage}, mobHP={hpBefore}->{mob.Model.HitPoints}/{mob.Model.MaxHitPoints}.");
+                    $"Hero #{hero.DisplayNumber} hit {mob.DebugName}: attack={attack}, firstHitBonus={firstHitBonus}, vengeanceBonus={vengeanceBonus}, mobArmor={mob.Model.ArmorPoints}, damage={damage}, mobHP={hpBefore}->{mob.Model.HitPoints}/{mob.Model.MaxHitPoints}.");
 
                 if (!mob.Model.IsAlive)
                 {
@@ -137,14 +163,22 @@ namespace Labyrinth.Combat
             }
             else
             {
+                hero.Model.RememberCombatThreat(mob.Model);
+                var incomingAttack = mob.Model.AttackPoints;
+                var modifiedAttack = hero.Model.ApplyVengeanceIncomingAttackModifier(
+                    mob.Model,
+                    incomingAttack,
+                    !mobOpeningAttackUsed,
+                    out var vengeanceReduction);
+                mobOpeningAttackUsed = true;
                 var hpBefore = hero.Model.HitPoints;
-                var damage = hero.ReceiveDamage(mob.Model.AttackPoints);
+                var damage = hero.ReceiveDamage(modifiedAttack);
                 mob.PlayAttack(hero.Model.Position);
                 DamageNumberView.Create(mazeRenderer, hero.Model.Position, damage, new Color(1f, 0.3f, 0.24f));
                 GameAudioController.Play(GameSfx.CombatHit, mazeRenderer.GridToWorld(hero.Model.Position));
                 GameDebugLog.Info(
                     "Combat",
-                    $"{mob.DebugName} hit Hero #{hero.DisplayNumber}: attack={mob.Model.AttackPoints}, heroArmor={hero.Model.ArmorPoints}, damage={damage}, heroHP={hpBefore}->{hero.Model.HitPoints}/{hero.Model.MaxHitPoints}.");
+                    $"{mob.DebugName} hit Hero #{hero.DisplayNumber}: attack={incomingAttack}, modifiedAttack={modifiedAttack}, vengeanceReduction={vengeanceReduction}, heroArmor={hero.Model.ArmorPoints}, damage={damage}, heroHP={hpBefore}->{hero.Model.HitPoints}/{hero.Model.MaxHitPoints}.");
 
                 if (!hero.Model.IsAlive)
                 {
@@ -209,7 +243,7 @@ namespace Labyrinth.Combat
             if (mob != null && !mob.Model.IsAlive)
             {
                 GiveHeroVictoryReward();
-                MobDefeated?.Invoke(mob);
+                MobDefeated?.Invoke(hero, mob);
             }
             else if (mob != null)
             {
@@ -247,13 +281,20 @@ namespace Labyrinth.Combat
             var rewardProfile = BuildRewardProfile(mob.Model);
             var reward = rewardRandom.Next(rewardProfile.MinGold, rewardProfile.MaxGold + 1);
             reward = hero.Model.ApplyGoldRewardBlessing(reward);
+            var vengeanceGoldBonus = hero.Model.GetVengeanceGoldRewardBonus(mob.Model, reward);
+            reward += vengeanceGoldBonus;
             hero.Model.AddGold(reward);
-            var experienceReward = rewardProfile.Experience + GetDarkHunterExperienceBonus();
+            var vengeanceExperienceBonus = hero.Model.GetVengeanceExperienceRewardBonus(mob.Model);
+            var experienceReward = rewardRandom.Next(rewardProfile.MinExperience, rewardProfile.MaxExperience + 1)
+                + GetDarkHunterExperienceBonus()
+                + vengeanceExperienceBonus;
             var gainedLevels = hero.Model.AddExperience(experienceReward);
+            var vengeanceProgress = hero.Model.RegisterVengeanceMobDefeated(mob.Model);
+            gainedLevels += vengeanceProgress.GainedLevels;
             GameAudioController.Play(GameSfx.Deposit, mazeRenderer.GridToWorld(hero.Model.Position));
             GameDebugLog.Info(
                 "Combat",
-                $"Mob defeated: {mob.DebugName}, rewardGold={reward}, rewardXP={experienceReward}, darkSpawn={mob.Model.SpawnedFromDarkness}, heroGold={hero.Model.Gold}, heroXP={hero.Model.Experience}/{hero.Model.ExperienceForNextLevel}, heroLevel={hero.Model.Level}, gainedLevels={gainedLevels}");
+                $"Mob defeated: {mob.DebugName}, rewardGold={reward}, rewardXP={experienceReward}, vengeanceGoldBonus={vengeanceGoldBonus}, vengeanceXPBonus={vengeanceExperienceBonus}, vengeanceProgress={vengeanceProgress.Message}, darkSpawn={mob.Model.SpawnedFromDarkness}, heroGold={hero.Model.Gold}, heroXP={hero.Model.Experience}/{hero.Model.ExperienceForNextLevel}, heroLevel={hero.Model.Level}, gainedLevels={gainedLevels}");
             DamageNumberView.CreateText(
                 mazeRenderer,
                 hero.Model.Position,
@@ -266,6 +307,7 @@ namespace Labyrinth.Combat
                 $"+{experienceReward} XP",
                 new Color(0.55f, 0.86f, 1f),
                 2.05f);
+            ShowVengeanceProgress(vengeanceProgress, rewardProfile.IsBoss ? 2.65f : 2.35f);
 
             if (rewardProfile.IsBoss)
             {
@@ -305,6 +347,48 @@ namespace Labyrinth.Combat
             return HeroModel.DarkHunterExperienceBonus;
         }
 
+        private void ShowVengeanceProgress(HeroVengeanceProgressResult result, float baseDelay)
+        {
+            if (!result.HasAnyFeedback || mazeRenderer == null || hero == null || hero.Model == null)
+            {
+                return;
+            }
+
+            var delay = baseDelay;
+            if (result.Completed)
+            {
+                DamageNumberView.CreateText(
+                    mazeRenderer,
+                    hero.Model.Position,
+                    result.Message,
+                    new Color(1f, 0.72f, 0.28f),
+                    delay);
+                delay += 0.3f;
+                GameAudioController.Play(GameSfx.LevelUp, mazeRenderer.GridToWorld(hero.Model.Position), 0.65f);
+            }
+
+            if (result.BonusGold > 0)
+            {
+                DamageNumberView.CreateText(
+                    mazeRenderer,
+                    hero.Model.Position,
+                    $"+{result.BonusGold} зол. клятвы",
+                    new Color(1f, 0.84f, 0.26f),
+                    delay);
+                delay += 0.3f;
+            }
+
+            if (result.BonusExperience > 0)
+            {
+                DamageNumberView.CreateText(
+                    mazeRenderer,
+                    hero.Model.Position,
+                    $"+{result.BonusExperience} XP клятвы",
+                    new Color(0.55f, 0.86f, 1f),
+                    delay);
+            }
+        }
+
         private void GiveDescentKeyReward()
         {
             if (hero == null || hero.Model == null)
@@ -335,23 +419,41 @@ namespace Labyrinth.Combat
         {
             if (model != null && model.IsBoss)
             {
-                return new RewardProfile(MinBossGoldReward, MaxBossGoldReward, BossExperienceReward, true);
+                switch (model.Species)
+                {
+                    case MobSpecies.Rat:
+                        return new RewardProfile(MinBossRatGoldReward, MaxBossRatGoldReward, MinBossRatExperienceReward, MaxBossRatExperienceReward, true);
+                    case MobSpecies.Goblin:
+                        return new RewardProfile(MinBossGoblinGoldReward, MaxBossGoblinGoldReward, MinBossGoblinExperienceReward, MaxBossGoblinExperienceReward, true);
+                    case MobSpecies.Orc:
+                    default:
+                        return new RewardProfile(MinBossOrcGoldReward, MaxBossOrcGoldReward, MinBossOrcExperienceReward, MaxBossOrcExperienceReward, true);
+                }
             }
 
             if (model != null && model.IsMiniBoss)
             {
-                return new RewardProfile(MinMiniBossGoldReward, MaxMiniBossGoldReward, MiniBossExperienceReward, false);
+                switch (model.Species)
+                {
+                    case MobSpecies.Rat:
+                        return new RewardProfile(MinMiniBossRatGoldReward, MaxMiniBossRatGoldReward, MinMiniBossRatExperienceReward, MaxMiniBossRatExperienceReward, false);
+                    case MobSpecies.Goblin:
+                        return new RewardProfile(MinMiniBossGoblinGoldReward, MaxMiniBossGoblinGoldReward, MinMiniBossGoblinExperienceReward, MaxMiniBossGoblinExperienceReward, false);
+                    case MobSpecies.Orc:
+                    default:
+                        return new RewardProfile(MinMiniBossOrcGoldReward, MaxMiniBossOrcGoldReward, MinMiniBossOrcExperienceReward, MaxMiniBossOrcExperienceReward, false);
+                }
             }
 
             switch (model?.Species)
             {
                 case MobSpecies.Rat:
-                    return new RewardProfile(MinRatGoldReward, MaxRatGoldReward, RatExperienceReward, false);
+                    return new RewardProfile(MinRatGoldReward, MaxRatGoldReward, MinRatExperienceReward, MaxRatExperienceReward, false);
                 case MobSpecies.Goblin:
-                    return new RewardProfile(MinGoblinGoldReward, MaxGoblinGoldReward, GoblinExperienceReward, false);
+                    return new RewardProfile(MinGoblinGoldReward, MaxGoblinGoldReward, MinGoblinExperienceReward, MaxGoblinExperienceReward, false);
                 case MobSpecies.Orc:
                 default:
-                    return new RewardProfile(MinOrcGoldReward, MaxOrcGoldReward, OrcExperienceReward, false);
+                    return new RewardProfile(MinOrcGoldReward, MaxOrcGoldReward, MinOrcExperienceReward, MaxOrcExperienceReward, false);
             }
         }
 
@@ -377,11 +479,12 @@ namespace Labyrinth.Combat
 
         private readonly struct RewardProfile
         {
-            public RewardProfile(int minGold, int maxGold, int experience, bool isBoss)
+            public RewardProfile(int minGold, int maxGold, int minExperience, int maxExperience, bool isBoss)
             {
                 MinGold = minGold;
                 MaxGold = maxGold;
-                Experience = experience;
+                MinExperience = minExperience;
+                MaxExperience = maxExperience;
                 IsBoss = isBoss;
             }
 
@@ -389,7 +492,9 @@ namespace Labyrinth.Combat
 
             public int MaxGold { get; }
 
-            public int Experience { get; }
+            public int MinExperience { get; }
+
+            public int MaxExperience { get; }
 
             public bool IsBoss { get; }
         }

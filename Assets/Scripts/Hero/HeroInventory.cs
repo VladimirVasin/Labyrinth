@@ -101,7 +101,7 @@ namespace Labyrinth.Hero
         public const string ReturnStoneHoverInfo = "Одноразово переносит рыцаря ко входу, когда он возвращается из подземелья";
         public const string GoldIngotItemName = "Золотой слиток";
         public const string GoldIngotHoverInfo = "Доставить к входу: +20 зол. в казну, +5 XP";
-        public const string DeathTokenItemPrefix = "Жетон Рыцаря ";
+        public const string DeathTokenItemPrefix = "Жетон #";
         public const string DeathTokenHoverInfo = "Вернуть к входу: жетон прикрепится к дому погибшего рыцаря, +10 XP";
         public const int SteelSwordAttackBonus = 3;
         public const int ChainmailArmorBonus = 2;
@@ -172,9 +172,9 @@ namespace Labyrinth.Hero
 
         public bool HasDeathToken => TryGetDeathTokenItemName(out _);
 
-        public static string BuildDeathTokenItemName(int heroNumber)
+        public static string BuildDeathTokenItemName(int tokenId)
         {
-            return $"{DeathTokenItemPrefix}{Math.Max(0, heroNumber)}";
+            return $"{DeathTokenItemPrefix}{Math.Max(0, tokenId)}";
         }
 
         public static bool IsDeathTokenItem(string itemName)

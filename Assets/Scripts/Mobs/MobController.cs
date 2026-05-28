@@ -136,7 +136,7 @@ namespace Labyrinth.Mobs
             grid = mazeGrid;
             random = new System.Random(seed);
             DebugId = ++nextDebugId;
-            Model = new MobModel(spawnPosition, species, rank, dungeonLevel);
+            Model = new MobModel(spawnPosition, species, rank, dungeonLevel, seed);
             view = MobView.Create(renderer, spawnPosition, species, rank);
             view.SetController(this);
             view.transform.SetParent(transform, true);
