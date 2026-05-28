@@ -666,6 +666,11 @@ namespace Labyrinth.Core
             return $"{GameDebugLog.Position(WorldToApproxGridCell(worldPosition))}/world({x}, {z})";
         }
 
+        private static string FormatSeconds(float seconds)
+        {
+            return Mathf.Max(0f, seconds).ToString("0.0", CultureInfo.InvariantCulture);
+        }
+
         private static string FormatCellPathPreview(IReadOnlyList<Vector2Int> cells)
         {
             if (cells == null || cells.Count == 0)

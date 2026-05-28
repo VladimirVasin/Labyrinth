@@ -86,7 +86,7 @@ namespace Labyrinth.Core
 
         private void UpdateWorkerBuild(MineWorker worker, int workerIndex)
         {
-            worker.BuildRemaining -= Time.deltaTime;
+            worker.BuildRemaining = Mathf.Max(0f, worker.BuildRemaining - Time.deltaTime);
             constructionRenderer.AnimateWorkerBuild(
                 worker.Root,
                 1f - Mathf.Clamp01(worker.BuildRemaining / worker.BuildSeconds));
@@ -100,7 +100,7 @@ namespace Labyrinth.Core
             {
                 GameDebugLog.Info(
                     "Mine",
-                    $"Mine worker #{worker.Id} finished mine build: cave={GameDebugLog.Position(zone.Cave.Center)}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, buildSeconds={worker.BuildSeconds:0.0}.");
+                    $"Mine worker #{worker.Id} finished mine build: cave={GameDebugLog.Position(zone.Cave.Center)}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, buildSeconds={FormatSeconds(worker.BuildSeconds)}.");
                 CompleteMine(zone);
                 DismissWorkersForZone(zone);
                 return;
@@ -109,7 +109,7 @@ namespace Labyrinth.Core
             var targetIndex = worker.TargetIndex;
             GameDebugLog.Info(
                 "Mine",
-                $"Mine worker #{worker.Id} finished route cell: target={GameDebugLog.Position(worker.TargetCell)}, index={targetIndex}/{zone.Route.Count}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, buildSeconds={worker.BuildSeconds:0.0}.");
+                $"Mine worker #{worker.Id} finished route cell: target={GameDebugLog.Position(worker.TargetCell)}, index={targetIndex}/{zone.Route.Count}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, buildSeconds={FormatSeconds(worker.BuildSeconds)}.");
             CompleteRouteCell(zone, worker.TargetCell);
             if (TryBuildRouteTargetToCastleWorldPath(zone.Route, targetIndex, out var returnPath))
             {
@@ -140,7 +140,7 @@ namespace Labyrinth.Core
                     : $"шахтёр укрепляет {GameDebugLog.Position(worker.TargetCell)}";
                 GameDebugLog.Info(
                     "Mine",
-                    $"Mine worker #{worker.Id} reached target and started build: target={GameDebugLog.Position(worker.TargetCell)}, buildsMine={worker.BuildsMine}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, buildSeconds={worker.BuildSeconds:0.0}.");
+                    $"Mine worker #{worker.Id} reached target and started build: target={GameDebugLog.Position(worker.TargetCell)}, buildsMine={worker.BuildsMine}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, buildSeconds={FormatSeconds(worker.BuildSeconds)}.");
                 return;
             }
 
@@ -382,7 +382,7 @@ namespace Labyrinth.Core
 
                 GameDebugLog.Info(
                     "Mine",
-                    $"Mine worker #{worker.Id} trace: state={worker.State}, carryingWood={worker.CarryingWood}, buildsMine={worker.BuildsMine}, cave={GameDebugLog.Position(worker.Zone.Cave.Center)}, target={GameDebugLog.Position(worker.TargetCell)}, targetIndex={worker.TargetIndex}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, next={FormatWorldPosition(worker.NextWaypointWorld)}, remainingWaypoints={worker.RemainingWaypoints}, buildRemaining={worker.BuildRemaining:0.0}.");
+                    $"Mine worker #{worker.Id} trace: state={worker.State}, carryingWood={worker.CarryingWood}, buildsMine={worker.BuildsMine}, cave={GameDebugLog.Position(worker.Zone.Cave.Center)}, target={GameDebugLog.Position(worker.TargetCell)}, targetIndex={worker.TargetIndex}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, next={FormatWorldPosition(worker.NextWaypointWorld)}, remainingWaypoints={worker.RemainingWaypoints}, buildRemaining={FormatSeconds(worker.BuildRemaining)}.");
             }
         }
     }

@@ -29,6 +29,8 @@ Thumbs.db
 debug.log
 sysinfo.txt
 *.stackdump
+[Aa]ssets/_Recovery/
+[Aa]ssets/_Recovery.meta
 
 # Crash reports
 [Mm]emoryCaptures/

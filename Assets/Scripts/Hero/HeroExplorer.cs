@@ -81,6 +81,11 @@ namespace Labyrinth.Hero
             }
 
             model.Memory.Remember(model.Position);
+            if (TryCollectKey())
+            {
+                return;
+            }
+
             if (TryHandleDeathTokenOnCurrentCell())
             {
                 return;
@@ -92,11 +97,6 @@ namespace Labyrinth.Hero
             }
 
             if (TryOpenChestInCurrentCave())
-            {
-                return;
-            }
-
-            if (TryCollectKey())
             {
                 return;
             }
@@ -371,8 +371,25 @@ namespace Labyrinth.Hero
 
         private bool TryCollectKey()
         {
-            var key = result.CentralRoomKey;
-            if (key == null || key.IsCollected || model.Position != key.Position)
+            if (result.KeyPickups == null)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < result.KeyPickups.Count; i++)
+            {
+                if (TryCollectKey(result.KeyPickups[i]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool TryCollectKey(KeyPickupModel key)
+        {
+            if (key == null || !key.IsAvailable || model.Position != key.Position)
             {
                 return false;
             }
@@ -388,7 +405,14 @@ namespace Labyrinth.Hero
             GameDebugLog.Info(
                 "Hero",
                 $"{HeroLogName} picked up {key.ItemName} at {GameDebugLog.Position(key.Position)}, knownClosedDoors={model.Memory.KnownClosedDoorCount}.");
-            TryBeginReturnToKnownDoor();
+            if (key.ItemName == HeroInventory.DescentKeyItemName)
+            {
+                TryBeginReturnToKnownStairs();
+            }
+            else
+            {
+                TryBeginReturnToKnownDoor();
+            }
 
             return true;
         }

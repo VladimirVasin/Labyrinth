@@ -19,13 +19,13 @@ namespace Labyrinth.Mobs
 
     public sealed class MobModel
     {
-        public MobModel(Vector2Int startPosition, MobSpecies species, MobRank rank, int dungeonLevel = 1, int statSeed = 0)
+        public MobModel(Vector2Int startPosition, MobSpecies species, MobRank rank, int dungeonLevel = 1, int statSeed = 0, bool useOpeningSpawnStats = false)
         {
             Species = species;
             Rank = rank;
             DungeonLevel = Mathf.Max(1, dungeonLevel);
             Position = startPosition;
-            var stats = BuildStats(species, rank, DungeonLevel, statSeed);
+            var stats = BuildStats(species, rank, DungeonLevel, statSeed, useOpeningSpawnStats);
             MaxHitPoints = stats.MaxHitPoints;
             HitPoints = MaxHitPoints;
             AttackPoints = stats.AttackPoints;
@@ -67,6 +67,22 @@ namespace Labyrinth.Mobs
         public int ReceiveDamage(int incomingDamage)
         {
             var damage = Mathf.Max(1, incomingDamage - ArmorPoints);
+            return ApplyDamage(damage);
+        }
+
+        public int ReceiveResolvedDamage(int resolvedDamage)
+        {
+            var damage = Mathf.Max(0, resolvedDamage);
+            if (damage <= 0)
+            {
+                return 0;
+            }
+
+            return ApplyDamage(damage);
+        }
+
+        private int ApplyDamage(int damage)
+        {
             HitPoints = Mathf.Max(0, HitPoints - damage);
             if (HitPoints <= 0)
             {
@@ -86,7 +102,7 @@ namespace Labyrinth.Mobs
             SpawnedFromDarkness = true;
         }
 
-        private static MobStats BuildStats(MobSpecies species, MobRank rank, int dungeonLevel, int statSeed)
+        private static MobStats BuildStats(MobSpecies species, MobRank rank, int dungeonLevel, int statSeed, bool useOpeningSpawnStats)
         {
             var random = new System.Random(statSeed);
             MobStats stats;
@@ -100,7 +116,9 @@ namespace Labyrinth.Mobs
             }
             else
             {
-                stats = BuildRegularStats(species).Roll(random);
+                stats = useOpeningSpawnStats && dungeonLevel <= 1
+                    ? BuildOpeningRegularStats(species).Roll(random)
+                    : BuildRegularStats(species).Roll(random);
             }
 
             return ApplyDungeonLevelMultiplier(stats, dungeonLevel);
@@ -146,6 +164,21 @@ namespace Labyrinth.Mobs
                     return new MobStatRange(new IntRange(12, 16), new IntRange(3, 5), new IntRange(0, 1));
                 default:
                     return new MobStatRange(new IntRange(20, 25), new IntRange(5, 7), new IntRange(1, 3));
+            }
+        }
+
+        private static MobStatRange BuildOpeningRegularStats(MobSpecies species)
+        {
+            switch (species)
+            {
+                case MobSpecies.Orc:
+                    return new MobStatRange(new IntRange(38, 48), new IntRange(8, 10), new IntRange(2, 4));
+                case MobSpecies.Goblin:
+                    return new MobStatRange(new IntRange(17, 22), new IntRange(4, 6), new IntRange(1, 2));
+                case MobSpecies.Rat:
+                    return new MobStatRange(new IntRange(10, 13), new IntRange(2, 4), new IntRange(0, 1));
+                default:
+                    return new MobStatRange(new IntRange(17, 22), new IntRange(4, 6), new IntRange(1, 2));
             }
         }
 

@@ -34,11 +34,12 @@ namespace Labyrinth.Mobs
             int seed,
             MobSpecies species = MobSpecies.Orc,
             MobRank rank = MobRank.Regular,
-            int dungeonLevel = 1)
+            int dungeonLevel = 1,
+            bool useOpeningSpawnStats = false)
         {
             var controllerObject = new GameObject(BuildControllerName(rank));
             var controller = controllerObject.AddComponent<MobController>();
-            controller.Initialize(mazeGrid, renderer, spawnPosition, seed, species, rank, dungeonLevel);
+            controller.Initialize(mazeGrid, renderer, spawnPosition, seed, species, rank, dungeonLevel, useOpeningSpawnStats);
             return controller;
         }
 
@@ -107,6 +108,19 @@ namespace Labyrinth.Mobs
             return damage;
         }
 
+        public int ReceiveResolvedDamage(int resolvedDamage)
+        {
+            var damage = Model.ReceiveResolvedDamage(resolvedDamage);
+            if (!Model.IsAlive)
+            {
+                wanderingPaused = true;
+                view.SetDefeated();
+                GameDebugLog.Info("Mobs", $"{DebugName} defeated at {GameDebugLog.Position(Model.Position)} by resolvedDamage={resolvedDamage}, damage={damage}.");
+            }
+
+            return damage;
+        }
+
         private void Update()
         {
             if (grid == null || Model == null || Model.State != MobState.Wandering || wanderingPaused)
@@ -131,12 +145,13 @@ namespace Labyrinth.Mobs
             int seed,
             MobSpecies species,
             MobRank rank,
-            int dungeonLevel)
+            int dungeonLevel,
+            bool useOpeningSpawnStats)
         {
             grid = mazeGrid;
             random = new System.Random(seed);
             DebugId = ++nextDebugId;
-            Model = new MobModel(spawnPosition, species, rank, dungeonLevel, seed);
+            Model = new MobModel(spawnPosition, species, rank, dungeonLevel, seed, useOpeningSpawnStats);
             view = MobView.Create(renderer, spawnPosition, species, rank);
             view.SetController(this);
             view.transform.SetParent(transform, true);

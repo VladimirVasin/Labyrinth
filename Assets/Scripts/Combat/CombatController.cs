@@ -7,11 +7,12 @@ using UnityEngine;
 
 namespace Labyrinth.Combat
 {
-    public sealed class CombatController : MonoBehaviour
+    public sealed partial class CombatController : MonoBehaviour
     {
-        private const float FirstHitDelay = 0.38f;
-        private const float TurnDelay = 0.78f;
-        private const float FinishDelay = 0.55f;
+        private const float FirstHitDelay = 0.9f;
+        private const float ActionDelay = 1f;
+        private const float TurnDelay = 1.45f;
+        private const float FinishDelay = 1f;
         private const int MinOrcGoldReward = 18;
         private const int MaxOrcGoldReward = 32;
         private const int MinOrcExperienceReward = 15;
@@ -48,6 +49,10 @@ namespace Labyrinth.Combat
         private const int MaxBossOrcGoldReward = 250;
         private const int MinBossOrcExperienceReward = 155;
         private const int MaxBossOrcExperienceReward = 185;
+        private const int MaxCombatGuard = 10;
+        private const int HeroWoundDamageThreshold = 6;
+        private const int MobWoundDamageThreshold = 8;
+        private const int EliteWoundDamageThreshold = 11;
 
         private readonly System.Random rewardRandom = new System.Random();
         private HeroController hero;
@@ -58,6 +63,9 @@ namespace Labyrinth.Combat
         private bool finishing;
         private bool heroOpeningAttackUsed;
         private bool mobOpeningAttackUsed;
+        private CombatActorState heroCombat;
+        private CombatActorState mobCombat;
+        private int roundNumber;
         private float timer;
 
         public event Action<HeroController, MobController> MobDefeated;
@@ -70,6 +78,10 @@ namespace Labyrinth.Combat
             mob = null;
             grid = null;
             mazeRenderer = null;
+            heroCombat = null;
+            mobCombat = null;
+            ResetPendingRound();
+            roundNumber = 0;
             IsActive = false;
             finishing = false;
         }
@@ -90,10 +102,16 @@ namespace Labyrinth.Combat
             mob = mobController;
             grid = mazeGrid;
             this.mazeRenderer = mazeRenderer;
-            heroTurn = true;
             finishing = false;
             heroOpeningAttackUsed = false;
             mobOpeningAttackUsed = false;
+            ResetPendingRound();
+            heroCombat = BuildHeroCombatState(heroController);
+            mobCombat = BuildMobCombatState(mobController);
+            roundNumber = 0;
+            heroTurn = RollInitialInitiative(out var heroInitiative, out var mobInitiative);
+            heroCombat.SetInitiative(heroInitiative);
+            mobCombat.SetInitiative(mobInitiative);
             timer = FirstHitDelay;
             IsActive = true;
 
@@ -104,7 +122,8 @@ namespace Labyrinth.Combat
             GameAudioController.Play(GameSfx.CombatStart, mazeRenderer.GridToWorld(hero.Model.Position));
             GameDebugLog.Info(
                 "Combat",
-                $"Started: hero=#{hero.DisplayNumber} pos={GameDebugLog.Position(hero.Model.Position)}, heroHP={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, heroAtk={hero.Model.AttackPoints}, heroArmor={hero.Model.ArmorPoints}, mob={mob.DebugName}, mobPos={GameDebugLog.Position(mob.Position)}, mobHP={mob.Model.HitPoints}/{mob.Model.MaxHitPoints}, mobAtk={mob.Model.AttackPoints}, mobArmor={mob.Model.ArmorPoints}");
+                $"Started: hero=#{hero.DisplayNumber} pos={GameDebugLog.Position(hero.Model.Position)}, heroHP={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, heroAtk={hero.Model.AttackPoints}, heroArmor={hero.Model.ArmorPoints}, heroWounds={hero.Model.CombatWounds}, heroCST={heroCombat.Stamina}/{heroCombat.MaxStamina}, mob={mob.DebugName}, mobPos={GameDebugLog.Position(mob.Position)}, mobHP={mob.Model.HitPoints}/{mob.Model.MaxHitPoints}, mobAtk={mob.Model.AttackPoints}, mobArmor={mob.Model.ArmorPoints}, mobCST={mobCombat.Stamina}/{mobCombat.MaxStamina}, initiative=Hero({heroInitiative}) vs Mob({mobInitiative}), first={(heroTurn ? "Hero" : "Mob")}.");
+            ShowCombatState();
             return true;
         }
 
@@ -127,68 +146,7 @@ namespace Labyrinth.Combat
                 return;
             }
 
-            ExecuteTurn();
-        }
-
-        private void ExecuteTurn()
-        {
-            if (heroTurn)
-            {
-                var attack = hero.Model.AttackPoints;
-                var firstHitBonus = 0;
-                var isOpeningAttack = !heroOpeningAttackUsed;
-                if (!heroOpeningAttackUsed)
-                {
-                    firstHitBonus = hero.Model.FirstHitBlessingBonus;
-                    attack += firstHitBonus;
-                    heroOpeningAttackUsed = true;
-                }
-
-                var vengeanceBonus = hero.Model.GetVengeanceAttackBonus(mob.Model, isOpeningAttack, attack);
-                attack += vengeanceBonus;
-                var hpBefore = mob.Model.HitPoints;
-                var damage = mob.ReceiveDamage(attack);
-                hero.PlayAttack(mob.Position);
-                DamageNumberView.Create(mazeRenderer, mob.Position, damage, new Color(1f, 0.72f, 0.24f));
-                GameAudioController.Play(GameSfx.CombatHit, mazeRenderer.GridToWorld(mob.Position));
-                GameDebugLog.Info(
-                    "Combat",
-                    $"Hero #{hero.DisplayNumber} hit {mob.DebugName}: attack={attack}, firstHitBonus={firstHitBonus}, vengeanceBonus={vengeanceBonus}, mobArmor={mob.Model.ArmorPoints}, damage={damage}, mobHP={hpBefore}->{mob.Model.HitPoints}/{mob.Model.MaxHitPoints}.");
-
-                if (!mob.Model.IsAlive)
-                {
-                    BeginFinish();
-                    return;
-                }
-            }
-            else
-            {
-                hero.Model.RememberCombatThreat(mob.Model);
-                var incomingAttack = mob.Model.AttackPoints;
-                var modifiedAttack = hero.Model.ApplyVengeanceIncomingAttackModifier(
-                    mob.Model,
-                    incomingAttack,
-                    !mobOpeningAttackUsed,
-                    out var vengeanceReduction);
-                mobOpeningAttackUsed = true;
-                var hpBefore = hero.Model.HitPoints;
-                var damage = hero.ReceiveDamage(modifiedAttack);
-                mob.PlayAttack(hero.Model.Position);
-                DamageNumberView.Create(mazeRenderer, hero.Model.Position, damage, new Color(1f, 0.3f, 0.24f));
-                GameAudioController.Play(GameSfx.CombatHit, mazeRenderer.GridToWorld(hero.Model.Position));
-                GameDebugLog.Info(
-                    "Combat",
-                    $"{mob.DebugName} hit Hero #{hero.DisplayNumber}: attack={incomingAttack}, modifiedAttack={modifiedAttack}, vengeanceReduction={vengeanceReduction}, heroArmor={hero.Model.ArmorPoints}, damage={damage}, heroHP={hpBefore}->{hero.Model.HitPoints}/{hero.Model.MaxHitPoints}.");
-
-                if (!hero.Model.IsAlive)
-                {
-                    BeginFinish();
-                    return;
-                }
-            }
-
-            heroTurn = !heroTurn;
-            timer = TurnDelay;
+            ExecuteRound();
         }
 
         private void PlaceOpponents()
@@ -243,6 +201,7 @@ namespace Labyrinth.Combat
             if (mob != null && !mob.Model.IsAlive)
             {
                 GiveHeroVictoryReward();
+                LogCombatSummary("mob-defeated");
                 MobDefeated?.Invoke(hero, mob);
             }
             else if (mob != null)
@@ -255,6 +214,7 @@ namespace Labyrinth.Combat
                     GameAudioController.Play(GameSfx.Defeat, mazeRenderer.GridToWorld(hero.Model.Position));
                 }
 
+                LogCombatSummary("hero-defeated");
                 mob.LeaveCombat();
             }
 
@@ -267,8 +227,24 @@ namespace Labyrinth.Combat
             mob = null;
             grid = null;
             mazeRenderer = null;
+            heroCombat = null;
+            mobCombat = null;
+            ResetPendingRound();
+            roundNumber = 0;
             IsActive = false;
             finishing = false;
+        }
+
+        private void LogCombatSummary(string outcome)
+        {
+            if (hero == null || mob == null || heroCombat == null || mobCombat == null)
+            {
+                return;
+            }
+
+            GameDebugLog.Info(
+                "Combat",
+                $"Summary: outcome={outcome}, rounds={roundNumber}, hero=#{hero.DisplayNumber}, heroHP={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, heroCST={heroCombat.Stamina}/{heroCombat.MaxStamina}, heroDamageDone={heroCombat.TotalDamageDealt}, heroDamageTaken={heroCombat.TotalDamageTaken}, heroArmorBreak={heroCombat.ArmorBreak}, heroWounds={hero.Model.CombatWounds}, mob={mob.DebugName}, mobHP={mob.Model.HitPoints}/{mob.Model.MaxHitPoints}, mobCST={mobCombat.Stamina}/{mobCombat.MaxStamina}, mobDamageDone={mobCombat.TotalDamageDealt}, mobDamageTaken={mobCombat.TotalDamageTaken}, mobArmorBreak={mobCombat.ArmorBreak}, mobWounds={mobCombat.Wounds}, mobPhase={mobCombat.Phase}.");
         }
 
         private void GiveHeroVictoryReward()

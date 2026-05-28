@@ -9,6 +9,7 @@ namespace Labyrinth.Core
     public sealed partial class GameBootstrap
     {
         private const int SilentStepTrailBlockRadius = 2;
+        private const int RespawnHeroSafetyRadius = 5;
 
         private void HandleVisibilityModeHotkeys()
         {
@@ -219,18 +220,29 @@ namespace Labyrinth.Core
 
         private HashSet<Vector2Int> BuildRespawnBlockedCells(IReadOnlyList<HeroController> heroesWithVisibility)
         {
-            var blockedCells = BuildLightingVisibleCells(heroesWithVisibility);
+            var blockedCells = new HashSet<Vector2Int>();
             if (currentMaze == null || currentMaze.Grid == null)
             {
                 return blockedCells;
             }
 
+            blockedCells.Add(currentMaze.EntrancePosition);
+            dungeonFortificationController?.AddTorchLitCells(blockedCells);
+            mineConstructionController?.AddTorchLitCells(blockedCells);
+
             foreach (var hero in heroesWithVisibility)
             {
-                if (hero == null
-                    || hero.Model == null
-                    || !hero.Model.IsAlive
-                    || !hero.Model.HasBlessing(HeroBlessingType.SilentStep))
+                if (hero == null || hero.Model == null || !hero.Model.IsAlive)
+                {
+                    continue;
+                }
+
+                AddRespawnSafetyCells(
+                    blockedCells,
+                    hero.Model.Position,
+                    Mathf.Max(RespawnHeroSafetyRadius, hero.Model.SightRange + 1));
+
+                if (!hero.Model.HasBlessing(HeroBlessingType.SilentStep))
                 {
                     continue;
                 }
@@ -242,6 +254,21 @@ namespace Labyrinth.Core
             }
 
             return blockedCells;
+        }
+
+        private void AddRespawnSafetyCells(HashSet<Vector2Int> cells, Vector2Int center, int radius)
+        {
+            for (var x = center.x - radius; x <= center.x + radius; x++)
+            {
+                for (var y = center.y - radius; y <= center.y + radius; y++)
+                {
+                    var position = new Vector2Int(x, y);
+                    if (currentMaze.Grid.InBounds(position))
+                    {
+                        cells.Add(position);
+                    }
+                }
+            }
         }
 
         private void AddBlessedTrailCells(HashSet<Vector2Int> cells, Vector2Int center)

@@ -4,8 +4,12 @@ namespace Labyrinth.Core
 {
     public sealed class MazeGenerationSettings
     {
-        public const int MinSize = 15;
-        public const int MaxSize = 101;
+        public const int MinWidth = 21;
+        public const int MinHeight = 15;
+        public const int MaxWidth = 101;
+        public const int MaxHeight = 101;
+        public const int MinSize = MinHeight;
+        public const int MaxSize = MaxWidth;
 
         public MazeGenerationSettings(int width, int height, int seed, MazeSizePreset preset)
         {
@@ -53,7 +57,7 @@ namespace Labyrinth.Core
             switch (preset)
             {
                 case MazeSizePreset.Small:
-                    return new MazeGenerationSettings(15, 15, seed, preset);
+                    return new MazeGenerationSettings(MinWidth, MinHeight, seed, preset);
                 case MazeSizePreset.Medium:
                     return new MazeGenerationSettings(25, 25, seed, preset);
                 case MazeSizePreset.Large:
@@ -68,18 +72,33 @@ namespace Labyrinth.Core
         public static MazeGenerationSettings CreateCustom(int width, int height, int seed)
         {
             return new MazeGenerationSettings(
-                NormalizeSize(width),
-                NormalizeSize(height),
+                NormalizeWidth(width),
+                NormalizeHeight(height),
                 seed,
                 MazeSizePreset.Custom);
         }
 
+        public static int NormalizeWidth(int width)
+        {
+            return NormalizeSize(width, MinWidth, MaxWidth);
+        }
+
+        public static int NormalizeHeight(int height)
+        {
+            return NormalizeSize(height, MinHeight, MaxHeight);
+        }
+
         public static int NormalizeSize(int size)
         {
-            var normalized = Math.Max(MinSize, Math.Min(MaxSize, size));
+            return NormalizeSize(size, MinSize, MaxSize);
+        }
+
+        private static int NormalizeSize(int size, int minSize, int maxSize)
+        {
+            var normalized = Math.Max(minSize, Math.Min(maxSize, size));
             if (normalized % 2 == 0)
             {
-                normalized = normalized == MaxSize ? normalized - 1 : normalized + 1;
+                normalized = normalized == maxSize ? normalized - 1 : normalized + 1;
             }
 
             return normalized;

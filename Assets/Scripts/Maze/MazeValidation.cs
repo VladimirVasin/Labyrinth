@@ -6,6 +6,13 @@ namespace Labyrinth.Maze
     public static class MazeValidation
     {
         private const int CentralRoomSize = 6;
+        public const int EarlyAlternativeProtectedCells = 2;
+        private const float EarlyAlternativeWindowFraction = 0.25f;
+        private const int EarlyAlternativeMinimumWindowEnd = 5;
+        private const int EarlyAlternativeMaximumWindowEnd = 14;
+        private const int EarlyAlternativeMinimumDetourSpan = 4;
+        private const int EarlyAlternativeMaximumDetourSpan = 10;
+        private const int EarlyAlternativeDetourSpanDivisor = 12;
 
         public static bool ValidateGeneratedMaze(MazeGenerationResult result, out string error)
         {
@@ -63,6 +70,11 @@ namespace Labyrinth.Maze
             if (!AllStructurallyPassableCellsReachable(grid, distances))
             {
                 error = "Не все открываемые клетки лабиринта достижимы из входа.";
+                return false;
+            }
+
+            if (!ValidateAlternativeRoutes(result, out error))
+            {
                 return false;
             }
 
@@ -226,6 +238,117 @@ namespace Labyrinth.Maze
             return distances.ContainsKey(target);
         }
 
+        public static bool HasAlternativeRoute(
+            MazeGrid grid,
+            Vector2Int start,
+            Vector2Int target,
+            bool includeClosedDoors)
+        {
+            if (!TryFindRoutePath(grid, start, target, includeClosedDoors, out var primaryPath))
+            {
+                return false;
+            }
+
+            const int protectedEndpointCells = 2;
+            for (var i = protectedEndpointCells; i < primaryPath.Count - protectedEndpointCells; i++)
+            {
+                var blocked = primaryPath[i];
+                if (TryFindRoutePath(grid, start, target, includeClosedDoors, blocked, out _))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static bool HasEarlyAlternativeRoute(
+            MazeGrid grid,
+            Vector2Int start,
+            Vector2Int target,
+            bool includeClosedDoors)
+        {
+            return HasEarlyAlternativeRoute(grid, start, target, includeClosedDoors, out _);
+        }
+
+        public static bool HasEarlyAlternativeRoute(
+            MazeGrid grid,
+            Vector2Int start,
+            Vector2Int target,
+            bool includeClosedDoors,
+            out string details)
+        {
+            if (!TryFindRoutePath(grid, start, target, includeClosedDoors, out var primaryPath))
+            {
+                details = "primaryPath=missing";
+                return false;
+            }
+
+            var earlyStartIndex = EarlyAlternativeProtectedCells;
+            var earlyEndIndex = GetEarlyAlternativeWindowEndIndex(primaryPath.Count);
+            var minimumDetourSpan = GetMinimumEarlyAlternativeDetourSpan(primaryPath.Count);
+            if (earlyEndIndex < earlyStartIndex)
+            {
+                details = $"primary={primaryPath.Count}, earlyWindow=none, minDetourSpan={minimumDetourSpan}";
+                return false;
+            }
+
+            for (var i = earlyStartIndex; i <= earlyEndIndex; i++)
+            {
+                var blocked = primaryPath[i];
+                if (!TryFindRoutePath(grid, start, target, includeClosedDoors, blocked, out var alternativePath))
+                {
+                    continue;
+                }
+
+                var detourSpan = CalculatePrimaryDetourSpan(primaryPath, alternativePath, i);
+                if (detourSpan < minimumDetourSpan)
+                {
+                    continue;
+                }
+
+                details = $"primary={primaryPath.Count}, earlyWindow={earlyStartIndex}-{earlyEndIndex}, splitIndex={i}, detourSpan={detourSpan}, alternative={alternativePath.Count}, minDetourSpan={minimumDetourSpan}";
+                return true;
+            }
+
+            details = $"primary={primaryPath.Count}, earlyWindow={earlyStartIndex}-{earlyEndIndex}, minDetourSpan={minimumDetourSpan}";
+            return false;
+        }
+
+        public static int GetEarlyAlternativeWindowEndIndex(int pathLength)
+        {
+            var lastAllowedIndex = pathLength - EarlyAlternativeProtectedCells - 1;
+            if (lastAllowedIndex < EarlyAlternativeProtectedCells)
+            {
+                return lastAllowedIndex;
+            }
+
+            var fractionalEnd = Mathf.CeilToInt(pathLength * EarlyAlternativeWindowFraction);
+            var clampedEnd = Mathf.Clamp(
+                fractionalEnd,
+                EarlyAlternativeMinimumWindowEnd,
+                EarlyAlternativeMaximumWindowEnd);
+            return Mathf.Min(clampedEnd, lastAllowedIndex);
+        }
+
+        public static int GetMinimumEarlyAlternativeDetourSpan(int pathLength)
+        {
+            return Mathf.Clamp(
+                pathLength / EarlyAlternativeDetourSpanDivisor,
+                EarlyAlternativeMinimumDetourSpan,
+                EarlyAlternativeMaximumDetourSpan);
+        }
+
+        public static bool TryFindRoutePath(
+            MazeGrid grid,
+            Vector2Int start,
+            Vector2Int target,
+            bool includeClosedDoors,
+            out List<Vector2Int> path)
+        {
+            return TryFindRoutePath(grid, start, target, includeClosedDoors, default, false, out path);
+        }
+
         public static Dictionary<Vector2Int, int> GetReachableDistances(MazeGrid grid, Vector2Int start)
         {
             return GetReachableDistances(grid, start, false);
@@ -307,6 +430,182 @@ namespace Labyrinth.Maze
             }
 
             return true;
+        }
+
+        private static bool ValidateAlternativeRoutes(MazeGenerationResult result, out string error)
+        {
+            var grid = result.Grid;
+            var room = result.CentralRoom;
+            if (!HasEarlyAlternativeRoute(grid, result.EntrancePosition, room.EntranceExternalPosition, false, out var centralEntryDetails))
+            {
+                error = $"До входа центральной комнаты должна существовать ранняя развилка из области входа внутри первой половины лабиринта. {centralEntryDetails}.";
+                return false;
+            }
+
+            if (result.CentralRoomKey != null
+                && !HasEarlyAlternativeRoute(grid, result.EntrancePosition, result.CentralRoomKey.Position, false, out var keyDetails))
+            {
+                error = $"До ключа центральной комнаты должна существовать ранняя развилка из области входа. {keyDetails}.";
+                return false;
+            }
+
+            if (result.DownStairs != null
+                && !HasEarlyAlternativeRoute(grid, room.ExitExternalPosition, result.DownStairs.Position, true, out var downStairsDetails))
+            {
+                error = $"До спуска во второй половине должна существовать ранняя развилка от выхода центральной комнаты. {downStairsDetails}.";
+                return false;
+            }
+
+            var farthestSecondHalf = FindFarthestSecondHalfRouteGoal(grid, room);
+            if (farthestSecondHalf != room.ExitExternalPosition
+                && !HasEarlyAlternativeRoute(grid, room.ExitExternalPosition, farthestSecondHalf, true, out var farthestDetails))
+            {
+                error = $"До дальней цели второй половины должна существовать ранняя развилка от выхода центральной комнаты. {farthestDetails}.";
+                return false;
+            }
+
+            error = string.Empty;
+            return true;
+        }
+
+        private static Vector2Int FindFarthestSecondHalfRouteGoal(MazeGrid grid, CentralRoomInfo room)
+        {
+            var distances = GetReachableDistances(grid, room.ExitExternalPosition, true);
+            var best = room.ExitExternalPosition;
+            var bestDistance = -1;
+            foreach (var pair in distances)
+            {
+                if (!room.IsBeyondExitSide(pair.Key) || room.Contains(pair.Key))
+                {
+                    continue;
+                }
+
+                if (pair.Value > bestDistance)
+                {
+                    best = pair.Key;
+                    bestDistance = pair.Value;
+                }
+            }
+
+            return best;
+        }
+
+        private static bool TryFindRoutePath(
+            MazeGrid grid,
+            Vector2Int start,
+            Vector2Int target,
+            bool includeClosedDoors,
+            Vector2Int blocked,
+            out List<Vector2Int> path)
+        {
+            return TryFindRoutePath(grid, start, target, includeClosedDoors, blocked, true, out path);
+        }
+
+        private static bool TryFindRoutePath(
+            MazeGrid grid,
+            Vector2Int start,
+            Vector2Int target,
+            bool includeClosedDoors,
+            Vector2Int blocked,
+            bool hasBlocked,
+            out List<Vector2Int> path)
+        {
+            path = new List<Vector2Int>();
+            if (!IsRouteCellPassable(grid, start, includeClosedDoors, blocked, hasBlocked)
+                || !IsRouteCellPassable(grid, target, includeClosedDoors, blocked, hasBlocked))
+            {
+                return false;
+            }
+
+            var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
+            var queue = new Queue<Vector2Int>();
+            cameFrom[start] = start;
+            queue.Enqueue(start);
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                if (current == target)
+                {
+                    path = RestorePath(cameFrom, start, target);
+                    return true;
+                }
+
+                foreach (var direction in MazeDirections.Cardinal)
+                {
+                    var next = current + direction;
+                    if (cameFrom.ContainsKey(next)
+                        || !IsRouteCellPassable(grid, next, includeClosedDoors, blocked, hasBlocked))
+                    {
+                        continue;
+                    }
+
+                    cameFrom[next] = current;
+                    queue.Enqueue(next);
+                }
+            }
+
+            return false;
+        }
+
+        private static int CalculatePrimaryDetourSpan(
+            IReadOnlyList<Vector2Int> primaryPath,
+            IReadOnlyList<Vector2Int> alternativePath,
+            int fromPrimaryIndex)
+        {
+            var alternativeCells = new HashSet<Vector2Int>(alternativePath);
+            var firstMissing = -1;
+            var lastMissing = -1;
+            var lastCheckedIndex = primaryPath.Count - EarlyAlternativeProtectedCells - 1;
+            for (var i = fromPrimaryIndex; i <= lastCheckedIndex; i++)
+            {
+                if (alternativeCells.Contains(primaryPath[i]))
+                {
+                    continue;
+                }
+
+                if (firstMissing < 0)
+                {
+                    firstMissing = i;
+                }
+
+                lastMissing = i;
+            }
+
+            return firstMissing < 0 ? 0 : lastMissing - firstMissing + 1;
+        }
+
+        private static bool IsRouteCellPassable(
+            MazeGrid grid,
+            Vector2Int position,
+            bool includeClosedDoors,
+            Vector2Int blocked,
+            bool hasBlocked)
+        {
+            if (!grid.InBounds(position) || (hasBlocked && position == blocked))
+            {
+                return false;
+            }
+
+            var cell = grid.Get(position);
+            return includeClosedDoors ? cell.IsStructurallyPassable : cell.IsWalkable;
+        }
+
+        private static List<Vector2Int> RestorePath(
+            IReadOnlyDictionary<Vector2Int, Vector2Int> cameFrom,
+            Vector2Int start,
+            Vector2Int target)
+        {
+            var path = new List<Vector2Int>();
+            var current = target;
+            path.Add(current);
+            while (current != start)
+            {
+                current = cameFrom[current];
+                path.Add(current);
+            }
+
+            path.Reverse();
+            return path;
         }
 
         private static List<Vector2Int> CollectCentralRoomExternalContacts(MazeGrid grid, CentralRoomInfo room)

@@ -153,18 +153,37 @@ namespace Labyrinth.Maze
             ItemName = itemName;
         }
 
-        public Vector2Int Position { get; }
+        public Vector2Int Position { get; private set; }
 
         public string ItemName { get; }
 
         public bool IsCollected { get; private set; }
 
+        public bool IsAvailable => !IsCollected;
+
+        public bool HasVisual => visualObject != null;
+
         public void AttachVisual(GameObject visual)
         {
+            if (visualObject != null && visualObject != visual)
+            {
+                Object.Destroy(visualObject);
+            }
+
             visualObject = visual;
             if (visualObject != null)
             {
                 visualObject.SetActive(!IsCollected);
+            }
+        }
+
+        public void Drop(Vector2Int position)
+        {
+            Position = position;
+            IsCollected = false;
+            if (visualObject != null)
+            {
+                visualObject.SetActive(true);
             }
         }
 
@@ -276,6 +295,12 @@ namespace Labyrinth.Maze
             CentralRoom = centralRoom;
             CentralDoors = centralDoors == null ? new List<CentralDoorModel>() : new List<CentralDoorModel>(centralDoors);
             CentralRoomKey = centralRoomKey;
+            KeyPickups = new List<KeyPickupModel>();
+            if (centralRoomKey != null)
+            {
+                KeyPickups.Add(centralRoomKey);
+            }
+
             Chests = chests == null ? new List<ChestModel>() : new List<ChestModel>(chests);
             Caves = caves == null ? new List<CaveInfo>() : new List<CaveInfo>(caves);
             OreDeposits = oreDeposits == null ? new List<OreDepositModel>() : new List<OreDepositModel>(oreDeposits);
@@ -299,6 +324,8 @@ namespace Labyrinth.Maze
 
         public KeyPickupModel CentralRoomKey { get; }
 
+        public List<KeyPickupModel> KeyPickups { get; }
+
         public IReadOnlyList<ChestModel> Chests { get; }
 
         public IReadOnlyList<CaveInfo> Caves { get; }
@@ -308,5 +335,22 @@ namespace Labyrinth.Maze
         public DungeonStairsModel DownStairs { get; }
 
         public DungeonStairsModel UpStairs { get; }
+
+        public KeyPickupModel GetOrCreateKeyPickup(Vector2Int position, string itemName)
+        {
+            for (var i = 0; i < KeyPickups.Count; i++)
+            {
+                var key = KeyPickups[i];
+                if (key != null && key.ItemName == itemName)
+                {
+                    key.Drop(position);
+                    return key;
+                }
+            }
+
+            var created = new KeyPickupModel(position, itemName);
+            KeyPickups.Add(created);
+            return created;
+        }
     }
 }

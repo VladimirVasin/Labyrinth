@@ -58,6 +58,10 @@ namespace Labyrinth.Hero
 
         public HeroInventory Inventory { get; }
 
+        public int DisplayNumber { get; private set; }
+
+        public string DisplayName { get; private set; } = string.Empty;
+
         public HeroBlessings Blessings { get; }
 
         public string BlessingText => HeroBlessingCatalog.FormatActiveNames(Blessings.Active);
@@ -90,7 +94,13 @@ namespace Labyrinth.Hero
 
         public int BaseArmorPoints { get; }
 
-        public int AttackPoints => BaseAttackPoints + Inventory.AttackBonus + LineageAttackBonus;
+        public int CombatWounds { get; private set; }
+
+        public int AttackWoundPenalty => Mathf.Min(CombatWounds, 4);
+
+        public int CombatStaminaWoundPenalty => Mathf.Min(CombatWounds, 5);
+
+        public int AttackPoints => Mathf.Max(1, BaseAttackPoints + Inventory.AttackBonus + LineageAttackBonus - AttackWoundPenalty);
 
         public int ArmorPoints => BaseArmorPoints + Inventory.ArmorBonus + GetVengeanceArmorBonus();
 
@@ -129,6 +139,12 @@ namespace Labyrinth.Hero
         public bool HasCompletedVengeance(HeroVengeanceKind kind)
         {
             return VengeanceQuest != null && VengeanceQuest.Kind == kind && VengeanceQuest.IsCompleted;
+        }
+
+        public void SetIdentity(int displayNumber, string displayName)
+        {
+            DisplayNumber = Mathf.Max(0, displayNumber);
+            DisplayName = string.IsNullOrWhiteSpace(displayName) ? string.Empty : displayName;
         }
 
         public void AssignVengeanceQuest(HeroVengeanceQuest quest)
@@ -328,6 +344,40 @@ namespace Labyrinth.Hero
         public int ReceiveDamage(int incomingDamage)
         {
             var damage = Mathf.Max(1, incomingDamage - ArmorPoints);
+            return ApplyDamage(damage);
+        }
+
+        public int ReceiveResolvedDamage(int resolvedDamage)
+        {
+            var damage = Mathf.Max(0, resolvedDamage);
+            if (damage <= 0)
+            {
+                return 0;
+            }
+
+            return ApplyDamage(damage);
+        }
+
+        public int ApplyCombatWound()
+        {
+            if (!IsAlive)
+            {
+                return CombatWounds;
+            }
+
+            CombatWounds = Mathf.Min(9, CombatWounds + 1);
+            return CombatWounds;
+        }
+
+        public int HealCombatWounds(int amount)
+        {
+            var healed = Mathf.Min(Mathf.Max(0, amount), CombatWounds);
+            CombatWounds -= healed;
+            return healed;
+        }
+
+        private int ApplyDamage(int damage)
+        {
             var hitPointsBeforeDamage = HitPoints;
             if (damage >= HitPoints && Blessings.TryConsume(HeroBlessingType.LastBreath))
             {

@@ -302,6 +302,7 @@ namespace Labyrinth.Core
                 var deathContext = BuildHeroDeathContext(hero);
                 goldIngotManager?.DropCarriedIngot(hero.Model);
                 deathTokenManager?.DropCarriedToken(hero.Model);
+                DropCarriedKey(hero.Model);
                 var deathToken = deathTokenManager?.CreateTokenForDefeatedHero(hero, housePosition);
                 lineage.RecordDeath(hero.Model, deathToken != null ? deathToken.Id : 0, hero.Model.Position, deathContext);
                 MarkHeroHouseForDefeatedHero(hero);

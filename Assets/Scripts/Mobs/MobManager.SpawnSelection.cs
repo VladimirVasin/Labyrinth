@@ -42,7 +42,7 @@ namespace Labyrinth.Mobs
                 species[FindClosestToEntranceIndex(spawnPositions, distancesFromEntrance)] = MobSpecies.Goblin;
             }
 
-            if (species.Count >= 4 && !species.Contains(MobSpecies.Orc))
+            if (species.Count >= 8 && !species.Contains(MobSpecies.Orc))
             {
                 species[FindFarthestFromEntranceIndex(spawnPositions, distancesFromEntrance)] = MobSpecies.Orc;
             }
@@ -63,10 +63,10 @@ namespace Labyrinth.Mobs
 
             var distanceRatio = distance / (float)maxDistanceFromEntrance;
             var goblinChance = distanceRatio <= 0.4f
-                ? 0.88
+                ? 0.92
                 : distanceRatio <= 0.7f
-                    ? 0.58
-                    : 0.25;
+                    ? 0.68
+                    : 0.35;
             return random.NextDouble() < goblinChance ? MobSpecies.Goblin : MobSpecies.Orc;
         }
 

@@ -138,7 +138,7 @@ namespace Labyrinth.Core
             {
                 GameDebugLog.Warning(
                     "Hero",
-                    $"Hero reached death token #{token.Id} at {GameDebugLog.Position(hero.Position)} but has no empty inventory slot.");
+                    $"Hero {FormatHero(hero)} reached death token #{token.Id} at {GameDebugLog.Position(hero.Position)} but has no empty inventory slot.");
                 return false;
             }
 
@@ -151,7 +151,9 @@ namespace Labyrinth.Core
                 new Color(0.92f, 0.88f, 0.72f),
                 1.75f);
             GameAudioController.Play(GameSfx.KeyPickup, mazeRenderer.GridToWorld(hero.Position), 0.7f);
-            GameDebugLog.Info("Hero", $"Hero picked up death token #{token.Id} for hero #{token.HeroNumber} ({token.FallenHeroName}) at {GameDebugLog.Position(hero.Position)}.");
+            GameDebugLog.Info(
+                "Hero",
+                $"Hero {FormatHero(hero)} picked up death token #{token.Id} for hero #{token.HeroNumber} ({token.FallenHeroName}) at {GameDebugLog.Position(hero.Position)}, inventorySlot={FormatInventorySlot(hero.Inventory, token.ItemName)}.");
             return true;
         }
 
@@ -171,6 +173,7 @@ namespace Labyrinth.Core
                 return false;
             }
 
+            var inventorySlot = FormatInventorySlot(hero.Inventory, token.ItemName);
             if (!hero.Inventory.TryRemoveItem(token.ItemName))
             {
                 return false;
@@ -204,7 +207,7 @@ namespace Labyrinth.Core
 
             GameDebugLog.Info(
                 "Hero",
-                $"Hero delivered death token #{token.Id} for hero #{token.HeroNumber} ({token.FallenHeroName}): vengeanceXP={vengeanceProgress.BonusExperience}, xp={hero.Experience}/{hero.ExperienceForNextLevel}, level={hero.Level}, gainedLevels={gainedLevels}.");
+                $"Hero {FormatHero(hero)} delivered death token #{token.Id} for hero #{token.HeroNumber} ({token.FallenHeroName}): inventorySlot={inventorySlot}, deliveryPosition={GameDebugLog.Position(deliveryPosition)}, vengeanceXP={vengeanceProgress.BonusExperience}, xp={hero.Experience}/{hero.ExperienceForNextLevel}, level={hero.Level}, gainedLevels={gainedLevels}.");
             TokenDeliveredByHero?.Invoke(hero);
             return true;
         }
@@ -219,6 +222,7 @@ namespace Labyrinth.Core
                 return false;
             }
 
+            var inventorySlot = FormatInventorySlot(hero.Inventory, token.ItemName);
             hero.Inventory.TryRemoveItem(token.ItemName);
             carriedTokens.Remove(hero);
             var dropPosition = FindDropPosition(hero.Position);
@@ -226,8 +230,31 @@ namespace Labyrinth.Core
             RenderToken(token);
             GameDebugLog.Info(
                 "Hero",
-                $"Hero dropped carried death token #{token.Id} for hero #{token.HeroNumber} ({token.FallenHeroName}) at {GameDebugLog.Position(dropPosition)} after death.");
+                $"Hero {FormatHero(hero)} dropped carried death token #{token.Id} for hero #{token.HeroNumber} ({token.FallenHeroName}) from inventorySlot={inventorySlot} at {GameDebugLog.Position(dropPosition)} after death.");
             return true;
+        }
+
+        private static string FormatHero(HeroModel hero)
+        {
+            if (hero == null)
+            {
+                return "unknown";
+            }
+
+            var name = string.IsNullOrWhiteSpace(hero.DisplayName) ? "unnamed" : hero.DisplayName;
+            return hero.DisplayNumber > 0 ? $"#{hero.DisplayNumber} ({name})" : $"unassigned ({name})";
+        }
+
+        private static string FormatInventorySlot(HeroInventory inventory, string itemName)
+        {
+            if (inventory == null)
+            {
+                return "none";
+            }
+
+            return inventory.TryFindItemSlot(itemName, out var slotIndex, out var slot)
+                ? $"{slotIndex + 1}/{inventory.Slots.Count} {slot.Type} ({slot.Label})"
+                : "missing";
         }
 
         private void RefreshTokenVisuals()

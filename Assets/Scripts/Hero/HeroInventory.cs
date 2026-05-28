@@ -210,6 +210,25 @@ namespace Labyrinth.Hero
             return false;
         }
 
+        public bool TryFindItemSlot(string itemName, out int slotIndex, out HeroInventorySlot slot)
+        {
+            for (var i = 0; i < slots.Length; i++)
+            {
+                if (slots[i].ItemName != itemName)
+                {
+                    continue;
+                }
+
+                slotIndex = i;
+                slot = slots[i];
+                return true;
+            }
+
+            slotIndex = -1;
+            slot = default;
+            return false;
+        }
+
         public bool TryGetDeathTokenItemName(out string itemName)
         {
             for (var i = 0; i < slots.Length; i++)

@@ -46,7 +46,7 @@ namespace Labyrinth.UI
                 case HeroState.ReturningToCastle:
                     return "Герой идёт ко входу, чтобы восстановиться, сдать добычу и пополнить запасы.";
                 case HeroState.Fighting:
-                    return "Герой находится в бою; исход зависит от HP, атаки, брони, экипировки и активных обетов.";
+                    return "Герой находится в бою; исход зависит от HP, боевой выносливости, инициативы, guard, брони, ран и выбранных действий.";
                 case HeroState.Stuck:
                     return "Герой ждёт доступной цели или маршрута.";
                 case HeroState.Defeated:
@@ -58,12 +58,18 @@ namespace Labyrinth.UI
 
         private static string BuildHealthTooltip(HeroModel model)
         {
-            return $"Текущее здоровье: {model.HitPoints}/{model.MaxHitPoints}. При 0 HP герой погибает, оставляя родословную и возможный жетон памяти.";
+            var woundText = model.CombatWounds > 0
+                ? $" Боевые раны: {model.CombatWounds}; лазарет лечит их за пищу."
+                : string.Empty;
+            return $"Текущее здоровье: {model.HitPoints}/{model.MaxHitPoints}. При 0 HP герой погибает, оставляя родословную и возможный жетон памяти.{woundText}";
         }
 
         private static string BuildStaminaTooltip(HeroModel model)
         {
-            return $"Выносливость: {model.Stamina}/{model.MaxStamina}. Новые клетки тратят запас, а у входа герой восстанавливает его полностью.";
+            var woundText = model.CombatStaminaWoundPenalty > 0
+                ? $" Раны уменьшают стартовую боевую выносливость на {model.CombatStaminaWoundPenalty}."
+                : string.Empty;
+            return $"Выносливость: {model.Stamina}/{model.MaxStamina}. Новые клетки тратят запас, а у входа герой восстанавливает его полностью.{woundText}";
         }
 
         private static string BuildGoldTooltip(HeroModel model)
@@ -111,7 +117,8 @@ namespace Labyrinth.UI
         private static string BuildAttackTooltip(HeroModel model)
         {
             var equipment = model.Inventory != null ? model.Inventory.AttackBonus : 0;
-            return $"Сила удара героя: {model.AttackPoints}. Личная база: {model.BaseAttackPoints}, оружие: +{equipment}, выучка: +{model.LineageAttackBonus}.";
+            var woundText = model.AttackWoundPenalty > 0 ? $", раны: -{model.AttackWoundPenalty}" : string.Empty;
+            return $"Сила удара героя: {model.AttackPoints}. Личная база: {model.BaseAttackPoints}, оружие: +{equipment}, выучка: +{model.LineageAttackBonus}{woundText}.";
         }
 
         private static string BuildArmorTooltip(HeroModel model)

@@ -11,6 +11,8 @@ namespace Labyrinth.Maze
         private const int MaximumExtraConnections = 90;
         private const int EntranceBranchSearchDistance = 6;
         private const int EntranceBranchFallbackDistance = 3;
+        private const int AlternativeRoutePathRadius = 5;
+        private const int MaxAlternativeCarvesPerGoal = 18;
 
         public static void AddExtraConnections(
             MazeGrid grid,
@@ -41,6 +43,78 @@ namespace Labyrinth.Maze
             GameDebugLog.Info(
                 "Maze",
                 $"Extra connections: desired={desiredCount}, candidates={candidates.Count}, placed={placed}, junctions={junctions}, entranceBranch={(firstBranch ? GameDebugLog.Position(firstBranchPosition) : "none")}");
+        }
+
+        public static void EnsureAlternativeRoutes(
+            MazeGrid grid,
+            Vector2Int entrance,
+            CentralRoomInfo centralRoom,
+            KeyPickupModel centralRoomKey,
+            DungeonStairsModel downStairs,
+            IReadOnlyList<CaveInfo> caves,
+            System.Random random)
+        {
+            var goals = BuildRouteGoals(grid, entrance, centralRoom, centralRoomKey, downStairs, caves);
+            if (goals.Count == 0)
+            {
+                return;
+            }
+
+            var initialCandidateCount = CollectExtraConnectionCandidates(grid, centralRoom).Count;
+            var satisfiedBefore = 0;
+            var satisfiedAfter = 0;
+            var carved = 0;
+            var failed = 0;
+            var carvedDetails = string.Empty;
+
+            foreach (var goal in goals)
+            {
+                if (IsRouteGoalSatisfied(grid, goal, out _))
+                {
+                    satisfiedBefore++;
+                    satisfiedAfter++;
+                    continue;
+                }
+
+                var carvedForGoal = 0;
+                while (carvedForGoal < MaxAlternativeCarvesPerGoal
+                    && !IsRouteGoalSatisfied(grid, goal, out _))
+                {
+                    var candidates = CollectExtraConnectionCandidates(grid, centralRoom);
+                    Shuffle(candidates, random);
+                    if (!TryCarveAlternativeRouteConnection(
+                        grid,
+                        centralRoom,
+                        goal,
+                        candidates,
+                        random,
+                        carvedForGoal < 2,
+                        out var carvedPosition))
+                    {
+                        break;
+                    }
+
+                    carvedForGoal++;
+                    carved++;
+                    AppendCarvedDetail(ref carvedDetails, goal.Name, carvedPosition);
+                }
+
+                if (IsRouteGoalSatisfied(grid, goal, out _))
+                {
+                    satisfiedAfter++;
+                    continue;
+                }
+
+                IsRouteGoalSatisfied(grid, goal, out var failedDetails);
+                failed++;
+                GameDebugLog.Warning(
+                    "Maze",
+                    $"Early alternative route still limited: goal={goal.Name}, start={GameDebugLog.Position(goal.Start)}, target={GameDebugLog.Position(goal.Target)}, carvedForGoal={carvedForGoal}, details={failedDetails}.");
+            }
+
+            GameDebugLog.Info(
+                "Maze",
+                $"Early alternative routes: goals={goals.Count}, initialCandidates={initialCandidateCount}, satisfiedBefore={satisfiedBefore}, satisfiedAfter={satisfiedAfter}, carved={carved}, failed={failed}{(string.IsNullOrEmpty(carvedDetails) ? string.Empty : $", carvedAt={carvedDetails}")}");
         }
 
         private static int PlaceExtraConnections(
@@ -85,6 +159,389 @@ namespace Labyrinth.Maze
             }
 
             return placed;
+        }
+
+        private static List<RouteGoal> BuildRouteGoals(
+            MazeGrid grid,
+            Vector2Int entrance,
+            CentralRoomInfo centralRoom,
+            KeyPickupModel centralRoomKey,
+            DungeonStairsModel downStairs,
+            IReadOnlyList<CaveInfo> caves)
+        {
+            var goals = new List<RouteGoal>();
+            AddRouteGoal(goals, "central-entry", entrance, centralRoom.EntranceExternalPosition, false);
+            if (centralRoomKey != null)
+            {
+                AddRouteGoal(goals, "central-key", entrance, centralRoomKey.Position, false);
+            }
+
+            if (downStairs != null)
+            {
+                AddRouteGoal(goals, "down-stairs", centralRoom.ExitExternalPosition, downStairs.Position, true);
+            }
+
+            if (TryFindFarthestCaveGoal(grid, entrance, centralRoom, caves, false, out var firstHalfCave))
+            {
+                AddRouteGoal(goals, "first-cave", entrance, firstHalfCave, false);
+            }
+
+            if (TryFindFarthestCaveGoal(grid, centralRoom.ExitExternalPosition, centralRoom, caves, true, out var secondHalfCave))
+            {
+                AddRouteGoal(goals, "second-cave", centralRoom.ExitExternalPosition, secondHalfCave, true);
+            }
+
+            var farthestSecondHalf = FindFarthestSecondHalfGoal(grid, centralRoom);
+            if (farthestSecondHalf != centralRoom.ExitExternalPosition)
+            {
+                AddRouteGoal(goals, "second-far", centralRoom.ExitExternalPosition, farthestSecondHalf, true);
+            }
+
+            return goals;
+        }
+
+        private static void AddRouteGoal(
+            List<RouteGoal> goals,
+            string name,
+            Vector2Int start,
+            Vector2Int target,
+            bool includeClosedDoors)
+        {
+            if (start == target)
+            {
+                return;
+            }
+
+            foreach (var goal in goals)
+            {
+                if (goal.Start == start && goal.Target == target)
+                {
+                    return;
+                }
+            }
+
+            goals.Add(new RouteGoal(name, start, target, includeClosedDoors));
+        }
+
+        private static bool TryFindFarthestCaveGoal(
+            MazeGrid grid,
+            Vector2Int start,
+            CentralRoomInfo centralRoom,
+            IReadOnlyList<CaveInfo> caves,
+            bool secondHalf,
+            out Vector2Int target)
+        {
+            target = default;
+            if (caves == null || caves.Count == 0)
+            {
+                return false;
+            }
+
+            var distances = MazeValidation.GetReachableDistances(grid, start, true);
+            var bestDistance = -1;
+            for (var i = 0; i < caves.Count; i++)
+            {
+                var cave = caves[i];
+                var inRequestedHalf = secondHalf
+                    ? centralRoom.IsBeyondExitSide(cave.Center)
+                    : cave.Center.x < centralRoom.Min.x;
+                if (!inRequestedHalf || !distances.TryGetValue(cave.Center, out var distance))
+                {
+                    continue;
+                }
+
+                if (distance > bestDistance)
+                {
+                    bestDistance = distance;
+                    target = cave.Center;
+                }
+            }
+
+            return bestDistance >= 0;
+        }
+
+        private static Vector2Int FindFarthestSecondHalfGoal(MazeGrid grid, CentralRoomInfo centralRoom)
+        {
+            var distances = MazeValidation.GetReachableDistances(grid, centralRoom.ExitExternalPosition, true);
+            var best = centralRoom.ExitExternalPosition;
+            var bestDistance = -1;
+            foreach (var pair in distances)
+            {
+                if (!centralRoom.IsBeyondExitSide(pair.Key) || centralRoom.Contains(pair.Key))
+                {
+                    continue;
+                }
+
+                if (pair.Value > bestDistance)
+                {
+                    best = pair.Key;
+                    bestDistance = pair.Value;
+                }
+            }
+
+            return best;
+        }
+
+        private static bool TryCarveAlternativeRouteConnection(
+            MazeGrid grid,
+            CentralRoomInfo centralRoom,
+            RouteGoal goal,
+            IReadOnlyList<Vector2Int> candidates,
+            System.Random random,
+            bool allowTwoCellConnector,
+            out Vector2Int carvedPosition)
+        {
+            carvedPosition = default;
+            if (!MazeValidation.TryFindRoutePath(grid, goal.Start, goal.Target, goal.IncludeClosedDoors, out var primaryPath))
+            {
+                return false;
+            }
+
+            var earlyStartIndex = MazeValidation.EarlyAlternativeProtectedCells;
+            var earlyEndIndex = MazeValidation.GetEarlyAlternativeWindowEndIndex(primaryPath.Count);
+            if (TryFindAlternativeConnectionCandidate(
+                grid,
+                centralRoom,
+                goal,
+                candidates,
+                primaryPath,
+                true,
+                earlyStartIndex,
+                earlyEndIndex,
+                out carvedPosition)
+                || (allowTwoCellConnector
+                    && TryCreateEarlyRouteConnector(
+                        grid,
+                        centralRoom,
+                        goal,
+                        primaryPath,
+                        random,
+                        earlyStartIndex,
+                        earlyEndIndex,
+                        out carvedPosition))
+                || TryFindAlternativeConnectionCandidate(
+                    grid,
+                    centralRoom,
+                    goal,
+                    candidates,
+                    primaryPath,
+                    false,
+                    0,
+                    primaryPath.Count - 1,
+                    out carvedPosition))
+            {
+                if (grid.Get(carvedPosition).Type == MazeCellType.Wall)
+                {
+                    grid.SetType(carvedPosition, MazeCellType.Path);
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryFindAlternativeConnectionCandidate(
+            MazeGrid grid,
+            CentralRoomInfo centralRoom,
+            RouteGoal goal,
+            IReadOnlyList<Vector2Int> candidates,
+            IReadOnlyList<Vector2Int> primaryPath,
+            bool requireNearPath,
+            int pathStartIndex,
+            int pathEndIndex,
+            out Vector2Int candidatePosition)
+        {
+            candidatePosition = default;
+            foreach (var candidate in candidates)
+            {
+                if (grid.Get(candidate).Type != MazeCellType.Wall
+                    || !IsCandidateInGoalSection(candidate, goal, centralRoom)
+                    || !WouldConnectWalkableCorridors(grid, candidate, centralRoom)
+                    || (requireNearPath && !IsNearPath(candidate, primaryPath, AlternativeRoutePathRadius, pathStartIndex, pathEndIndex)))
+                {
+                    continue;
+                }
+
+                candidatePosition = candidate;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryCreateEarlyRouteConnector(
+            MazeGrid grid,
+            CentralRoomInfo centralRoom,
+            RouteGoal goal,
+            IReadOnlyList<Vector2Int> primaryPath,
+            System.Random random,
+            int pathStartIndex,
+            int pathEndIndex,
+            out Vector2Int branchPosition)
+        {
+            branchPosition = default;
+            if (pathEndIndex < pathStartIndex)
+            {
+                return false;
+            }
+
+            var origins = CollectPathWindow(primaryPath, pathStartIndex, pathEndIndex);
+            Shuffle(origins, random);
+            foreach (var origin in origins)
+            {
+                if (!IsCandidateInGoalSection(origin, goal, centralRoom))
+                {
+                    continue;
+                }
+
+                var directions = new List<Vector2Int>(MazeDirections.Cardinal);
+                Shuffle(directions, random);
+                foreach (var direction in directions)
+                {
+                    var side = origin + direction;
+                    var end = side + direction;
+                    if (!CanCreateTwoCellConnector(grid, centralRoom, goal, origin, side, end))
+                    {
+                        continue;
+                    }
+
+                    grid.SetType(side, MazeCellType.Path);
+                    grid.SetType(end, MazeCellType.Path);
+                    branchPosition = side;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsCandidateInGoalSection(
+            Vector2Int candidate,
+            RouteGoal goal,
+            CentralRoomInfo centralRoom)
+        {
+            if (IsInFirstSection(goal.Target, centralRoom))
+            {
+                return IsInFirstSection(candidate, centralRoom);
+            }
+
+            if (IsInSecondSection(goal.Target, centralRoom))
+            {
+                return IsInSecondSection(candidate, centralRoom);
+            }
+
+            return IsInFirstSection(candidate, centralRoom) || IsInSecondSection(candidate, centralRoom);
+        }
+
+        private static bool IsNearPath(
+            Vector2Int candidate,
+            IReadOnlyList<Vector2Int> path,
+            int maxDistance)
+        {
+            return IsNearPath(candidate, path, maxDistance, 0, path.Count - 1);
+        }
+
+        private static bool IsNearPath(
+            Vector2Int candidate,
+            IReadOnlyList<Vector2Int> path,
+            int maxDistance,
+            int startIndex,
+            int endIndex)
+        {
+            var clampedStart = Mathf.Max(0, startIndex);
+            var clampedEnd = Mathf.Min(path.Count - 1, endIndex);
+            for (var i = clampedStart; i <= clampedEnd; i++)
+            {
+                if (GridDistance(candidate, path[i]) <= maxDistance)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool CanCreateTwoCellConnector(
+            MazeGrid grid,
+            CentralRoomInfo centralRoom,
+            RouteGoal goal,
+            Vector2Int origin,
+            Vector2Int side,
+            Vector2Int end)
+        {
+            if (!grid.InBounds(side)
+                || !grid.InBounds(end)
+                || IsOnEdge(grid, side)
+                || IsOnEdge(grid, end)
+                || grid.Get(side).Type != MazeCellType.Wall
+                || grid.Get(end).Type != MazeCellType.Wall
+                || !IsCandidateInGoalSection(side, goal, centralRoom)
+                || !IsCandidateInGoalSection(end, goal, centralRoom)
+                || !IsExtraConnectionPositionAllowed(side, centralRoom)
+                || !IsExtraConnectionPositionAllowed(end, centralRoom))
+            {
+                return false;
+            }
+
+            foreach (var direction in MazeDirections.Cardinal)
+            {
+                var neighbor = end + direction;
+                if (neighbor == side
+                    || neighbor == origin
+                    || !grid.InBounds(neighbor)
+                    || !grid.Get(neighbor).IsWalkable
+                    || !IsCandidateInGoalSection(neighbor, goal, centralRoom)
+                    || !AreInSameMazeSection(origin, neighbor, centralRoom))
+                {
+                    continue;
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static List<Vector2Int> CollectPathWindow(
+            IReadOnlyList<Vector2Int> path,
+            int startIndex,
+            int endIndex)
+        {
+            var cells = new List<Vector2Int>();
+            var clampedStart = Mathf.Max(0, startIndex);
+            var clampedEnd = Mathf.Min(path.Count - 1, endIndex);
+            for (var i = clampedStart; i <= clampedEnd; i++)
+            {
+                cells.Add(path[i]);
+            }
+
+            return cells;
+        }
+
+        private static int GridDistance(Vector2Int a, Vector2Int b)
+        {
+            return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+        }
+
+        private static void AppendCarvedDetail(ref string text, string goalName, Vector2Int position)
+        {
+            if (text.Length > 0)
+            {
+                text += "; ";
+            }
+
+            text += $"{goalName}:{GameDebugLog.Position(position)}";
+        }
+
+        private static bool IsRouteGoalSatisfied(MazeGrid grid, RouteGoal goal, out string details)
+        {
+            return MazeValidation.HasEarlyAlternativeRoute(
+                grid,
+                goal.Start,
+                goal.Target,
+                goal.IncludeClosedDoors,
+                out details);
         }
 
         private static bool TryCreateEntranceBranch(
@@ -386,6 +843,14 @@ namespace Labyrinth.Maze
             return isSideContact && position != openContact;
         }
 
+        private static bool IsOnEdge(MazeGrid grid, Vector2Int position)
+        {
+            return position.x == 0
+                || position.y == 0
+                || position.x == grid.Width - 1
+                || position.y == grid.Height - 1;
+        }
+
         private static void Shuffle(List<Vector2Int> positions, System.Random random)
         {
             for (var i = positions.Count - 1; i > 0; i--)
@@ -395,6 +860,25 @@ namespace Labyrinth.Maze
                 positions[i] = positions[j];
                 positions[j] = temp;
             }
+        }
+
+        private readonly struct RouteGoal
+        {
+            public RouteGoal(string name, Vector2Int start, Vector2Int target, bool includeClosedDoors)
+            {
+                Name = name;
+                Start = start;
+                Target = target;
+                IncludeClosedDoors = includeClosedDoors;
+            }
+
+            public string Name { get; }
+
+            public Vector2Int Start { get; }
+
+            public Vector2Int Target { get; }
+
+            public bool IncludeClosedDoors { get; }
         }
     }
 }

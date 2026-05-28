@@ -146,14 +146,14 @@ namespace Labyrinth.UI
 
         private void DrawCustomSizeControls()
         {
-            var rect = DrawCard(150f);
+            var rect = DrawCard(172f);
             GUI.Label(new Rect(rect.x, rect.y, rect.width, 26f), "Размер подземелья", sectionStyle);
             GUI.Label(
-                new Rect(rect.x, rect.y + 29f, rect.width, 22f),
-                "Ручной ввод, нечетность подгоняется автоматически.",
+                new Rect(rect.x, rect.y + 29f, rect.width, 38f),
+                $"Ширина {MazeGenerationSettings.MinWidth}-{MazeGenerationSettings.MaxWidth}, высота {MazeGenerationSettings.MinHeight}-{MazeGenerationSettings.MaxHeight}; нечетность подгоняется автоматически.",
                 mutedStyle);
 
-            var fieldY = rect.y + 62f;
+            var fieldY = rect.y + 78f;
             var fieldWidth = Mathf.Min(160f, (rect.width - 36f) * 0.5f);
             var nextWidth = DrawNumberField(new Rect(rect.x, fieldY, fieldWidth, 66f), "Ширина", customWidthText);
             var nextHeight = DrawNumberField(
@@ -167,7 +167,7 @@ namespace Labyrinth.UI
                 customHeightText = nextHeight;
             }
 
-            DrawSizeStatus(new Rect(rect.x, rect.y + 124f, rect.width, 22f));
+            DrawSizeStatus(new Rect(rect.x, rect.y + 144f, rect.width, 22f));
         }
 
         private void DrawSeedControls()
@@ -242,8 +242,8 @@ namespace Labyrinth.UI
         {
             if (TryParseCustomSize(out var width, out var height))
             {
-                var normalizedWidth = MazeGenerationSettings.NormalizeSize(width);
-                var normalizedHeight = MazeGenerationSettings.NormalizeSize(height);
+                var normalizedWidth = MazeGenerationSettings.NormalizeWidth(width);
+                var normalizedHeight = MazeGenerationSettings.NormalizeHeight(height);
                 var hint = normalizedWidth == width && normalizedHeight == height
                     ? $"Будет создано: {normalizedWidth} x {normalizedHeight}"
                     : $"Будет создано: {normalizedWidth} x {normalizedHeight}, размер приведен к нечетному";
@@ -315,10 +315,15 @@ namespace Labyrinth.UI
                 return false;
             }
 
-            if (width < MazeGenerationSettings.MinSize || width > MazeGenerationSettings.MaxSize ||
-                height < MazeGenerationSettings.MinSize || height > MazeGenerationSettings.MaxSize)
+            if (width < MazeGenerationSettings.MinWidth || width > MazeGenerationSettings.MaxWidth)
             {
-                sizeError = $"Размер должен быть от {MazeGenerationSettings.MinSize} до {MazeGenerationSettings.MaxSize}.";
+                sizeError = $"Ширина должна быть от {MazeGenerationSettings.MinWidth} до {MazeGenerationSettings.MaxWidth}.";
+                return false;
+            }
+
+            if (height < MazeGenerationSettings.MinHeight || height > MazeGenerationSettings.MaxHeight)
+            {
+                sizeError = $"Высота должна быть от {MazeGenerationSettings.MinHeight} до {MazeGenerationSettings.MaxHeight}.";
                 return false;
             }
 

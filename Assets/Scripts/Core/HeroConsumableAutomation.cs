@@ -216,42 +216,63 @@ namespace Labyrinth.Core
             }
 
             var missingHitPoints = hero.Model.MaxHitPoints - hero.Model.HitPoints;
-            var affordableHitPoints = resources.Food / BaseDevelopment.InfirmaryFoodPerHitPoint;
-            var requestedHealing = Mathf.Min(missingHitPoints, affordableHitPoints);
-            if (requestedHealing <= 0)
+            var woundFoodCost = BaseDevelopment.InfirmaryFoodPerHitPoint * 2;
+            var requestedHealing = Mathf.Min(
+                missingHitPoints,
+                resources.Food / BaseDevelopment.InfirmaryFoodPerHitPoint);
+            var foodAfterHealing = resources.Food - requestedHealing * BaseDevelopment.InfirmaryFoodPerHitPoint;
+            var requestedWoundHealing = Mathf.Min(hero.Model.CombatWounds, foodAfterHealing / woundFoodCost);
+            if (requestedHealing <= 0 && requestedWoundHealing <= 0)
             {
                 return false;
             }
 
-            var foodCost = requestedHealing * BaseDevelopment.InfirmaryFoodPerHitPoint;
+            var foodCost = requestedHealing * BaseDevelopment.InfirmaryFoodPerHitPoint
+                + requestedWoundHealing * woundFoodCost;
             if (!resources.TrySpendFood(foodCost))
             {
                 return false;
             }
 
             var restored = hero.Model.RestoreHitPoints(requestedHealing);
-            if (restored <= 0)
+            var healedWounds = hero.Model.HealCombatWounds(requestedWoundHealing);
+            if (restored <= 0 && healedWounds <= 0)
             {
                 resources.AddFood(foodCost);
                 return false;
             }
 
-            var unusedFood = (requestedHealing - restored) * BaseDevelopment.InfirmaryFoodPerHitPoint;
+            var unusedFood = (requestedHealing - restored) * BaseDevelopment.InfirmaryFoodPerHitPoint
+                + (requestedWoundHealing - healedWounds) * woundFoodCost;
             if (unusedFood > 0)
             {
                 resources.AddFood(unusedFood);
             }
 
-            DamageNumberView.CreateText(
-                mazeRenderer,
-                baseDevelopment.InfirmaryPosition,
-                $"+{restored} HP",
-                new Color(0.52f, 1f, 0.62f),
-                1.95f);
+            if (restored > 0)
+            {
+                DamageNumberView.CreateText(
+                    mazeRenderer,
+                    baseDevelopment.InfirmaryPosition,
+                    $"+{restored} HP",
+                    new Color(0.52f, 1f, 0.62f),
+                    1.95f);
+            }
+
+            if (healedWounds > 0)
+            {
+                DamageNumberView.CreateText(
+                    mazeRenderer,
+                    baseDevelopment.InfirmaryPosition,
+                    $"-{healedWounds} ран",
+                    new Color(0.75f, 0.95f, 1f),
+                    restored > 0 ? 2.25f : 1.95f);
+            }
+
             GameAudioController.Play(GameSfx.Potion, mazeRenderer.GridToWorld(baseDevelopment.InfirmaryPosition), 0.9f);
             GameDebugLog.Info(
                 "Hero",
-                $"Hero healed at infirmary: restored={restored}, foodSpent={restored * BaseDevelopment.InfirmaryFoodPerHitPoint}, foodLeft={resources.Food}, hp={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}");
+                $"Hero healed at infirmary: restored={restored}, woundsHealed={healedWounds}, foodSpent={foodCost - unusedFood}, foodLeft={resources.Food}, hp={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, wounds={hero.Model.CombatWounds}");
             return true;
         }
 

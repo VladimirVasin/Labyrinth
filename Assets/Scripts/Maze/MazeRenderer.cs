@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Labyrinth.Maze
 {
-    public sealed class MazeRenderer : MonoBehaviour
+    public sealed partial class MazeRenderer : MonoBehaviour
     {
         private const float ModelUnit = 1.35f;
         private const float BuildingScale = 2f;
@@ -74,7 +74,7 @@ namespace Labyrinth.Maze
             }
 
             RenderCentralDoors(result);
-            RenderCentralRoomKey(result);
+            RenderKeyPickups(result);
             RenderChests(result);
             OreDepositRenderer.Render(this, result);
             DungeonStairsRenderer.Render(this, result);
@@ -501,49 +501,6 @@ namespace Labyrinth.Maze
 
                 door.AttachVisual(doorRoot);
             }
-        }
-
-        private void RenderCentralRoomKey(MazeGenerationResult result)
-        {
-            var key = result.CentralRoomKey;
-            if (key == null)
-            {
-                return;
-            }
-
-            var keyRoot = new GameObject("Central Room Key");
-            keyRoot.transform.SetParent(root, false);
-            var position = GridToWorld(key.Position);
-            keyRoot.transform.position = position;
-
-            var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            head.name = "Key Head";
-            head.transform.SetParent(keyRoot.transform, false);
-            head.transform.position = position + new Vector3(-cellSize * 0.14f, Scale(0.11f), 0f);
-            head.transform.localScale = new Vector3(cellSize * 0.18f, Scale(0.06f), cellSize * 0.18f);
-            head.GetComponent<Renderer>().sharedMaterial = keyGoldMaterial;
-            RemoveCollider(head);
-            TrackCellRenderer(key.Position, head);
-
-            var shaft = CreateCube(
-                "Key Shaft",
-                position + new Vector3(cellSize * 0.12f, Scale(0.11f), 0f),
-                new Vector3(cellSize * 0.36f, Scale(0.05f), cellSize * 0.07f),
-                keyGoldMaterial,
-                keyRoot.transform,
-                false);
-            TrackCellRenderer(key.Position, shaft);
-
-            var tooth = CreateCube(
-                "Key Tooth",
-                position + new Vector3(cellSize * 0.3f, Scale(0.11f), cellSize * 0.07f),
-                new Vector3(cellSize * 0.08f, Scale(0.05f), cellSize * 0.16f),
-                keyGoldMaterial,
-                keyRoot.transform,
-                false);
-            TrackCellRenderer(key.Position, tooth);
-
-            key.AttachVisual(keyRoot);
         }
 
         private void RenderChests(MazeGenerationResult result)

@@ -26,8 +26,8 @@ namespace Labyrinth.Maze
 
         public MazeGenerationResult Generate(MazeGenerationSettings settings, int levelNumber = 1)
         {
-            var width = MazeGenerationSettings.NormalizeSize(settings.Width);
-            var height = MazeGenerationSettings.NormalizeSize(settings.Height);
+            var width = MazeGenerationSettings.NormalizeWidth(settings.Width);
+            var height = MazeGenerationSettings.NormalizeHeight(settings.Height);
             var levelSeed = levelNumber <= 1 ? settings.Seed : settings.Seed ^ (levelNumber * 104729);
             var normalizedSettings = new MazeGenerationSettings(width, height, levelSeed, settings.Preset);
             var random = new System.Random(levelSeed);
@@ -47,9 +47,10 @@ namespace Labyrinth.Maze
             MazeBranchCarver.AddExtraConnections(grid, entrance, centralRoom, random);
             var caves = PlaceCaves(grid, entrance, centralRoom, random);
             EnsureSecondHalfStairsCave(grid, entrance, centralRoom, caves);
-            var centralDoors = CreateCentralDoors(grid, centralRoom);
             var centralRoomKey = PlaceCentralRoomKey(grid, entrance, centralRoom, caves);
             var downStairs = PlaceDownStairs(grid, entrance, centralRoom, caves, levelNumber + 1);
+            MazeBranchCarver.EnsureAlternativeRoutes(grid, entrance, centralRoom, centralRoomKey, downStairs, caves, random);
+            var centralDoors = CreateCentralDoors(grid, centralRoom);
             var chests = CreateChests(caves, centralRoomKey, downStairs.Position, random);
             var oreDeposits = CreateOreDeposits(grid, caves, entrance, centralRoomKey, downStairs.Position, random);
             var upStairs = levelNumber > 1
@@ -824,9 +825,9 @@ namespace Labyrinth.Maze
                 return CavePlacementStatus.NoExternalContact;
             }
 
-            var selectedContact = SelectCaveEntranceContact(contacts, entrance);
+            var selectedContacts = SelectCaveEntranceContacts(contacts, entrance);
             var snapshots = new List<CellSnapshot>();
-            ApplyCaveCandidate(grid, center, contacts, selectedContact, snapshots);
+            ApplyCaveCandidate(grid, center, contacts, selectedContacts, snapshots);
 
             if (!AllWalkableCellsReachable(grid, entrance))
             {
@@ -834,7 +835,7 @@ namespace Labyrinth.Maze
                 return CavePlacementStatus.DisconnectsMaze;
             }
 
-            cave = new CaveInfo(center, selectedContact.EntrancePosition);
+            cave = new CaveInfo(center, selectedContacts[0].EntrancePosition);
             return CavePlacementStatus.Placed;
         }
 

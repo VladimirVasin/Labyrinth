@@ -93,6 +93,46 @@ namespace Labyrinth.Maze
             return best;
         }
 
+        private static List<CaveEntranceContact> SelectCaveEntranceContacts(
+            IReadOnlyList<CaveEntranceContact> contacts,
+            Vector2Int mazeEntrance)
+        {
+            var selected = new List<CaveEntranceContact>();
+            var primary = SelectCaveEntranceContact(contacts, mazeEntrance);
+            selected.Add(primary);
+
+            if (contacts.Count <= 1)
+            {
+                return selected;
+            }
+
+            var bestSecondary = primary;
+            var bestDistance = -1;
+            for (var i = 0; i < contacts.Count; i++)
+            {
+                var contact = contacts[i];
+                if (contact.ExternalPosition == primary.ExternalPosition)
+                {
+                    continue;
+                }
+
+                var distance = GridDistance(contact.ExternalPosition, primary.ExternalPosition);
+                if (distance > bestDistance
+                    || (distance == bestDistance && IsEarlierPosition(contact.EntrancePosition, bestSecondary.EntrancePosition)))
+                {
+                    bestSecondary = contact;
+                    bestDistance = distance;
+                }
+            }
+
+            if (bestDistance > 0)
+            {
+                selected.Add(bestSecondary);
+            }
+
+            return selected;
+        }
+
         private static bool IsEarlierPosition(Vector2Int current, Vector2Int best)
         {
             return current.x < best.x || (current.x == best.x && current.y < best.y);
@@ -102,7 +142,7 @@ namespace Labyrinth.Maze
             MazeGrid grid,
             Vector2Int center,
             IReadOnlyList<CaveEntranceContact> contacts,
-            CaveEntranceContact selectedContact,
+            IReadOnlyList<CaveEntranceContact> selectedContacts,
             List<CellSnapshot> snapshots)
         {
             var radius = CaveSize / 2;
@@ -116,13 +156,28 @@ namespace Labyrinth.Maze
 
             foreach (var contact in contacts)
             {
-                if (contact.ExternalPosition == selectedContact.ExternalPosition)
+                if (ContainsSelectedExternalContact(selectedContacts, contact.ExternalPosition))
                 {
                     continue;
                 }
 
                 SetTypeWithSnapshot(grid, contact.ExternalPosition, MazeCellType.Wall, snapshots);
             }
+        }
+
+        private static bool ContainsSelectedExternalContact(
+            IReadOnlyList<CaveEntranceContact> selectedContacts,
+            Vector2Int externalPosition)
+        {
+            for (var i = 0; i < selectedContacts.Count; i++)
+            {
+                if (selectedContacts[i].ExternalPosition == externalPosition)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void SetTypeWithSnapshot(

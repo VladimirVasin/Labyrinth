@@ -85,8 +85,8 @@ namespace Labyrinth.UI
         {
             new BuildingServiceEntry(
                 "Лечение",
-                $"{BaseDevelopment.InfirmaryFoodPerHitPoint} пищи / HP",
-                "У входа восстанавливает раненым рыцарям недостающее здоровье за пищу из казны.")
+                $"{BaseDevelopment.InfirmaryFoodPerHitPoint} пищи / HP, {BaseDevelopment.InfirmaryFoodPerHitPoint * 2} / рана",
+                "У входа восстанавливает раненым рыцарям недостающее здоровье и лечит боевые раны за пищу из казны.")
         };
 
         private static readonly BuildingServiceEntry[] CartographerEntries =

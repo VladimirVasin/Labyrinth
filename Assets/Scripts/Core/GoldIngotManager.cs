@@ -136,7 +136,7 @@ namespace Labyrinth.Core
             {
                 GameDebugLog.Warning(
                     "Hero",
-                    $"Hero reached gold ingot at {GameDebugLog.Position(hero.Position)} but has no empty inventory slot.");
+                    $"Hero {FormatHero(hero)} reached gold ingot at {GameDebugLog.Position(hero.Position)} but has no empty inventory slot.");
                 return false;
             }
 
@@ -149,7 +149,9 @@ namespace Labyrinth.Core
                 new Color(1f, 0.82f, 0.25f),
                 1.55f);
             GameAudioController.Play(GameSfx.IngotPickup, mazeRenderer.GridToWorld(hero.Position));
-            GameDebugLog.Info("Hero", $"Hero picked up gold ingot #{ingot.Id} at {GameDebugLog.Position(hero.Position)}.");
+            GameDebugLog.Info(
+                "Hero",
+                $"Hero {FormatHero(hero)} picked up gold ingot #{ingot.Id} at {GameDebugLog.Position(hero.Position)}, inventorySlot={FormatInventorySlot(hero.Inventory, HeroInventory.GoldIngotItemName)}.");
             return true;
         }
 
@@ -164,6 +166,7 @@ namespace Labyrinth.Core
                 return false;
             }
 
+            var inventorySlot = FormatInventorySlot(hero.Inventory, HeroInventory.GoldIngotItemName);
             if (!hero.Inventory.TryRemoveItem(HeroInventory.GoldIngotItemName))
             {
                 return false;
@@ -200,7 +203,7 @@ namespace Labyrinth.Core
 
             GameDebugLog.Info(
                 "Hero",
-                $"Hero delivered gold ingot: treasuryGold={resources.Gold}, vengeanceGold={vengeanceProgress.BonusGold}, vengeanceXP={vengeanceProgress.BonusExperience}, heroGold={hero.Gold}, heroXP={hero.Experience}/{hero.ExperienceForNextLevel}, heroLevel={hero.Level}, gainedLevels={gainedLevels}.");
+                $"Hero {FormatHero(hero)} delivered gold ingot: inventorySlot={inventorySlot}, treasuryGold={resources.Gold}, vengeanceGold={vengeanceProgress.BonusGold}, vengeanceXP={vengeanceProgress.BonusExperience}, heroGold={hero.Gold}, heroXP={hero.Experience}/{hero.ExperienceForNextLevel}, heroLevel={hero.Level}, gainedLevels={gainedLevels}.");
             IngotDeliveredByHero?.Invoke(hero);
             return true;
         }
@@ -212,6 +215,7 @@ namespace Labyrinth.Core
                 return false;
             }
 
+            var inventorySlot = FormatInventorySlot(hero.Inventory, HeroInventory.GoldIngotItemName);
             hero.Inventory.TryRemoveItem(HeroInventory.GoldIngotItemName);
             if (!carriedIngots.TryGetValue(hero, out var ingot) || ingot == null)
             {
@@ -225,8 +229,31 @@ namespace Labyrinth.Core
             RenderIngot(ingot);
             GameDebugLog.Info(
                 "Hero",
-                $"Hero dropped gold ingot #{ingot.Id} at {GameDebugLog.Position(dropPosition)} after death.");
+                $"Hero {FormatHero(hero)} dropped gold ingot #{ingot.Id} from inventorySlot={inventorySlot} at {GameDebugLog.Position(dropPosition)} after death.");
             return true;
+        }
+
+        private static string FormatHero(HeroModel hero)
+        {
+            if (hero == null)
+            {
+                return "unknown";
+            }
+
+            var name = string.IsNullOrWhiteSpace(hero.DisplayName) ? "unnamed" : hero.DisplayName;
+            return hero.DisplayNumber > 0 ? $"#{hero.DisplayNumber} ({name})" : $"unassigned ({name})";
+        }
+
+        private static string FormatInventorySlot(HeroInventory inventory, string itemName)
+        {
+            if (inventory == null)
+            {
+                return "none";
+            }
+
+            return inventory.TryFindItemSlot(itemName, out var slotIndex, out var slot)
+                ? $"{slotIndex + 1}/{inventory.Slots.Count} {slot.Type} ({slot.Label})"
+                : "missing";
         }
 
         private List<Vector2Int> CollectCandidates(HashSet<Vector2Int> blockedPositions)

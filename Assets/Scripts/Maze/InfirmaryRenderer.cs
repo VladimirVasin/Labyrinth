@@ -24,7 +24,7 @@ namespace Labyrinth.Maze
                 BuildingType.Infirmary,
                 "Лазарет",
                 "лечение рыцарей",
-                $"У входа восстанавливает HP: 1 HP за {BaseDevelopment.InfirmaryFoodPerHitPoint} пищи.",
+                $"У входа восстанавливает HP и лечит боевые раны: 1 HP за {BaseDevelopment.InfirmaryFoodPerHitPoint} пищи, 1 рана за {BaseDevelopment.InfirmaryFoodPerHitPoint * 2}.",
                 position,
                 BaseDevelopment.InfirmaryFootprintRadiusCells);
 

@@ -8,7 +8,7 @@ namespace Labyrinth.Hero
 {
     public sealed class HeroController : MonoBehaviour
     {
-        private const float StepInterval = 0.28f;
+        private const float StepInterval = 0.34f;
         private const float CorpseVisibilityDuration = 5f;
         private const float VowOfReturnStepIntervalMultiplier = 0.45f;
         private const float FortifiedCellSpeedMultiplier = 1.2f;
@@ -203,6 +203,19 @@ namespace Labyrinth.Hero
             return damage;
         }
 
+        public int ReceiveResolvedDamage(int resolvedDamage)
+        {
+            var wasAlive = Model.IsAlive;
+            var damage = Model.ReceiveResolvedDamage(resolvedDamage);
+            if (wasAlive && !Model.IsAlive)
+            {
+                StartCorpseVisibility();
+            }
+
+            LogStateChangeIfNeeded("damage");
+            return damage;
+        }
+
         private void Update()
         {
             if (Model == null)
@@ -284,6 +297,7 @@ namespace Labyrinth.Hero
             DisplayNumber = displayNumber;
             DisplayName = string.IsNullOrWhiteSpace(displayName) ? $"Рыцарь {displayNumber}" : displayName;
             Model = new HeroModel(startPosition, memory, statSeed);
+            Model.SetIdentity(DisplayNumber, DisplayName);
             Model.SetDungeonLevel(result.LevelNumber);
             explorer = new HeroExplorer(result, Model, startPosition, displayNumber, mazeRenderer, goldIngotManager, deathTokenManager, entranceKnowledgeSync, downStairsOpened);
             corpseExpired = false;
