@@ -250,3 +250,13 @@
 - Added a general same-cell stagger queue for non-combat floating text, so pickups, deliveries, rewards, healing, purchases, and production feedback no longer spawn multiple labels on top of each other in the same moment; default world floating text is also slightly smaller and rises more calmly.
 - Slightly softened only the first level's initial regular mob spawn: opening rats/goblins/orcs now use lower stat ranges, and the initial spread forces orcs less aggressively while keeping dark respawn, elites, bosses, and deeper levels at the existing hardcore values.
 - Fixed carried key loss on knight death: central-room and descent keys now exist as reusable world pickups, drop from the carry slot after death, render with object hover info, and can be picked up again by another knight; key pickups now take priority over other same-cell carry objectives.
+
+## 2026-05-29
+
+- Added personal combat trauma progression for knights: light wounds can escalate into a single heavy injury, untreated heavy injuries can leave one permanent personal scar, and successor character traits are generated separately from death context without inheriting scars.
+- Updated healing rules and feedback: potions heal HP plus light wounds, the infirmary heals HP/light wounds/heavy injuries for food, rations restore only stamina, and scars are never healed. Combat, healing, death, rebirth, and reward logs now include wound/injury/scar/trait state.
+- Extended hero and lineage HUDs with compact injury/scar/character cards and hover explanations so the new combat consequences are visible without overflowing the existing panel.
+- Tightened the hero HUD after the trauma pass: wound/injury/scar/character cells are now text-first instead of icon-first, empty inventory slots no longer draw item-type icons, and the inventory rows are slightly denser so the close button no longer overlaps the last slot.
+- Made the hero HUD blessing and vengeance card titles render with a fixed high-contrast label instead of auto-fit text, preventing those two card names from disappearing at compact panel widths.
+- Consolidated the hero HUD into semantic blocks: level moved into the header XP bar, wounds/injury/scar moved under state, blessing/vengeance/character merged into a single legacy block, attack/armor merged into one combat row, and the inventory scroll area now sizes from the close button gap.
+- Enlarged and tightened the hero HUD so inventory fits without a lower scroll view, and added colon separators to compact HUD parameter labels for clearer `label: value` reading.

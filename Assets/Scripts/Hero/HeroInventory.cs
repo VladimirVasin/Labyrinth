@@ -94,9 +94,9 @@ namespace Labyrinth.Hero
         public const string TemperedSwordItemName = MasterBladeItemName;
         public const string PlateArmorItemName = PlateHarnessItemName;
         public const string HealthPotionItemName = "Зелье здоровья";
-        public const string HealthPotionHoverInfo = "+5 HP при использовании";
+        public const string HealthPotionHoverInfo = "+5 HP и -1 легкая рана при использовании";
         public const string RationItemName = "Паёк";
-        public const string RationHoverInfo = "+10 выносливости при использовании";
+        public const string RationHoverInfo = "+10 выносливости при использовании; раны не лечит";
         public const string ReturnStoneItemName = "Камень возвращения";
         public const string ReturnStoneHoverInfo = "Одноразово переносит рыцаря ко входу, когда он возвращается из подземелья";
         public const string GoldIngotItemName = "Золотой слиток";
@@ -473,12 +473,13 @@ namespace Labyrinth.Hero
 
         private static string BuildHealthPotionHover(int healAmount)
         {
-            return $"+{Math.Max(0, healAmount)} HP при использовании";
+            var woundHealing = healAmount >= 7 ? 2 : 1;
+            return $"+{Math.Max(0, healAmount)} HP и -{woundHealing} легк. ран при использовании";
         }
 
         private static string BuildRationHover(int restoreAmount)
         {
-            return $"+{Math.Max(0, restoreAmount)} выносливости при использовании";
+            return $"+{Math.Max(0, restoreAmount)} выносливости при использовании; раны не лечит";
         }
 
         private static string BuildMoveSpeedHover(int bonusPercent)

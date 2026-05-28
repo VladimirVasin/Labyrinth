@@ -144,8 +144,9 @@ namespace Labyrinth.UI
         {
             var availableWidth = Mathf.Max(330f, Screen.width - HeroPanelX - 18f);
             var width = Mathf.Min(480f, availableWidth);
-            var height = Mathf.Min(720f, Screen.height - 78f);
-            return new Rect(HeroPanelX, 66f, width, height);
+            var y = Screen.height < 700 ? 4f : 36f;
+            var height = Mathf.Min(760f, Screen.height - y - 8f);
+            return new Rect(HeroPanelX, y, width, height);
         }
 
         private bool ContainsHeroIconPoint(Vector2 guiPoint)
@@ -406,16 +407,75 @@ namespace Labyrinth.UI
                 new Rect(rect.xMax - statusWidth - 12f, rect.y + 14f, statusWidth, 26f),
                 BuildStateText(hero.Model.State),
                 BuildStateColor(hero.Model.State));
-            DrawHeaderXpBar(new Rect(textX, rect.y + 72f, rect.width - 92f, 15f), hero.Model.Experience, hero.Model.ExperienceForNextLevel);
+            DrawHeaderXpBar(new Rect(textX, rect.y + 72f, rect.width - 92f, 15f), hero.Model.Level, hero.Model.Experience, hero.Model.ExperienceForNextLevel);
         }
 
         private void DrawTraitCard(Rect rect, string title, string value)
         {
             FillRect(rect, new Color(0.87f, 0.72f, 0.34f, 0.07f));
             DrawOutline(rect, new Color(0.87f, 0.72f, 0.34f, 0.18f));
-            DrawTraitIcon(new Rect(rect.x + 9f, rect.y + 5f, 12f, 12f), title);
-            DrawFittedLabel(new Rect(rect.x + 25f, rect.y + 4f, rect.width - 34f, 14f), title, chipLabelStyle, 10, false);
-            DrawFittedLabel(new Rect(rect.x + 10f, rect.y + 18f, rect.width - 20f, 28f), string.IsNullOrEmpty(value) ? "нет" : value, blessingValueStyle, 10, true);
+            GUI.Label(new Rect(rect.x + 10f, rect.y + 3f, rect.width - 20f, 18f), title, slotLabelStyle);
+            FillRect(new Rect(rect.x + 10f, rect.y + 22f, rect.width - 20f, 1f), new Color(0.87f, 0.72f, 0.34f, 0.16f));
+            DrawFittedLabel(new Rect(rect.x + 10f, rect.y + 24f, rect.width - 20f, rect.height - 27f), string.IsNullOrEmpty(value) ? "нет" : value, blessingValueStyle, 10, true);
+        }
+
+        private void DrawConditionLine(Rect rect, HeroModel model)
+        {
+            FillRect(rect, new Color(1f, 1f, 1f, 0.045f));
+            DrawOutline(rect, new Color(1f, 1f, 1f, 0.1f));
+            var third = rect.width / 3f;
+            DrawInlinePair(new Rect(rect.x + 8f, rect.y + 4f, third - 12f, 22f), "Раны", model.CombatWounds > 0 ? model.CombatWounds.ToString() : "нет", model.CombatWounds > 0);
+            DrawInlinePair(new Rect(rect.x + third + 8f, rect.y + 4f, third - 12f, 22f), "Травма", model.SevereInjuryCompactText, model.HasSevereInjury);
+            DrawInlinePair(new Rect(rect.x + third * 2f + 8f, rect.y + 4f, third - 12f, 22f), "Шрам", model.PersonalScarCompactText, model.HasPersonalScar);
+        }
+
+        private void DrawLegacySummary(Rect rect, HeroModel model)
+        {
+            FillRect(rect, new Color(0.87f, 0.72f, 0.34f, 0.06f));
+            DrawOutline(rect, new Color(0.87f, 0.72f, 0.34f, 0.18f));
+            var lineHeight = rect.height / 3f;
+            DrawLegacyLine(new Rect(rect.x + 10f, rect.y + 3f, rect.width - 20f, lineHeight - 2f), "Благословение", model.BlessingText, TryGetActiveBlessing(model, out _));
+            DrawLegacyLine(new Rect(rect.x + 10f, rect.y + lineHeight + 3f, rect.width - 20f, lineHeight - 2f), "Клятва", model.VengeanceText, model.VengeanceQuest != null && model.VengeanceQuest.IsActive);
+            DrawLegacyLine(new Rect(rect.x + 10f, rect.y + lineHeight * 2f + 3f, rect.width - 20f, lineHeight - 2f), "Характер", model.CharacterTraitCompactText, model.CharacterTrait != HeroCharacterTraitType.None);
+        }
+
+        private void DrawLegacyLine(Rect rect, string title, string value, bool active)
+        {
+            var labelWidth = Mathf.Min(116f, rect.width * 0.42f);
+            GUI.Label(new Rect(rect.x, rect.y, labelWidth, rect.height), $"{title}:", slotLabelStyle);
+            var previousColor = GUI.color;
+            GUI.color = active ? new Color(1f, 0.78f, 0.28f) : new Color(0.92f, 0.9f, 0.84f);
+            GUI.Label(new Rect(rect.x + labelWidth, rect.y, rect.width - labelWidth, rect.height), string.IsNullOrEmpty(value) ? "нет" : value, blessingValueStyle);
+            GUI.color = previousColor;
+        }
+
+        private void DrawCombatSummary(Rect rect, HeroModel model)
+        {
+            FillRect(rect, new Color(1f, 1f, 1f, 0.055f));
+            DrawOutline(rect, new Color(1f, 1f, 1f, 0.1f));
+            var half = rect.width * 0.5f;
+            DrawCombatSummaryCell(new Rect(rect.x + 10f, rect.y + 6f, half - 20f, rect.height - 12f), "Атака", model.AttackPoints.ToString(), new Color(0.98f, 0.76f, 0.34f));
+            DrawCombatSummaryCell(new Rect(rect.x + half + 10f, rect.y + 6f, half - 20f, rect.height - 12f), "Броня", model.ArmorPoints.ToString(), new Color(0.55f, 0.78f, 1f));
+            FillRect(new Rect(rect.x + half, rect.y + 7f, 1f, rect.height - 14f), new Color(1f, 1f, 1f, 0.12f));
+        }
+
+        private void DrawCombatSummaryCell(Rect rect, string label, string value, Color valueColor)
+        {
+            GUI.Label(new Rect(rect.x, rect.y, rect.width * 0.45f, rect.height), $"{label}:", slotLabelStyle);
+            var previousColor = GUI.color;
+            GUI.color = valueColor;
+            GUI.Label(new Rect(rect.x + rect.width * 0.45f, rect.y, rect.width * 0.55f, rect.height), value, chipValueStyle);
+            GUI.color = previousColor;
+        }
+
+        private void DrawInlinePair(Rect rect, string title, string value, bool active)
+        {
+            var labelWidth = Mathf.Min(58f, rect.width * 0.58f);
+            GUI.Label(new Rect(rect.x, rect.y, labelWidth, rect.height), $"{title}:", chipLabelStyle);
+            var previousColor = GUI.color;
+            GUI.color = active ? new Color(1f, 0.78f, 0.28f) : new Color(0.88f, 0.86f, 0.78f);
+            GUI.Label(new Rect(rect.x + labelWidth, rect.y, rect.width - labelWidth, rect.height), string.IsNullOrEmpty(value) ? "нет" : value, blessingValueStyle);
+            GUI.color = previousColor;
         }
 
         private void DrawStatusBadge(Rect rect, string text, Color color)
@@ -428,12 +488,12 @@ namespace Labyrinth.UI
             GUI.color = previousColor;
         }
 
-        private void DrawHeaderXpBar(Rect rect, int value, int maxValue)
+        private void DrawHeaderXpBar(Rect rect, int level, int value, int maxValue)
         {
             FillRect(rect, new Color(0f, 0f, 0f, 0.34f));
             var normalized = maxValue > 0 ? Mathf.Clamp01((float)value / maxValue) : 0f;
             FillRect(new Rect(rect.x, rect.y, rect.width * normalized, rect.height), new Color(0.18f, 0.72f, 0.96f, 0.82f));
-            GUI.Label(rect, $"XP {value} / {maxValue}", barValueStyle);
+            GUI.Label(rect, $"Ур. {level} · XP {value} / {maxValue}", barValueStyle);
         }
 
         private void DrawProgressBar(Rect rect, string label, int value, int maxValue, Color color)
@@ -441,7 +501,7 @@ namespace Labyrinth.UI
             FillRect(rect, new Color(1f, 1f, 1f, 0.045f));
             DrawOutline(rect, new Color(1f, 1f, 1f, 0.08f));
             DrawProgressIcon(new Rect(rect.x + 9f, rect.y + 3f, 14f, 14f), label);
-            GUI.Label(new Rect(rect.x + 29f, rect.y + 2f, rect.width - 39f, 16f), label, barLabelStyle);
+            GUI.Label(new Rect(rect.x + 29f, rect.y + 2f, rect.width - 39f, 16f), $"{label}:", barLabelStyle);
 
             var barRect = new Rect(rect.x + 10f, rect.y + 21f, rect.width - 20f, 8f);
             FillRect(barRect, new Color(0f, 0f, 0f, 0.45f));
@@ -455,7 +515,7 @@ namespace Labyrinth.UI
             FillRect(rect, new Color(1f, 1f, 1f, 0.055f));
             DrawOutline(rect, new Color(1f, 1f, 1f, 0.1f));
             DrawInfoChipIcon(new Rect(rect.x + 8f, rect.y + 10f, 18f, 18f), label);
-            GUI.Label(new Rect(rect.x + 31f, rect.y + 4f, rect.width - 39f, 14f), label, chipLabelStyle);
+            GUI.Label(new Rect(rect.x + 31f, rect.y + 4f, rect.width - 39f, 14f), $"{label}:", chipLabelStyle);
             var previousColor = GUI.color;
             GUI.color = valueColor;
             GUI.Label(new Rect(rect.x + 31f, rect.y + 17f, rect.width - 39f, 18f), value, chipValueStyle);
@@ -480,22 +540,17 @@ namespace Labyrinth.UI
             DrawOutline(rect, slot.HasItem ? new Color(0.75f, 0.63f, 0.36f, 0.45f) : new Color(1f, 1f, 1f, 0.16f));
 
             var labelWidth = rect.width * 0.36f;
-            DrawFittedLabel(new Rect(rect.x + 9f, rect.y, labelWidth - 9f, rect.height), slot.Label, slotLabelStyle, 10, false);
+            DrawFittedLabel(new Rect(rect.x + 9f, rect.y, labelWidth - 9f, rect.height), $"{slot.Label}:", slotLabelStyle, 10, false);
 
-            var itemX = rect.x + labelWidth;
-            var iconRect = new Rect(itemX + 4f, rect.y + 9f, 18f, 18f);
+            var itemX = rect.x + labelWidth + 4f;
             if (slot.HasItem)
             {
+                var iconRect = new Rect(itemX, rect.y + 9f, 18f, 18f);
                 if (!DrawInventoryItemIcon(iconRect, slot.ItemName))
                 {
                     DrawInventorySlotTypeIcon(iconRect, slot.Type);
                 }
 
-                itemX += 28f;
-            }
-            else
-            {
-                DrawInventorySlotTypeIcon(iconRect, slot.Type);
                 itemX += 28f;
             }
 

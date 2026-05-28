@@ -398,7 +398,7 @@ namespace Labyrinth.Core
                 DamageNumberView.CreateText(
                     mazeRenderer,
                     position,
-                    $"+{progress.BonusExperience} XP клятвы",
+                    $"+{progress.BonusExperience} XP памяти",
                     new Color(0.55f, 0.86f, 1f),
                     delay);
             }

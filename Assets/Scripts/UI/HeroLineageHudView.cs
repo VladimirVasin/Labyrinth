@@ -80,13 +80,15 @@ namespace Labyrinth.UI
 
             var viewRect = new Rect(contentX, y, contentWidth, rect.yMax - y - 56f);
             var members = selectedLineage.Members;
-            var contentHeight = Mathf.Max(viewRect.height - 4f, members.Count * 140f + 18f);
+            const float memberCardHeight = 136f;
+            const float memberStep = 150f;
+            var contentHeight = Mathf.Max(viewRect.height - 4f, members.Count * memberStep + 18f);
             scrollPosition = GUI.BeginScrollView(viewRect, scrollPosition, new Rect(0f, 0f, viewRect.width - 18f, contentHeight));
             var localY = 8f;
             for (var i = 0; i < members.Count; i++)
             {
-                DrawMemberCard(new Rect(8f, localY, viewRect.width - 34f, 118f), members[i]);
-                localY += 130f;
+                DrawMemberCard(new Rect(8f, localY, viewRect.width - 34f, memberCardHeight), members[i]);
+                localY += memberStep;
                 if (i < members.Count - 1)
                 {
                     DrawConnector(new Rect(viewRect.width * 0.5f - 1f, localY - 10f, 2f, 20f));
@@ -143,7 +145,8 @@ namespace Labyrinth.UI
             {
                 GUI.Label(new Rect(rect.x + 14f, rect.y + 55f, rect.width - 28f, 18f), $"Пал: {BuildDeathCauseText(member)}, ур. {member.LevelAtDeath}, XP {member.ExperienceAtDeath}", labelStyle);
                 GUI.Label(new Rect(rect.x + 14f, rect.y + 74f, rect.width - 28f, 18f), $"{BuildTokenText(member)}; вклад {member.ContributedGold} зол.", labelStyle);
-                GUI.Label(new Rect(rect.x + 14f, rect.y + 93f, rect.width - 28f, 18f), BuildVengeanceText(member), labelStyle);
+                GUI.Label(new Rect(rect.x + 14f, rect.y + 93f, rect.width - 28f, 18f), BuildLegacyMarksText(member), labelStyle);
+                GUI.Label(new Rect(rect.x + 14f, rect.y + 112f, rect.width - 28f, 18f), BuildVengeanceText(member), labelStyle);
                 return;
             }
 
@@ -151,12 +154,14 @@ namespace Labyrinth.UI
             {
                 GUI.Label(new Rect(rect.x + 14f, rect.y + 55f, rect.width - 28f, 18f), $"Ур. {activeHero.Model.Level}, XP {activeHero.Model.Experience}/{activeHero.Model.ExperienceForNextLevel}", labelStyle);
                 GUI.Label(new Rect(rect.x + 14f, rect.y + 74f, rect.width - 28f, 18f), $"HP {activeHero.Model.HitPoints}/{activeHero.Model.MaxHitPoints}, выносл. {activeHero.Model.Stamina}/{activeHero.Model.MaxStamina}, вклад {member.ContributedGold} зол.", labelStyle);
-                GUI.Label(new Rect(rect.x + 14f, rect.y + 93f, rect.width - 28f, 18f), BuildVengeanceText(member), labelStyle);
+                GUI.Label(new Rect(rect.x + 14f, rect.y + 93f, rect.width - 28f, 18f), BuildActiveMarksText(activeHero.Model), labelStyle);
+                GUI.Label(new Rect(rect.x + 14f, rect.y + 112f, rect.width - 28f, 18f), BuildVengeanceText(member), labelStyle);
             }
             else
             {
                 GUI.Label(new Rect(rect.x + 14f, rect.y + 62f, rect.width - 28f, 20f), "Наследник ещё не призван", labelStyle);
-                GUI.Label(new Rect(rect.x + 14f, rect.y + 86f, rect.width - 28f, 20f), BuildVengeanceText(member), labelStyle);
+                GUI.Label(new Rect(rect.x + 14f, rect.y + 86f, rect.width - 28f, 20f), BuildLegacyMarksText(member), labelStyle);
+                GUI.Label(new Rect(rect.x + 14f, rect.y + 110f, rect.width - 28f, 20f), BuildVengeanceText(member), labelStyle);
             }
         }
 
@@ -191,6 +196,24 @@ namespace Labyrinth.UI
         {
             var quest = member.VengeanceQuest;
             return quest == null || !quest.IsActive ? "Клятва: нет" : quest.SummaryText;
+        }
+
+        private static string BuildLegacyMarksText(HeroLineageMember member)
+        {
+            var scar = member.ScarAtDeath != HeroScarType.None
+                ? HeroInjuryCatalog.GetScarShortName(member.ScarAtDeath)
+                : "нет";
+            var trait = member.CharacterTrait != HeroCharacterTraitType.None
+                ? HeroInjuryCatalog.GetCharacterTraitShortName(member.CharacterTrait)
+                : "нет";
+            return $"Шрам: {scar}; характер: {trait}";
+        }
+
+        private static string BuildActiveMarksText(HeroModel model)
+        {
+            var scar = model.PersonalScar != HeroScarType.None ? model.PersonalScarCompactText : "нет";
+            var trait = model.CharacterTrait != HeroCharacterTraitType.None ? model.CharacterTraitCompactText : "нет";
+            return $"Шрам: {scar}; характер: {trait}";
         }
 
         private static void DrawPanel(Rect rect)

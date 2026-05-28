@@ -122,7 +122,7 @@ namespace Labyrinth.Combat
             GameAudioController.Play(GameSfx.CombatStart, mazeRenderer.GridToWorld(hero.Model.Position));
             GameDebugLog.Info(
                 "Combat",
-                $"Started: hero=#{hero.DisplayNumber} pos={GameDebugLog.Position(hero.Model.Position)}, heroHP={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, heroAtk={hero.Model.AttackPoints}, heroArmor={hero.Model.ArmorPoints}, heroWounds={hero.Model.CombatWounds}, heroCST={heroCombat.Stamina}/{heroCombat.MaxStamina}, mob={mob.DebugName}, mobPos={GameDebugLog.Position(mob.Position)}, mobHP={mob.Model.HitPoints}/{mob.Model.MaxHitPoints}, mobAtk={mob.Model.AttackPoints}, mobArmor={mob.Model.ArmorPoints}, mobCST={mobCombat.Stamina}/{mobCombat.MaxStamina}, initiative=Hero({heroInitiative}) vs Mob({mobInitiative}), first={(heroTurn ? "Hero" : "Mob")}.");
+                $"Started: hero=#{hero.DisplayNumber} pos={GameDebugLog.Position(hero.Model.Position)}, heroHP={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, heroAtk={hero.Model.AttackPoints}, heroArmor={hero.Model.ArmorPoints}, heroWounds={hero.Model.CombatWounds}, heroSevere={hero.Model.SevereInjury}, heroScar={hero.Model.PersonalScar}, heroTrait={hero.Model.CharacterTrait}, heroCST={heroCombat.Stamina}/{heroCombat.MaxStamina}, mob={mob.DebugName}, mobPos={GameDebugLog.Position(mob.Position)}, mobHP={mob.Model.HitPoints}/{mob.Model.MaxHitPoints}, mobAtk={mob.Model.AttackPoints}, mobArmor={mob.Model.ArmorPoints}, mobCST={mobCombat.Stamina}/{mobCombat.MaxStamina}, initiative=Hero({heroInitiative}) vs Mob({mobInitiative}), first={(heroTurn ? "Hero" : "Mob")}.");
             ShowCombatState();
             return true;
         }
@@ -244,7 +244,7 @@ namespace Labyrinth.Combat
 
             GameDebugLog.Info(
                 "Combat",
-                $"Summary: outcome={outcome}, rounds={roundNumber}, hero=#{hero.DisplayNumber}, heroHP={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, heroCST={heroCombat.Stamina}/{heroCombat.MaxStamina}, heroDamageDone={heroCombat.TotalDamageDealt}, heroDamageTaken={heroCombat.TotalDamageTaken}, heroArmorBreak={heroCombat.ArmorBreak}, heroWounds={hero.Model.CombatWounds}, mob={mob.DebugName}, mobHP={mob.Model.HitPoints}/{mob.Model.MaxHitPoints}, mobCST={mobCombat.Stamina}/{mobCombat.MaxStamina}, mobDamageDone={mobCombat.TotalDamageDealt}, mobDamageTaken={mobCombat.TotalDamageTaken}, mobArmorBreak={mobCombat.ArmorBreak}, mobWounds={mobCombat.Wounds}, mobPhase={mobCombat.Phase}.");
+                $"Summary: outcome={outcome}, rounds={roundNumber}, hero=#{hero.DisplayNumber}, heroHP={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, heroCST={heroCombat.Stamina}/{heroCombat.MaxStamina}, heroDamageDone={heroCombat.TotalDamageDealt}, heroDamageTaken={heroCombat.TotalDamageTaken}, heroArmorBreak={heroCombat.ArmorBreak}, heroWounds={hero.Model.CombatWounds}, heroSevere={hero.Model.SevereInjury}, heroScar={hero.Model.PersonalScar}, heroTrait={hero.Model.CharacterTrait}, mob={mob.DebugName}, mobHP={mob.Model.HitPoints}/{mob.Model.MaxHitPoints}, mobCST={mobCombat.Stamina}/{mobCombat.MaxStamina}, mobDamageDone={mobCombat.TotalDamageDealt}, mobDamageTaken={mobCombat.TotalDamageTaken}, mobArmorBreak={mobCombat.ArmorBreak}, mobWounds={mobCombat.Wounds}, mobPhase={mobCombat.Phase}.");
         }
 
         private void GiveHeroVictoryReward()
@@ -259,18 +259,22 @@ namespace Labyrinth.Combat
             reward = hero.Model.ApplyGoldRewardBlessing(reward);
             var vengeanceGoldBonus = hero.Model.GetVengeanceGoldRewardBonus(mob.Model, reward);
             reward += vengeanceGoldBonus;
+            var characterGoldBonus = hero.Model.GetCharacterGoldRewardBonus(mob.Model, reward);
+            reward += characterGoldBonus;
             hero.Model.AddGold(reward);
             var vengeanceExperienceBonus = hero.Model.GetVengeanceExperienceRewardBonus(mob.Model);
+            var personalExperienceBonus = hero.Model.GetPersonalExperienceRewardBonus(mob.Model);
             var experienceReward = rewardRandom.Next(rewardProfile.MinExperience, rewardProfile.MaxExperience + 1)
                 + GetDarkHunterExperienceBonus()
-                + vengeanceExperienceBonus;
+                + vengeanceExperienceBonus
+                + personalExperienceBonus;
             var gainedLevels = hero.Model.AddExperience(experienceReward);
             var vengeanceProgress = hero.Model.RegisterVengeanceMobDefeated(mob.Model);
             gainedLevels += vengeanceProgress.GainedLevels;
             GameAudioController.Play(GameSfx.Deposit, mazeRenderer.GridToWorld(hero.Model.Position));
             GameDebugLog.Info(
                 "Combat",
-                $"Mob defeated: {mob.DebugName}, rewardGold={reward}, rewardXP={experienceReward}, vengeanceGoldBonus={vengeanceGoldBonus}, vengeanceXPBonus={vengeanceExperienceBonus}, vengeanceProgress={vengeanceProgress.Message}, darkSpawn={mob.Model.SpawnedFromDarkness}, heroGold={hero.Model.Gold}, heroXP={hero.Model.Experience}/{hero.Model.ExperienceForNextLevel}, heroLevel={hero.Model.Level}, gainedLevels={gainedLevels}");
+                $"Mob defeated: {mob.DebugName}, rewardGold={reward}, rewardXP={experienceReward}, vengeanceGoldBonus={vengeanceGoldBonus}, characterGoldBonus={characterGoldBonus}, vengeanceXPBonus={vengeanceExperienceBonus}, personalXPBonus={personalExperienceBonus}, vengeanceProgress={vengeanceProgress.Message}, darkSpawn={mob.Model.SpawnedFromDarkness}, heroGold={hero.Model.Gold}, heroXP={hero.Model.Experience}/{hero.Model.ExperienceForNextLevel}, heroLevel={hero.Model.Level}, gainedLevels={gainedLevels}, severe={hero.Model.SevereInjury}, scar={hero.Model.PersonalScar}, trait={hero.Model.CharacterTrait}");
             DamageNumberView.CreateText(
                 mazeRenderer,
                 hero.Model.Position,

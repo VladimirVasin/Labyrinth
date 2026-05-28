@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Labyrinth.Hero
 {
-    public sealed class HeroModel
+    public sealed partial class HeroModel
     {
         public const int DefaultHitPoints = 10;
         public const int DefaultMaxStamina = 10;
@@ -98,17 +98,39 @@ namespace Labyrinth.Hero
 
         public int AttackWoundPenalty => Mathf.Min(CombatWounds, 4);
 
-        public int CombatStaminaWoundPenalty => Mathf.Min(CombatWounds, 5);
+        public int CombatStaminaWoundPenalty => Mathf.Min(CombatWounds, 5)
+            + SevereInjuryCombatStaminaPenalty
+            + PersonalScarCombatStaminaPenalty;
 
-        public int AttackPoints => Mathf.Max(1, BaseAttackPoints + Inventory.AttackBonus + LineageAttackBonus - AttackWoundPenalty);
+        public int AttackPoints => Mathf.Max(
+            1,
+            BaseAttackPoints
+                + Inventory.AttackBonus
+                + LineageAttackBonus
+                - AttackWoundPenalty
+                - SevereInjuryAttackPenalty
+                - PersonalScarAttackPenalty);
 
-        public int ArmorPoints => BaseArmorPoints + Inventory.ArmorBonus + GetVengeanceArmorBonus();
+        public int ArmorPoints => Mathf.Max(
+            0,
+            BaseArmorPoints
+                + Inventory.ArmorBonus
+                + GetVengeanceArmorBonus()
+                - SevereInjuryArmorPenalty);
 
-        public int MoveSpeedBonusPercent => Inventory.MoveSpeedBonusPercent;
+        public int MoveSpeedBonusPercent => Mathf.Clamp(
+            Inventory.MoveSpeedBonusPercent + CharacterMoveSpeedBonusPercent - SevereInjuryMoveSpeedPenaltyPercent,
+            -40,
+            80);
 
-        public int SightRange => HeroVisibility.SightRange
-            + (HasBlessing(HeroBlessingType.PilgrimLight) ? PilgrimLightSightBonus : 0)
-            + GetVengeanceSightBonus();
+        public int SightRange => Mathf.Max(
+            1,
+            HeroVisibility.SightRange
+                + (HasBlessing(HeroBlessingType.PilgrimLight) ? PilgrimLightSightBonus : 0)
+                + GetVengeanceSightBonus()
+                + CharacterSightBonus
+                - SevereInjurySightPenalty
+                - PersonalScarSightPenalty);
 
         public int FirstHitBlessingBonus => HasBlessing(HeroBlessingType.TrueHand)
             ? TrueHandAttackBonus
@@ -321,13 +343,21 @@ namespace Labyrinth.Hero
             var progress = ApplyVengeanceCompletionReward(VengeanceQuest != null
                 ? VengeanceQuest.RegisterDeathTokenDelivered()
                 : HeroVengeanceProgressResult.None);
+            var characterExperienceBonus = GetCharacterDeathTokenExperienceBonus();
             if (!HasCompletedVengeance(HeroVengeanceKind.CarriedName))
             {
-                return progress;
+                if (characterExperienceBonus <= 0)
+                {
+                    return progress;
+                }
+
+                var traitLevels = AddExperience(characterExperienceBonus);
+                return progress.WithAppliedBonuses(0, characterExperienceBonus, progress.GainedLevels + traitLevels);
             }
 
-            var gainedLevels = AddExperience(5);
-            return progress.WithAppliedBonuses(0, 5, progress.GainedLevels + gainedLevels);
+            var experienceBonus = 5 + characterExperienceBonus;
+            var gainedLevels = AddExperience(experienceBonus);
+            return progress.WithAppliedBonuses(0, experienceBonus, progress.GainedLevels + gainedLevels);
         }
 
         public void MoveTo(Vector2Int position)
@@ -382,6 +412,11 @@ namespace Labyrinth.Hero
             if (damage >= HitPoints && Blessings.TryConsume(HeroBlessingType.LastBreath))
             {
                 HitPoints = 1;
+                if (TryGainLastBreathScar(out var scarGained))
+                {
+                    GameDebugLog.Info("Hero", $"Last Breath scar gained: scar={scarGained}, {InjuryDebugText}");
+                }
+
                 return Mathf.Max(1, hitPointsBeforeDamage - HitPoints);
             }
 

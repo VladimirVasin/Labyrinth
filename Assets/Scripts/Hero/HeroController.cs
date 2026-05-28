@@ -470,12 +470,14 @@ namespace Labyrinth.Hero
         private float ApplyFootwearSpeedBonus(float interval)
         {
             var bonusPercent = Model != null ? Model.MoveSpeedBonusPercent : 0;
-            if (bonusPercent <= 0)
+            if (bonusPercent == 0)
             {
                 return interval;
             }
 
-            return interval / (1f + bonusPercent / 100f);
+            return bonusPercent > 0
+                ? interval / (1f + bonusPercent / 100f)
+                : interval * (1f + Mathf.Abs(bonusPercent) / 100f);
         }
 
         private float ApplyVengeanceMovementBonus(float interval)

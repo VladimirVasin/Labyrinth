@@ -300,7 +300,16 @@ namespace Labyrinth.Combat
                 return;
             }
 
-            var baseAttack = BuildAttack(actorIsHero, action, out var firstHitBonus, out var vengeanceBonus, out var vengeanceReduction, out var phaseBonus, out var desperateBonus);
+            var baseAttack = BuildAttack(
+                actorIsHero,
+                action,
+                out var firstHitBonus,
+                out var vengeanceBonus,
+                out var vengeanceReduction,
+                out var personalBonus,
+                out var personalReduction,
+                out var phaseBonus,
+                out var desperateBonus);
             var scaledAttack = Mathf.Max(1, Mathf.RoundToInt((baseAttack + action.FlatAttackBonus) * action.DamageMultiplier));
             var targetBaseArmor = actorIsHero ? mob.Model.ArmorPoints : hero.Model.ArmorPoints;
             var armorBeforePierce = targetState.EffectiveArmor(targetBaseArmor);
@@ -326,7 +335,7 @@ namespace Labyrinth.Combat
             ShowSupportFeedback(actorPosition, recoveredStamina, guardAdded, forcedRecover);
             GameDebugLog.Info(
                 "Combat",
-                $"Round {roundNumber} action: actor={(actorIsHero ? "Hero" : "Mob")}, action={action.Type}, forcedRecover={forcedRecover}, baseAttack={baseAttack}, scaledAttack={scaledAttack}, firstHitBonus={firstHitBonus}, vengeanceBonus={vengeanceBonus}, vengeanceReduction={vengeanceReduction}, phaseBonus={phaseBonus}, desperateBonus={desperateBonus}, targetArmorBase={targetBaseArmor}, targetArmorBreak={targetState.ArmorBreak}, armorBeforePierce={armorBeforePierce}, pierce={action.ArmorPierce}, effectiveArmor={effectiveArmor}, guardBroken={guardBroken}, guardAbsorb={guardAbsorb}, resolvedDamage={resolvedDamage}, damage={actualDamage}, targetHP={hpBefore}->{hpAfter}, armorBreakApplied={armorBreakApplied}, staminaDamaged={staminaDamaged}, woundApplied={woundApplied}, actorCST={actorState.Stamina}/{actorState.MaxStamina}, targetCST={targetState.Stamina}/{targetState.MaxStamina}, targetGuard={targetState.Guard}, targetWounds={targetState.Wounds}.");
+                $"Round {roundNumber} action: actor={(actorIsHero ? "Hero" : "Mob")}, action={action.Type}, forcedRecover={forcedRecover}, baseAttack={baseAttack}, scaledAttack={scaledAttack}, firstHitBonus={firstHitBonus}, vengeanceBonus={vengeanceBonus}, vengeanceReduction={vengeanceReduction}, personalBonus={personalBonus}, personalReduction={personalReduction}, phaseBonus={phaseBonus}, desperateBonus={desperateBonus}, targetArmorBase={targetBaseArmor}, targetArmorBreak={targetState.ArmorBreak}, armorBeforePierce={armorBeforePierce}, pierce={action.ArmorPierce}, effectiveArmor={effectiveArmor}, guardBroken={guardBroken}, guardAbsorb={guardAbsorb}, resolvedDamage={resolvedDamage}, damage={actualDamage}, targetHP={hpBefore}->{hpAfter}, armorBreakApplied={armorBreakApplied}, staminaDamaged={staminaDamaged}, woundApplied={woundApplied}, actorCST={actorState.Stamina}/{actorState.MaxStamina}, targetCST={targetState.Stamina}/{targetState.MaxStamina}, targetGuard={targetState.Guard}, targetWounds={targetState.Wounds}.");
 
             if (actorIsHero)
             {
@@ -340,12 +349,16 @@ namespace Labyrinth.Combat
             out int firstHitBonus,
             out int vengeanceBonus,
             out int vengeanceReduction,
+            out int personalBonus,
+            out int personalReduction,
             out int phaseBonus,
             out int desperateBonus)
         {
             firstHitBonus = 0;
             vengeanceBonus = 0;
             vengeanceReduction = 0;
+            personalBonus = 0;
+            personalReduction = 0;
             phaseBonus = 0;
             desperateBonus = 0;
 
@@ -364,6 +377,8 @@ namespace Labyrinth.Combat
 
                 vengeanceBonus = hero.Model.GetVengeanceAttackBonus(mob.Model, isOpeningAttack, attack);
                 attack += vengeanceBonus;
+                personalBonus = hero.Model.GetPersonalAttackBonus(mob.Model, isOpeningAttack);
+                attack += personalBonus;
             }
             else
             {
@@ -375,6 +390,11 @@ namespace Labyrinth.Combat
                     attack,
                     isOpeningAttack,
                     out vengeanceReduction);
+                attack = hero.Model.ApplyPersonalIncomingAttackModifier(
+                    mob.Model,
+                    attack,
+                    isOpeningAttack,
+                    out personalReduction);
                 mobOpeningAttackUsed = true;
             }
 
@@ -459,6 +479,34 @@ namespace Labyrinth.Combat
             if (targetIsHero)
             {
                 targetState.SetWounds(hero.Model.ApplyCombatWound());
+                if (hero.Model.TryApplySevereInjuryFromCombat(mob.Model, damage, rewardRandom, out var severeGained, out var scarGained))
+                {
+                    if (severeGained != HeroSevereInjuryType.None)
+                    {
+                        DamageNumberView.CreateCombatText(
+                            mazeRenderer,
+                            hero.Model.Position,
+                            "тяжелая рана",
+                            new Color(1f, 0.42f, 0.28f),
+                            1.45f,
+                            CombatStateFeedbackDelay + 0.18f);
+                    }
+
+                    if (scarGained != HeroScarType.None)
+                    {
+                        DamageNumberView.CreateCombatText(
+                            mazeRenderer,
+                            hero.Model.Position,
+                            "шрам",
+                            new Color(1f, 0.68f, 0.28f),
+                            1.48f,
+                            CombatStateFeedbackDelay + 0.36f);
+                    }
+
+                    GameDebugLog.Info(
+                        "Combat",
+                        $"Round {roundNumber} hero injury: severeGained={severeGained}, scarGained={scarGained}, {hero.Model.InjuryDebugText}, source={mob.DebugName}, damage={damage}.");
+                }
             }
             else
             {

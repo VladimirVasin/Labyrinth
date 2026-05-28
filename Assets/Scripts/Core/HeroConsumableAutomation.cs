@@ -222,13 +222,19 @@ namespace Labyrinth.Core
                 resources.Food / BaseDevelopment.InfirmaryFoodPerHitPoint);
             var foodAfterHealing = resources.Food - requestedHealing * BaseDevelopment.InfirmaryFoodPerHitPoint;
             var requestedWoundHealing = Mathf.Min(hero.Model.CombatWounds, foodAfterHealing / woundFoodCost);
-            if (requestedHealing <= 0 && requestedWoundHealing <= 0)
+            var foodAfterWounds = foodAfterHealing - requestedWoundHealing * woundFoodCost;
+            var requestedSevereHealing = hero.Model.HasSevereInjury
+                && foodAfterWounds >= BaseDevelopment.InfirmaryFoodPerSevereInjury
+                    ? 1
+                    : 0;
+            if (requestedHealing <= 0 && requestedWoundHealing <= 0 && requestedSevereHealing <= 0)
             {
                 return false;
             }
 
             var foodCost = requestedHealing * BaseDevelopment.InfirmaryFoodPerHitPoint
-                + requestedWoundHealing * woundFoodCost;
+                + requestedWoundHealing * woundFoodCost
+                + requestedSevereHealing * BaseDevelopment.InfirmaryFoodPerSevereInjury;
             if (!resources.TrySpendFood(foodCost))
             {
                 return false;
@@ -236,14 +242,20 @@ namespace Labyrinth.Core
 
             var restored = hero.Model.RestoreHitPoints(requestedHealing);
             var healedWounds = hero.Model.HealCombatWounds(requestedWoundHealing);
-            if (restored <= 0 && healedWounds <= 0)
+            var healedSevereInjury = requestedSevereHealing > 0
+                ? hero.Model.HealSevereInjury()
+                : HeroSevereInjuryType.None;
+            if (restored <= 0 && healedWounds <= 0 && healedSevereInjury == HeroSevereInjuryType.None)
             {
                 resources.AddFood(foodCost);
                 return false;
             }
 
             var unusedFood = (requestedHealing - restored) * BaseDevelopment.InfirmaryFoodPerHitPoint
-                + (requestedWoundHealing - healedWounds) * woundFoodCost;
+                + (requestedWoundHealing - healedWounds) * woundFoodCost
+                + (requestedSevereHealing > 0 && healedSevereInjury == HeroSevereInjuryType.None
+                    ? BaseDevelopment.InfirmaryFoodPerSevereInjury
+                    : 0);
             if (unusedFood > 0)
             {
                 resources.AddFood(unusedFood);
@@ -269,10 +281,20 @@ namespace Labyrinth.Core
                     restored > 0 ? 2.25f : 1.95f);
             }
 
+            if (healedSevereInjury != HeroSevereInjuryType.None)
+            {
+                DamageNumberView.CreateText(
+                    mazeRenderer,
+                    baseDevelopment.InfirmaryPosition,
+                    "-травма",
+                    new Color(0.72f, 1f, 0.82f),
+                    restored > 0 || healedWounds > 0 ? 2.55f : 1.95f);
+            }
+
             GameAudioController.Play(GameSfx.Potion, mazeRenderer.GridToWorld(baseDevelopment.InfirmaryPosition), 0.9f);
             GameDebugLog.Info(
                 "Hero",
-                $"Hero healed at infirmary: restored={restored}, woundsHealed={healedWounds}, foodSpent={foodCost - unusedFood}, foodLeft={resources.Food}, hp={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, wounds={hero.Model.CombatWounds}");
+                $"Hero healed at infirmary: restored={restored}, woundsHealed={healedWounds}, severeHealed={healedSevereInjury}, scarUnchanged={hero.Model.PersonalScar}, foodSpent={foodCost - unusedFood}, foodLeft={resources.Food}, hp={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, wounds={hero.Model.CombatWounds}, severe={hero.Model.SevereInjury}");
             return true;
         }
 
@@ -545,27 +567,44 @@ namespace Labyrinth.Core
         private bool TryUseHealthPotion(HeroController hero)
         {
             var healAmount = baseDevelopment.HealthPotionHealAmount;
-            if (!ShouldUseHealthPotion(hero.Model, healAmount) || !hero.Model.Inventory.TryConsumeHealthPotion(healAmount))
+            var woundHealAmount = GetPotionWoundHealAmount(healAmount);
+            if (!ShouldUseHealthPotion(hero.Model, healAmount, woundHealAmount)
+                || !hero.Model.Inventory.TryConsumeHealthPotion(healAmount))
             {
                 return false;
             }
 
             var restored = hero.Model.RestoreHitPoints(healAmount);
-            if (restored <= 0)
+            var healedWounds = hero.Model.HealCombatWounds(woundHealAmount);
+            if (restored <= 0 && healedWounds <= 0)
             {
                 return false;
             }
 
-            DamageNumberView.CreateText(
-                mazeRenderer,
-                hero.Model.Position,
-                $"+{restored} HP",
-                new Color(0.45f, 1f, 0.48f),
-                1.65f);
+            if (restored > 0)
+            {
+                DamageNumberView.CreateText(
+                    mazeRenderer,
+                    hero.Model.Position,
+                    $"+{restored} HP",
+                    new Color(0.45f, 1f, 0.48f),
+                    1.65f);
+            }
+
+            if (healedWounds > 0)
+            {
+                DamageNumberView.CreateText(
+                    mazeRenderer,
+                    hero.Model.Position,
+                    $"-{healedWounds} ран",
+                    new Color(0.75f, 0.95f, 1f),
+                    restored > 0 ? 1.95f : 1.65f);
+            }
+
             GameAudioController.Play(GameSfx.Potion, mazeRenderer.GridToWorld(hero.Model.Position));
             GameDebugLog.Info(
                 "Hero",
-                $"Hero used health potion: restored={restored}, hp={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}");
+                $"Hero used health potion: restored={restored}, woundsHealed={healedWounds}, severeUnchanged={hero.Model.SevereInjury}, scarUnchanged={hero.Model.PersonalScar}, hp={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, wounds={hero.Model.CombatWounds}");
             return true;
         }
 
@@ -608,7 +647,7 @@ namespace Labyrinth.Core
             GameAudioController.Play(GameSfx.Ration, mazeRenderer.GridToWorld(hero.Model.Position));
             GameDebugLog.Info(
                 "Hero",
-                $"Hero used ration: restored={restored}, stamina={hero.Model.Stamina}/{hero.Model.MaxStamina}");
+                $"Hero used ration: restored={restored}, stamina={hero.Model.Stamina}/{hero.Model.MaxStamina}, woundsUnchanged={hero.Model.CombatWounds}, severeUnchanged={hero.Model.SevereInjury}, scarUnchanged={hero.Model.PersonalScar}");
             return true;
         }
 
@@ -622,11 +661,22 @@ namespace Labyrinth.Core
                 && hero.TryUseReturnStoneToEntrance();
         }
 
-        private static bool ShouldUseHealthPotion(HeroModel model, int healAmount)
+        private static bool ShouldUseHealthPotion(HeroModel model, int healAmount, int woundHealAmount)
         {
-            return model != null
-                && model.IsAlive
-                && model.MaxHitPoints - model.HitPoints >= Mathf.Min(healAmount, BaseDevelopment.HealthPotionBaseHealAmount);
+            if (model == null || !model.IsAlive)
+            {
+                return false;
+            }
+
+            var missingHitPoints = model.MaxHitPoints - model.HitPoints;
+            var needsHitPoints = missingHitPoints >= Mathf.Min(healAmount, BaseDevelopment.HealthPotionBaseHealAmount);
+            var needsWoundCare = model.CombatWounds >= Mathf.Max(2, woundHealAmount + 1);
+            return needsHitPoints || needsWoundCare;
+        }
+
+        private static int GetPotionWoundHealAmount(int healAmount)
+        {
+            return healAmount >= BaseDevelopment.HealthPotionUpgradedHealAmount ? 2 : 1;
         }
 
         private static bool ShouldUseRation(HeroModel model, int restoreAmount)

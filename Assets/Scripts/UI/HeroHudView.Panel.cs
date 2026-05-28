@@ -18,15 +18,15 @@ namespace Labyrinth.UI
             string hoveredInfo = null;
             var hoveredRect = Rect.zero;
 
-            var y = rect.y + 16f;
+            var y = rect.y + 12f;
             var headerRect = new Rect(contentX, y, contentWidth, 92f);
             DrawHeroHeader(headerRect, title, hero);
             CaptureHover(headerRect, title, BuildHeroHeaderTooltip(hero, title), ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
-            y += 106f;
+            y += 98f;
 
             DrawSection(new Rect(contentX, y, contentWidth, 18f), "Состояние");
-            y += 24f;
-            var hpRect = new Rect(contentX, y, contentWidth, 34f);
+            y += 20f;
+            var hpRect = new Rect(contentX, y, contentWidth, 32f);
             DrawProgressBar(
                 hpRect,
                 "HP",
@@ -34,9 +34,9 @@ namespace Labyrinth.UI
                 hero.Model.MaxHitPoints,
                 new Color(0.92f, 0.34f, 0.28f));
             CaptureHover(hpRect, "HP", BuildHealthTooltip(hero.Model), ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
-            y += 42f;
+            y += 36f;
 
-            var staminaRect = new Rect(contentX, y, contentWidth, 34f);
+            var staminaRect = new Rect(contentX, y, contentWidth, 32f);
             DrawProgressBar(
                 staminaRect,
                 "Выносливость",
@@ -44,48 +44,65 @@ namespace Labyrinth.UI
                 hero.Model.MaxStamina,
                 new Color(0.34f, 0.72f, 1f));
             CaptureHover(staminaRect, "Выносливость", BuildStaminaTooltip(hero.Model), ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
-            y += 46f;
+            y += 36f;
 
-            var chipWidth = (contentWidth - 24f) / 3f;
+            var conditionRect = new Rect(contentX, y, contentWidth, 30f);
+            DrawConditionLine(conditionRect, hero.Model);
+            var conditionThird = contentWidth / 3f;
+            var woundsRect = new Rect(contentX, y, conditionThird, 30f);
+            var severeRect = new Rect(contentX + conditionThird, y, conditionThird, 30f);
+            var scarRect = new Rect(contentX + conditionThird * 2f, y, conditionThird, 30f);
+            CaptureHover(woundsRect, "Боевые раны", BuildWoundsTooltip(hero.Model), ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
+            CaptureHover(severeRect, "Тяжелая травма", BuildSevereInjuryTooltip(hero.Model), ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
+            CaptureHover(scarRect, "Личный шрам", BuildScarTooltip(hero.Model), ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
+            y += 38f;
+
+            var chipWidth = (contentWidth - 12f) * 0.5f;
             var goldRect = new Rect(contentX, y, chipWidth, 38f);
-            var levelRect = new Rect(contentX + chipWidth + 12f, y, chipWidth, 38f);
-            var trainingRect = new Rect(contentX + (chipWidth + 12f) * 2f, y, chipWidth, 38f);
+            var trainingRect = new Rect(contentX + chipWidth + 12f, y, chipWidth, 38f);
             DrawInfoChip(goldRect, "Золото", hero.Model.Gold.ToString(), new Color(1f, 0.84f, 0.26f));
-            DrawInfoChip(levelRect, "Уровень", hero.Model.Level.ToString(), new Color(0.72f, 1f, 0.42f));
             DrawInfoChip(trainingRect, "Выучка", $"{hero.Model.LineageTrainingScore}/{HeroLineageState.MaxTrainingScore}", new Color(0.96f, 0.74f, 0.28f));
             CaptureHover(goldRect, "Личное золото", BuildGoldTooltip(hero.Model), ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
-            CaptureHover(levelRect, "Уровень", BuildLevelTooltip(hero.Model), ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
             CaptureHover(trainingRect, "Выучка", BuildTrainingTooltip(hero.Model), ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
-            y += 48f;
+            y += 44f;
 
-            var traitWidth = (contentWidth - 8f) * 0.5f;
-            var blessingRect = new Rect(contentX, y, traitWidth, 50f);
-            var vengeanceRect = new Rect(contentX + traitWidth + 8f, y, traitWidth, 50f);
-            DrawTraitCard(blessingRect, "Благословение", hero.Model.BlessingText);
-            DrawTraitCard(vengeanceRect, "Клятва мести", hero.Model.VengeanceText);
+            DrawSection(new Rect(contentX, y, contentWidth, 18f), "Наследие");
+            y += 20f;
+            var legacyRect = new Rect(contentX, y, contentWidth, 72f);
+            DrawLegacySummary(legacyRect, hero.Model);
+            var legacyLineHeight = legacyRect.height / 3f;
+            var blessingRect = new Rect(contentX, y, contentWidth, legacyLineHeight);
+            var vengeanceRect = new Rect(contentX, y + legacyLineHeight, contentWidth, legacyLineHeight);
+            var characterRect = new Rect(contentX, y + legacyLineHeight * 2f, contentWidth, legacyLineHeight);
             BuildBlessingTooltip(hero.Model, out var blessingTitle, out var blessingInfo);
             BuildVengeanceTooltip(hero.Model, out var vengeanceTitle, out var vengeanceInfo);
             CaptureHover(blessingRect, blessingTitle, blessingInfo, ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
             CaptureHover(vengeanceRect, vengeanceTitle, vengeanceInfo, ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
-            y += 62f;
+            CaptureHover(characterRect, "Характер", BuildCharacterTraitTooltip(hero.Model), ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
+            y += 78f;
 
             DrawSection(new Rect(contentX, y, contentWidth, 18f), "Боевые параметры");
-            y += 24f;
-            var attackRect = new Rect(contentX, y, chipWidth, 52f);
-            var armorRect = new Rect(contentX + chipWidth + 12f, y, chipWidth, 52f);
-            DrawCombatCard(attackRect, "Attack Points", hero.Model.AttackPoints.ToString(), new Color(0.98f, 0.76f, 0.34f));
-            DrawCombatCard(armorRect, "Armor Points", hero.Model.ArmorPoints.ToString(), new Color(0.55f, 0.78f, 1f));
+            y += 20f;
+            var combatRect = new Rect(contentX, y, contentWidth, 42f);
+            DrawCombatSummary(combatRect, hero.Model);
+            var attackRect = new Rect(contentX, y, contentWidth * 0.5f, 42f);
+            var armorRect = new Rect(contentX + contentWidth * 0.5f, y, contentWidth * 0.5f, 42f);
             CaptureHover(attackRect, "Attack Points", BuildAttackTooltip(hero.Model), ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
             CaptureHover(armorRect, "Armor Points", BuildArmorTooltip(hero.Model), ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
-            y += 66f;
+            y += 50f;
 
             DrawSection(new Rect(contentX, y, contentWidth, 18f), "Инвентарь");
-            y += 24f;
+            y += 20f;
 
+            var closeRect = new Rect(contentX, rect.yMax - 42f, contentWidth, 31f);
             var slots = hero.Model.Inventory.Slots;
-            const float inventoryGap = 8f;
+            const float inventoryGap = 4f;
+            const float slotHeight = 35f;
+            var rowCount = Mathf.CeilToInt(slots.Count / 2f);
+            var slotContentHeight = Mathf.Max(slotHeight, rowCount * (slotHeight + inventoryGap) - inventoryGap);
+            var inventoryViewRect = new Rect(contentX, y, contentWidth, slotContentHeight);
             var slotWidth = (contentWidth - inventoryGap) * 0.5f;
-            const float slotHeight = 40f;
+            FillRect(inventoryViewRect, new Color(0f, 0f, 0f, 0.08f));
             for (var i = 0; i < slots.Count; i++)
             {
                 var slot = slots[i];
@@ -111,7 +128,6 @@ namespace Labyrinth.UI
                 DrawInventoryTooltip(hoveredRect, rect, hoveredTitle, hoveredInfo);
             }
 
-            var closeRect = new Rect(contentX, rect.yMax - 42f, contentWidth, 31f);
             if (GUI.Button(closeRect, "Закрыть", closeButtonStyle))
             {
                 Hide();

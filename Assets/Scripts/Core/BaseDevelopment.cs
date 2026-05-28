@@ -38,6 +38,7 @@ namespace Labyrinth.Core
         public const int HealthPotionBaseMaxCount = 3;
         public const int HealthPotionUpgradedMaxCount = 4;
         public const int InfirmaryFoodPerHitPoint = 5;
+        public const int InfirmaryFoodPerSevereInjury = 35;
         public const int RationFoodCost = 10;
         public const int RationGoldCost = 10;
         public const int RationBaseStaminaRestore = 10;

@@ -65,6 +65,7 @@
     <Compile Include="Assets\Scripts\Core\GameBootstrap.Upgrades.cs" />
     <Compile Include="Assets\Scripts\Base\BuildingView.cs" />
     <Compile Include="Assets\Scripts\Core\HeroDeathTokenManager.cs" />
+    <Compile Include="Assets\Scripts\Core\GameBootstrap.CarryItems.cs" />
     <Compile Include="Assets\Scripts\UI\HeroLineageHudView.cs" />
     <Compile Include="Assets\Scripts\Maze\TerrainDecorationController.Materials.cs" />
     <Compile Include="Assets\Scripts\Maze\ChestView.cs" />
@@ -111,7 +112,7 @@
     <Compile Include="Assets\Scripts\Hero\HeroExplorer.Pathfinding.cs" />
     <Compile Include="Assets\Scripts\Maze\ChestModel.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.Heroes.cs" />
-    <Compile Include="Assets\Scripts\Core\GameBootstrap.CarryItems.cs" />
+    <Compile Include="Assets\Scripts\Hero\HeroModel.Injuries.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.MinersGuild.cs" />
     <Compile Include="Assets\Scripts\Core\BaseDevelopment.cs" />
     <Compile Include="Assets\Scripts\Maze\MazeValidation.cs" />
@@ -151,6 +152,7 @@
     <Compile Include="Assets\Scripts\Maze\OreDepositModel.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.DungeonFortification.cs" />
     <Compile Include="Assets\Scripts\Core\MineConstructionController.Workers.cs" />
+    <Compile Include="Assets\Scripts\Hero\HeroInjuryState.cs" />
     <Compile Include="Assets\Scripts\Core\MineConstructionController.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroState.cs" />
     <Compile Include="Assets\Scripts\Maze\MazeGenerator.cs" />

@@ -59,9 +59,15 @@ namespace Labyrinth.UI
         private static string BuildHealthTooltip(HeroModel model)
         {
             var woundText = model.CombatWounds > 0
-                ? $" Боевые раны: {model.CombatWounds}; лазарет лечит их за пищу."
+                ? $" Легкие раны: {model.CombatWounds}; зелья и лазарет лечат их, пайки не лечат."
                 : string.Empty;
-            return $"Текущее здоровье: {model.HitPoints}/{model.MaxHitPoints}. При 0 HP герой погибает, оставляя родословную и возможный жетон памяти.{woundText}";
+            var severeText = model.HasSevereInjury
+                ? $" Тяжелая травма: {model.SevereInjuryText}; лечится только в лазарете."
+                : string.Empty;
+            var scarText = model.HasPersonalScar
+                ? $" Личный шрам: {model.PersonalScarText}; не лечится и не наследуется."
+                : string.Empty;
+            return $"Текущее здоровье: {model.HitPoints}/{model.MaxHitPoints}. При 0 HP герой погибает, оставляя родословную и возможный жетон памяти.{woundText}{severeText}{scarText}";
         }
 
         private static string BuildStaminaTooltip(HeroModel model)
@@ -114,17 +120,54 @@ namespace Labyrinth.UI
             info = "У этого наследника нет личной клятвы мести.";
         }
 
+        private static string BuildWoundsTooltip(HeroModel model)
+        {
+            if (model.CombatWounds <= 0)
+            {
+                return "Легких боевых ран нет. Пайки восстанавливают только выносливость и не лечат раны.";
+            }
+
+            return $"Легкие боевые раны: {model.CombatWounds}. Они снижают Attack Points и стартовую боевую выносливость. Зелья лечат легкие раны вместе с HP; лазарет лечит их за пищу; пайки не лечат.";
+        }
+
+        private static string BuildSevereInjuryTooltip(HeroModel model)
+        {
+            return model.HasSevereInjury
+                ? HeroInjuryCatalog.BuildSevereInjuryTooltip(model.SevereInjury)
+                : "Тяжелой травмы нет. Она может появиться после серии опасных ударов и лечится только в лазарете.";
+        }
+
+        private static string BuildScarTooltip(HeroModel model)
+        {
+            return model.HasPersonalScar
+                ? HeroInjuryCatalog.BuildScarTooltip(model.PersonalScar)
+                : "Личного шрама нет. Шрам может остаться, если герой продолжает драться с тяжелой травмой или чудом переживает смертельный удар. Шрамы не лечатся и не наследуются.";
+        }
+
+        private static string BuildCharacterTraitTooltip(HeroModel model)
+        {
+            return model.CharacterTrait != HeroCharacterTraitType.None
+                ? HeroInjuryCatalog.BuildCharacterTraitTooltip(model.CharacterTrait)
+                : "Особой черты характера нет. Черты формируются у наследников по обстоятельствам смерти предка; это отдельная система и она не наследует личные шрамы.";
+        }
+
         private static string BuildAttackTooltip(HeroModel model)
         {
             var equipment = model.Inventory != null ? model.Inventory.AttackBonus : 0;
-            var woundText = model.AttackWoundPenalty > 0 ? $", раны: -{model.AttackWoundPenalty}" : string.Empty;
-            return $"Сила удара героя: {model.AttackPoints}. Личная база: {model.BaseAttackPoints}, оружие: +{equipment}, выучка: +{model.LineageAttackBonus}{woundText}.";
+            var woundText = model.AttackWoundPenalty > 0 ? $", легкие раны: -{model.AttackWoundPenalty}" : string.Empty;
+            var severePenalty = HeroInjuryCatalog.GetSevereAttackPenalty(model.SevereInjury);
+            var scarPenalty = HeroInjuryCatalog.GetScarAttackPenalty(model.PersonalScar);
+            var severeText = severePenalty > 0 ? $", травма: -{severePenalty}" : string.Empty;
+            var scarText = scarPenalty > 0 ? $", шрам: -{scarPenalty}" : string.Empty;
+            return $"Сила удара героя: {model.AttackPoints}. Личная база: {model.BaseAttackPoints}, оружие: +{equipment}, выучка: +{model.LineageAttackBonus}{woundText}{severeText}{scarText}. Ситуативные бонусы шрамов и характера применяются в бою.";
         }
 
         private static string BuildArmorTooltip(HeroModel model)
         {
             var equipment = model.Inventory != null ? model.Inventory.ArmorBonus : 0;
-            return $"Броня героя: {model.ArmorPoints}. Она снижает входящий урон. Личная база: {model.BaseArmorPoints}, броня: +{equipment}, обеты и жетоны могут добавить ещё бонус.";
+            var severePenalty = HeroInjuryCatalog.GetSevereArmorPenalty(model.SevereInjury);
+            var severeText = severePenalty > 0 ? $", травма: -{severePenalty}" : string.Empty;
+            return $"Броня героя: {model.ArmorPoints}. Она снижает входящий урон. Личная база: {model.BaseArmorPoints}, броня: +{equipment}{severeText}; обеты и жетоны могут добавить ещё бонус.";
         }
 
         private static string BuildInventorySlotTooltipTitle(HeroInventorySlot slot)
@@ -153,9 +196,9 @@ namespace Labyrinth.UI
                 case HeroInventorySlotType.Footwear:
                     return "Слот обуви. Обувь может ускорять перемещение героя.";
                 case HeroInventorySlotType.Potion:
-                    return $"Пустой слот зелий. Герой может носить до {HeroInventory.MaxHealthPotionCount} зелий здоровья.";
+                    return $"Пустой слот зелий. Герой может носить до {HeroInventory.MaxHealthPotionCount} зелий здоровья; они лечат HP и легкие раны, но не тяжелые травмы и не шрамы.";
                 case HeroInventorySlotType.Ration:
-                    return $"Пустой слот пайков. Герой может носить до {HeroInventory.MaxRationCount} пайков для восстановления выносливости.";
+                    return $"Пустой слот пайков. Герой может носить до {HeroInventory.MaxRationCount} пайков для восстановления выносливости. Пайки не лечат раны, травмы и шрамы.";
                 case HeroInventorySlotType.Artifact:
                     return "Пустой слот артефакта. Здесь могут лежать редкие одноразовые предметы.";
                 default:

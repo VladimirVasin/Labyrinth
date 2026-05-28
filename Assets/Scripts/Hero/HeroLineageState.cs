@@ -116,6 +116,12 @@ namespace Labyrinth.Hero
 
         public HeroVengeanceQuest VengeanceQuest { get; private set; }
 
+        public HeroSevereInjuryType SevereInjuryAtDeath { get; private set; }
+
+        public HeroScarType ScarAtDeath { get; private set; }
+
+        public HeroCharacterTraitType CharacterTrait { get; private set; }
+
         public bool HasDeathToken => DeathTokenId > 0;
 
         public void MarkDead(HeroModel model, int deathTokenId, Vector2Int deathPosition, HeroDeathContext deathContext)
@@ -128,6 +134,9 @@ namespace Labyrinth.Hero
             IsDeathTokenReturned = false;
             DeathContext = deathContext;
             HasDeathContext = true;
+            SevereInjuryAtDeath = model != null ? model.SevereInjury : HeroSevereInjuryType.None;
+            ScarAtDeath = model != null ? model.PersonalScar : HeroScarType.None;
+            CharacterTrait = model != null ? model.CharacterTrait : CharacterTrait;
         }
 
         public void MarkTokenReturned()
@@ -143,6 +152,11 @@ namespace Labyrinth.Hero
         public void SetVengeanceQuest(HeroVengeanceQuest quest)
         {
             VengeanceQuest = quest ?? HeroVengeanceQuest.CreateNone();
+        }
+
+        public void SetCharacterTrait(HeroCharacterTraitType trait)
+        {
+            CharacterTrait = trait;
         }
     }
 
@@ -225,6 +239,7 @@ namespace Labyrinth.Hero
             Generation++;
             var nextMember = new HeroLineageMember(HeroNumber, Generation, CurrentDisplayName);
             nextMember.SetVengeanceQuest(HeroVengeanceQuest.CreateForSuccessor(fallenMember));
+            nextMember.SetCharacterTrait(HeroInjuryCatalog.ChooseSuccessorTrait(fallenMember));
             members.Add(nextMember);
             return CurrentDisplayName;
         }

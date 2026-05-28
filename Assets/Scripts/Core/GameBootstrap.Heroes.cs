@@ -134,7 +134,7 @@ namespace Labyrinth.Core
             StartAdventureMusicIfNeeded();
             GameDebugLog.Info(
                 "Hero",
-                $"Created hero #{heroNumber} ({heroName}): cost={heroCost.Format()}, foodLeft={resources.Food}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, spawn={GameDebugLog.Position(currentMaze.EntrancePosition)}, house={GameDebugLog.Position(housePosition)}, training={trainingBonus.ToDisplayText()}, vengeance={hero.Model.VengeanceText}, hp={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, atk={hero.Model.AttackPoints}, armor={hero.Model.ArmorPoints}, stamina={hero.Model.Stamina}/{hero.Model.MaxStamina}");
+                $"Created hero #{heroNumber} ({heroName}): cost={heroCost.Format()}, foodLeft={resources.Food}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, spawn={GameDebugLog.Position(currentMaze.EntrancePosition)}, house={GameDebugLog.Position(housePosition)}, training={trainingBonus.ToDisplayText()}, vengeance={hero.Model.VengeanceText}, trait={hero.Model.CharacterTrait}, scar={hero.Model.PersonalScar}, hp={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, atk={hero.Model.AttackPoints}, armor={hero.Model.ArmorPoints}, stamina={hero.Model.Stamina}/{hero.Model.MaxStamina}");
         }
 
         private void RebirthHeroFromHouse(int heroNumber)
@@ -200,7 +200,7 @@ namespace Labyrinth.Core
             StartAdventureMusicIfNeeded();
             GameDebugLog.Info(
                 "Hero",
-                $"Reborn hero #{heroNumber} ({heroName}): generation={lineage.Generation}, legacyXp={legacyExperience}, gainedLevels={gainedLevels}, cost={heroCost.Format()}, foodLeft={resources.Food}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, spawn={GameDebugLog.Position(currentMaze.EntrancePosition)}, house={GameDebugLog.Position(houseView != null ? houseView.GridPosition : currentMaze.BasePosition)}, training={trainingBonus.ToDisplayText()}, vengeance={hero.Model.VengeanceText}, hp={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, atk={hero.Model.AttackPoints}, armor={hero.Model.ArmorPoints}, stamina={hero.Model.Stamina}/{hero.Model.MaxStamina}.");
+                $"Reborn hero #{heroNumber} ({heroName}): generation={lineage.Generation}, legacyXp={legacyExperience}, gainedLevels={gainedLevels}, cost={heroCost.Format()}, foodLeft={resources.Food}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, spawn={GameDebugLog.Position(currentMaze.EntrancePosition)}, house={GameDebugLog.Position(houseView != null ? houseView.GridPosition : currentMaze.BasePosition)}, training={trainingBonus.ToDisplayText()}, vengeance={hero.Model.VengeanceText}, trait={hero.Model.CharacterTrait}, scar={hero.Model.PersonalScar}, hp={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, atk={hero.Model.AttackPoints}, armor={hero.Model.ArmorPoints}, stamina={hero.Model.Stamina}/{hero.Model.MaxStamina}.");
         }
 
         private static HeroLineageTrainingBonus ApplyHeroLineageTraits(HeroController hero, HeroLineageState lineage)
@@ -208,6 +208,7 @@ namespace Labyrinth.Core
             var bonus = lineage != null ? lineage.TrainingBonus : default;
             hero?.Model?.ApplyLineageBonus(bonus);
             hero?.Model?.AssignVengeanceQuest(lineage?.CurrentMember?.VengeanceQuest);
+            hero?.Model?.AssignCharacterTrait(lineage?.CurrentMember?.CharacterTrait ?? HeroCharacterTraitType.None);
             return bonus;
         }
 
@@ -596,7 +597,7 @@ namespace Labyrinth.Core
                 barrierName);
             GameDebugLog.Info(
                 "Hero",
-                $"Death context for hero #{hero.DisplayNumber}: cause={context.CauseText}, level={context.DungeonLevel}, dark={context.DiedInDarkness}, carriedGold={context.CarriedGoldIngot}, carriedToken={context.CarriedDeathToken}, nearBarrier={context.NearBarrier} {context.BarrierName}.");
+                $"Death context for hero #{hero.DisplayNumber}: cause={context.CauseText}, level={context.DungeonLevel}, dark={context.DiedInDarkness}, carriedGold={context.CarriedGoldIngot}, carriedToken={context.CarriedDeathToken}, nearBarrier={context.NearBarrier} {context.BarrierName}, severe={hero.Model.SevereInjury}, scar={hero.Model.PersonalScar}, trait={hero.Model.CharacterTrait}.");
             return context;
         }
 
