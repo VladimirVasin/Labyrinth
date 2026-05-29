@@ -1,3 +1,4 @@
+using Labyrinth.Core;
 using UnityEngine;
 
 namespace Labyrinth.Maze
@@ -36,7 +37,7 @@ namespace Labyrinth.Maze
             var stone = CreateMaterial("Dungeon Stairs Stone", new Color(0.22f, 0.23f, 0.25f));
             var dark = CreateMaterial("Dungeon Stairs Dark", new Color(0.025f, 0.022f, 0.02f));
             var metal = CreateMaterial("Dungeon Stairs Lock", new Color(0.78f, 0.62f, 0.22f));
-            var light = CreateMaterial("Dungeon Stairs Light", new Color(0.15f, 0.72f, 0.82f));
+            var light = VoxelVisuals.CreateEmissiveMaterial("Dungeon Stairs Light", new Color(0.15f, 0.72f, 0.82f), 1.9f);
 
             CreateCube(
                 "Closed Hatch",
@@ -94,23 +95,13 @@ namespace Labyrinth.Maze
             {
                 Object.Destroy(collider);
             }
+
+            VoxelVisuals.ApplyBlockStyle(cube, PrimitiveType.Cube, material, false);
         }
 
         private static Material CreateMaterial(string name, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader) { name = name, color = color };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(name, color);
         }
     }
 }

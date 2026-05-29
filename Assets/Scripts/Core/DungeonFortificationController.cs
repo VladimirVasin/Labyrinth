@@ -454,16 +454,22 @@ namespace Labyrinth.Core
 
         private List<Vector3> BuildWorkerWorldPath(IReadOnlyList<Vector2Int> cellPath)
         {
-            var worldPath = new List<Vector3>
+            var cells = new List<Vector2Int>();
+            cells.Add(result.BasePosition);
+            if (cellPath != null)
             {
-                mazeRenderer.GridToWorld(result.BasePosition) + new Vector3(0f, mazeRenderer.CellSize * 0.08f, 0f)
-            };
-            foreach (var cell in cellPath)
-            {
-                worldPath.Add(mazeRenderer.GridToWorld(cell) + new Vector3(0f, mazeRenderer.CellSize * 0.08f, 0f));
+                for (var i = 0; i < cellPath.Count; i++)
+                {
+                    cells.Add(cellPath[i]);
+                }
             }
 
-            return worldPath;
+            return SubCellPathBuilder.Build(
+                mazeRenderer,
+                cells,
+                mazeRenderer.CellSize * 0.08f,
+                SubCellPathBuilder.BuildSeed(cells, 0x37dd),
+                SubCellPathProfile.Worker);
         }
 
         private void RefreshTorchLight()

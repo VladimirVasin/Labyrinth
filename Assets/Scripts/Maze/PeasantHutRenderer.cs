@@ -46,7 +46,7 @@ namespace Labyrinth.Maze
 
         private static void CreateCoin(Transform parent, Vector3 position, float unit, Material material)
         {
-            var coin = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            var coin = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(PrimitiveType.Cylinder, "Peasant Hut Coin"));
             coin.name = "Peasant Hut Coin";
             coin.transform.SetParent(parent, false);
             coin.transform.position = position;
@@ -54,6 +54,7 @@ namespace Labyrinth.Maze
             coin.transform.localScale = new Vector3(unit * 0.08f, unit * 0.02f, unit * 0.08f);
             coin.GetComponent<Renderer>().sharedMaterial = material;
             RemoveCollider(coin);
+            VoxelVisuals.ApplyBlockStyle(coin, PrimitiveType.Cylinder, material, false);
         }
 
         private static void CreateCube(string name, Transform parent, Vector3 position, Vector3 scale, Material material, bool keepCollider)
@@ -68,23 +69,13 @@ namespace Labyrinth.Maze
             {
                 RemoveCollider(cube);
             }
+
+            VoxelVisuals.ApplyBlockStyle(cube, PrimitiveType.Cube, material, keepCollider);
         }
 
         private static Material CreateMaterial(string name, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader) { name = name, color = color };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(name, color);
         }
 
         private static void RemoveCollider(GameObject target)

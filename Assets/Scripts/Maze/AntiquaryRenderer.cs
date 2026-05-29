@@ -35,7 +35,7 @@ namespace Labyrinth.Maze
             var brass = CreateMaterial("Antiquary Brass", new Color(0.92f, 0.66f, 0.22f));
             var cloth = CreateMaterial("Antiquary Cloth", new Color(0.28f, 0.12f, 0.38f));
             var parchment = CreateMaterial("Antiquary Parchment", new Color(0.78f, 0.64f, 0.42f));
-            var stone = CreateMaterial("Return Stone Glow", new Color(0.38f, 0.72f, 1f));
+            var stone = VoxelVisuals.CreateEmissiveMaterial("Return Stone Glow", new Color(0.38f, 0.72f, 1f), 1.9f);
             var glass = CreateMaterial("Antiquary Glass", new Color(0.7f, 0.9f, 1f, 0.8f));
 
             CreateCube("Antiquary Walls", root.transform, center + new Vector3(0f, unit * 0.5f, 0f), new Vector3(unit * 1.02f, unit, unit * 0.86f), wall, true);
@@ -63,34 +63,25 @@ namespace Labyrinth.Maze
             {
                 RemoveCollider(cube);
             }
+
+            VoxelVisuals.ApplyBlockStyle(cube, PrimitiveType.Cube, material, keepCollider);
         }
 
         private static void CreateSphere(string name, Transform parent, Vector3 position, Vector3 scale, Material material)
         {
-            var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            var sphere = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(PrimitiveType.Sphere, name));
             sphere.name = name;
             sphere.transform.SetParent(parent, false);
             sphere.transform.position = position;
             sphere.transform.localScale = scale;
             sphere.GetComponent<Renderer>().sharedMaterial = material;
             RemoveCollider(sphere);
+            VoxelVisuals.ApplyBlockStyle(sphere, PrimitiveType.Sphere, material, false);
         }
 
         private static Material CreateMaterial(string name, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader) { name = name, color = color };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(name, color);
         }
 
         private static void RemoveCollider(GameObject target)

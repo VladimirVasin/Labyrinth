@@ -10,7 +10,7 @@ namespace Labyrinth.Maze
         private const float EarlyAlternativeWindowFraction = 0.25f;
         private const int EarlyAlternativeMinimumWindowEnd = 5;
         private const int EarlyAlternativeMaximumWindowEnd = 14;
-        private const int EarlyAlternativeMinimumDetourSpan = 4;
+        private const int EarlyAlternativeMinimumDetourSpan = 2;
         private const int EarlyAlternativeMaximumDetourSpan = 10;
         private const int EarlyAlternativeDetourSpanDivisor = 12;
 

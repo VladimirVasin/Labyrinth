@@ -89,6 +89,7 @@ namespace Labyrinth.Core
                 var visibleCells = BuildLightingVisibleCells(visibleHeroes);
                 var exploredCells = BuildDisplayedExploredCells();
                 mazeRenderer.ApplyCellVisibility(BuildKnownCells(visibleCells, exploredCells), currentMaze.Grid);
+                mazeRenderer.ApplyHeroLightTints(visibleHeroes, currentMaze.Grid, visibleCells);
                 fogOfWarView.Show(currentMaze.Grid, exploredCells, visibleCells);
                 RefreshMemoryOverlay(visibleCells);
                 mobManager.ApplyVisibility(visibleCells);
@@ -96,6 +97,7 @@ namespace Labyrinth.Core
             }
 
             selectedHeroVisibilityView.ShowSchematic(BuildSchematicVisibleCells(BuildVisibilityHeroes()), currentMaze.Grid);
+            mazeRenderer.ClearHeroLightTints();
             mazeRenderer.ShowAllCells();
             fogOfWarView.Hide();
             RefreshMemoryOverlay();
@@ -306,9 +308,9 @@ namespace Labyrinth.Core
 
             if (displayMode == HeroVisibilityDisplayMode.Lighting)
             {
-                RenderSettings.ambientLight = Color.black;
+                RenderSettings.ambientLight = new Color(0.08f, 0.09f, 0.115f);
                 mainCamera.clearFlags = CameraClearFlags.SolidColor;
-                mainCamera.backgroundColor = Color.black;
+                mainCamera.backgroundColor = new Color(0.005f, 0.006f, 0.008f);
                 mazeTerrain.SetVisualVisible(true);
                 return;
             }

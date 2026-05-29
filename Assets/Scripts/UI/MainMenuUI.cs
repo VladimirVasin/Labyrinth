@@ -32,6 +32,10 @@ namespace Labyrinth.UI
         private GUIStyle textFieldStyle;
         private Texture2D menuBackground;
         private bool menuBackgroundLoaded;
+        private bool loading;
+        private float loadingProgress;
+        private float displayedLoadingProgress;
+        private string loadingStatus;
 
         public bool IsVisible => visible;
 
@@ -39,12 +43,37 @@ namespace Labyrinth.UI
         {
             startRequested = onStartRequested;
             pauseMode = isPauseMenu;
+            loading = false;
             EnsureSeedText();
             visible = true;
         }
 
+        public void ShowLoading(MazeGenerationSettings settings)
+        {
+            pauseMode = false;
+            loading = true;
+            visible = true;
+            loadingProgress = 0f;
+            displayedLoadingProgress = 0f;
+            loadingStatus = settings == null
+                ? "Подготовка лабиринта"
+                : $"Подготовка карты {settings.Width} x {settings.Height}";
+        }
+
+        public void SetLoadingProgress(float progress, string status)
+        {
+            loading = true;
+            visible = true;
+            loadingProgress = Mathf.Clamp01(progress);
+            if (!string.IsNullOrEmpty(status))
+            {
+                loadingStatus = status;
+            }
+        }
+
         public void Hide()
         {
+            loading = false;
             visible = false;
         }
 
@@ -72,6 +101,13 @@ namespace Labyrinth.UI
             GUILayout.BeginArea(new Rect(rect.x + 34f, rect.y + 28f, rect.width - 68f, rect.height - 56f));
             DrawHeader();
             GUILayout.Space(20f);
+
+            if (loading)
+            {
+                DrawLoadingProgress();
+                GUILayout.EndArea();
+                return;
+            }
 
             DrawCustomSizeControls();
             GUILayout.Space(16f);
@@ -212,11 +248,41 @@ namespace Labyrinth.UI
             if (GUI.Button(new Rect(rect.x, rect.y + 82f, rect.width, 56f), startButtonText, primaryButtonStyle))
             {
                 GameAudioController.PlayUi(GameSfx.HudConfirm);
-                visible = false;
                 startRequested?.Invoke(selected);
             }
 
             GUI.enabled = true;
+        }
+
+        private void DrawLoadingProgress()
+        {
+            var rect = DrawCard(156f);
+            if (Event.current.type == EventType.Repaint)
+            {
+                var step = Mathf.Max(0.008f, Time.unscaledDeltaTime * 1.25f);
+                displayedLoadingProgress = Mathf.MoveTowards(displayedLoadingProgress, loadingProgress, step);
+                if (loadingProgress >= 0.995f)
+                {
+                    displayedLoadingProgress = loadingProgress;
+                }
+            }
+
+            var visualProgress = Mathf.Clamp01(displayedLoadingProgress);
+            GUI.Label(new Rect(rect.x, rect.y, rect.width, 28f), "Генерация мира", sectionStyle);
+            GUI.Label(
+                new Rect(rect.x, rect.y + 38f, rect.width, 30f),
+                string.IsNullOrEmpty(loadingStatus) ? "Подготовка лабиринта" : loadingStatus,
+                summaryStyle);
+
+            var barRect = new Rect(rect.x, rect.y + 82f, rect.width, 28f);
+            FillRect(barRect, new Color(0.02f, 0.025f, 0.022f, 0.95f));
+            FillRect(
+                new Rect(barRect.x + 2f, barRect.y + 2f, (barRect.width - 4f) * visualProgress, barRect.height - 4f),
+                new Color(0.22f, 0.74f, 0.92f, 0.95f));
+            DrawOutline(barRect, new Color(0f, 0f, 0f, 0.8f));
+
+            var percent = Mathf.RoundToInt(visualProgress * 100f);
+            GUI.Label(new Rect(rect.x, rect.y + 116f, rect.width, 24f), $"{percent}%", statusStyle);
         }
 
         private void DrawHeader()

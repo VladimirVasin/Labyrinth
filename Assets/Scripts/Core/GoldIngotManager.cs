@@ -586,6 +586,7 @@ namespace Labyrinth.Core
                 Destroy(collider);
             }
 
+            VoxelVisuals.ApplyBlockStyle(cube, PrimitiveType.Cube, material, false);
             return cube;
         }
 
@@ -602,19 +603,7 @@ namespace Labyrinth.Core
 
         private static Material CreateMaterial(string materialName, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader) { name = materialName, color = color };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(materialName, color);
         }
 
         private static int CalculateIngotCount(int width, int height)

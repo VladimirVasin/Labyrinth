@@ -53,6 +53,8 @@ namespace Labyrinth.Combat
         private const int HeroWoundDamageThreshold = 6;
         private const int MobWoundDamageThreshold = 8;
         private const int EliteWoundDamageThreshold = 11;
+        private const int OpeningRookieSafetyMaxHeroLevel = 2;
+        private const int OpeningRookieSafetyMaxHeroSteps = 40;
 
         private readonly System.Random rewardRandom = new System.Random();
         private HeroController hero;

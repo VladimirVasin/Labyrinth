@@ -50,6 +50,7 @@ namespace Labyrinth.Maze
             var centralRoomKey = PlaceCentralRoomKey(grid, entrance, centralRoom, caves);
             var downStairs = PlaceDownStairs(grid, entrance, centralRoom, caves, levelNumber + 1);
             MazeBranchCarver.EnsureAlternativeRoutes(grid, entrance, centralRoom, centralRoomKey, downStairs, caves, random);
+            MazeBranchCarver.AddSpaciousAreas(grid, entrance, centralRoom, random);
             var centralDoors = CreateCentralDoors(grid, centralRoom);
             var chests = CreateChests(caves, centralRoomKey, downStairs.Position, random);
             var oreDeposits = CreateOreDeposits(grid, caves, entrance, centralRoomKey, downStairs.Position, random);

@@ -55,6 +55,8 @@
     <Compile Include="Assets\Scripts\Maze\MazeGenerationResult.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroView.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroVengeance.cs" />
+    <Compile Include="Assets\Scripts\Core\AmbientWalkerMoveAnimator.cs" />
+    <Compile Include="Assets\Scripts\Core\GameBootstrap.StartGame.cs" />
     <Compile Include="Assets\Scripts\Core\TimeScaleController.cs" />
     <Compile Include="Assets\Scripts\Core\DungeonFortificationRenderer.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.Map.cs" />
@@ -63,6 +65,7 @@
     <Compile Include="Assets\Scripts\Core\GameBootstrap.Chapel.cs" />
     <Compile Include="Assets\Scripts\Core\ObjectMicroHudTarget.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.Upgrades.cs" />
+    <Compile Include="Assets\Scripts\Core\VoxelVisuals.Patterns.cs" />
     <Compile Include="Assets\Scripts\Base\BuildingView.cs" />
     <Compile Include="Assets\Scripts\Core\HeroDeathTokenManager.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.CarryItems.cs" />
@@ -95,10 +98,13 @@
     <Compile Include="Assets\Scripts\Combat\CombatController.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.Mines.cs" />
     <Compile Include="Assets\Scripts\UI\VictoryHudView.cs" />
+    <Compile Include="Assets\Scripts\Core\SubCellPathBuilder.cs" />
     <Compile Include="Assets\Scripts\Maze\CartographerHouseRenderer.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroVisibilityView.cs" />
+    <Compile Include="Assets\Scripts\Core\VoxelVisuals.Shadows.cs" />
     <Compile Include="Assets\Scripts\UI\HeroHudView.Tooltips.cs" />
     <Compile Include="Assets\Scripts\Maze\PeasantHutRenderer.cs" />
+    <Compile Include="Assets\Scripts\Maze\MazeRenderer.Voxels.cs" />
     <Compile Include="Assets\Scripts\Camera\LabyrinthCameraController.cs" />
     <Compile Include="Assets\Scripts\Core\CityAmbienceController.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.LumberjackCamp.cs" />
@@ -110,16 +116,20 @@
     <Compile Include="Assets\Scripts\Maze\MazeTerrain.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroExplorer.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroExplorer.Pathfinding.cs" />
+    <Compile Include="Assets\Scripts\Core\VoxelBurstView.cs" />
     <Compile Include="Assets\Scripts\Maze\ChestModel.cs" />
+    <Compile Include="Assets\Scripts\Core\VoxelVisuals.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.Heroes.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroModel.Injuries.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.MinersGuild.cs" />
     <Compile Include="Assets\Scripts\Core\BaseDevelopment.cs" />
     <Compile Include="Assets\Scripts\Maze\MazeValidation.cs" />
     <Compile Include="Assets\Scripts\Core\MineConstructionController.Visibility.cs" />
+    <Compile Include="Assets\Scripts\Core\VoxelFigurePartAnimator.cs" />
     <Compile Include="Assets\Scripts\Core\MazeSizePreset.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.MiniBossDoors.cs" />
     <Compile Include="Assets\Scripts\UI\BaseHudView.cs" />
+    <Compile Include="Assets\Scripts\Maze\TerrainDecorationController.Async.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.DungeonLevels.cs" />
     <Compile Include="Assets\Scripts\Core\TaxCollectorController.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroController.cs" />
@@ -139,6 +149,7 @@
     <Compile Include="Assets\Scripts\UI\BuildingServiceCatalog.cs" />
     <Compile Include="Assets\Scripts\Core\MineConstructionController.Runtime.cs" />
     <Compile Include="Assets\Scripts\Mobs\MobModel.cs" />
+    <Compile Include="Assets\Scripts\Maze\MazeRenderer.Async.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.PeasantHuts.cs" />
     <Compile Include="Assets\Scripts\Core\ResourceProductionController.cs" />
     <Compile Include="Assets\Scripts\Core\MazeGenerationSettings.cs" />
@@ -152,12 +163,15 @@
     <Compile Include="Assets\Scripts\Maze\OreDepositModel.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.DungeonFortification.cs" />
     <Compile Include="Assets\Scripts\Core\MineConstructionController.Workers.cs" />
+    <Compile Include="Assets\Scripts\Maze\MazeBranchCarver.Spacious.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroInjuryState.cs" />
     <Compile Include="Assets\Scripts\Core\MineConstructionController.cs" />
+    <Compile Include="Assets\Scripts\Maze\MazeTerrain.Async.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroState.cs" />
     <Compile Include="Assets\Scripts\Maze\MazeGenerator.cs" />
     <Compile Include="Assets\Scripts\Combat\CombatController.Round.cs" />
     <Compile Include="Assets\Scripts\Combat\DamageNumberView.cs" />
+    <Compile Include="Assets\Scripts\Core\GeneratedTextureLibrary.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroMemoryView.cs" />
     <Compile Include="Assets\Scripts\Mobs\MobState.cs" />
     <Compile Include="Assets\Scripts\Core\GameAudioController.cs" />
@@ -179,6 +193,7 @@
     <Compile Include="Assets\Scripts\Core\BaseAmbienceController.cs" />
     <Compile Include="Assets\Scripts\Maze\MazeBranchCarver.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroVisibility.cs" />
+    <Compile Include="Assets\Scripts\Maze\MazeRenderer.Lighting.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroInventory.cs" />
     <Compile Include="Assets\Scripts\Core\FogOfWarView.cs" />
     <Compile Include="Assets\Scripts\Maze\LumberjackCampRenderer.cs" />
@@ -186,6 +201,10 @@
     <Compile Include="Assets\Scripts\Core\HeroConsumableAutomation.cs" />
     <Compile Include="Assets\Scripts\UI\DungeonLevelHudView.cs" />
     <Compile Include="Assets\Scripts\Mobs\MobManager.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\Shaders\VoxelSoftLightOverlay.shader" />
+    <None Include="Assets\Shaders\VoxelVertexColorLit.shader" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">

@@ -333,6 +333,7 @@ namespace Labyrinth.Core
             segment.transform.localScale = scale;
             segment.GetComponent<Renderer>().sharedMaterial = roadMaterial;
             RemoveCollider(segment);
+            VoxelVisuals.ApplyBlockStyle(segment, PrimitiveType.Cube, roadMaterial, false);
             road.Segments.Add(segment);
             terrainDecorations?.RegisterRoadSegment(from, to);
         }
@@ -348,8 +349,8 @@ namespace Labyrinth.Core
             var cartRoot = new GameObject("Farm Cart");
             cartRoot.transform.SetParent(root, false);
             cartRoot.transform.position = waypoints[0];
-            var wheels = BuildCartModel(cartRoot.transform);
-            carts.Add(new CartRuntime(cartRoot, waypoints, wheels, road.BuildingPosition, foodAmount));
+            var visuals = BuildCartModel(cartRoot.transform);
+            carts.Add(new CartRuntime(cartRoot, waypoints, visuals, road.BuildingPosition, foodAmount));
             GameDebugLog.Info(
                 "Base",
                 $"Farm cart sent: farm={GameDebugLog.Position(road.BuildingPosition)}, food={foodAmount}.");
@@ -357,21 +358,28 @@ namespace Labyrinth.Core
 
         private List<Vector3> BuildCartWaypoints(IReadOnlyList<Vector2Int> path)
         {
-            var waypoints = new List<Vector3>(path.Count);
-            foreach (var position in path)
-            {
-                waypoints.Add(mazeRenderer.GridToWorld(position) + new Vector3(0f, CartYOffset, 0f));
-            }
-
-            return waypoints;
+            return SubCellPathBuilder.Build(
+                mazeRenderer,
+                path,
+                CartYOffset,
+                SubCellPathBuilder.BuildSeed(path, 0x2f49),
+                SubCellPathProfile.Cart);
         }
 
-        private Transform[] BuildCartModel(Transform parent)
+        private CartVisuals BuildCartModel(Transform parent)
         {
             var unit = mazeRenderer.ModelUnitSize;
+            VoxelVisuals.CreateContactShadow(
+                "Farm Cart Contact Shadow",
+                parent,
+                new Vector3(0f, 0.006f, 0f),
+                new Vector3(unit * 0.72f, 0.004f, unit * 0.5f),
+                0.26f);
+            var visualRoot = new GameObject("Farm Cart Visual").transform;
+            visualRoot.SetParent(parent, false);
             CreateCartPart(
                 "Cart Bed",
-                parent,
+                visualRoot,
                 PrimitiveType.Cube,
                 new Vector3(0f, unit * 0.2f, 0f),
                 new Vector3(unit * 0.52f, unit * 0.18f, unit * 0.42f),
@@ -379,7 +387,7 @@ namespace Labyrinth.Core
                 cartWoodMaterial);
             CreateCartPart(
                 "Cart Cargo",
-                parent,
+                visualRoot,
                 PrimitiveType.Cube,
                 new Vector3(0f, unit * 0.37f, unit * -0.02f),
                 new Vector3(unit * 0.42f, unit * 0.18f, unit * 0.32f),
@@ -387,7 +395,7 @@ namespace Labyrinth.Core
                 cartCargoMaterial);
             CreateCartPart(
                 "Cart Handle",
-                parent,
+                visualRoot,
                 PrimitiveType.Cube,
                 new Vector3(0f, unit * 0.2f, unit * 0.36f),
                 new Vector3(unit * 0.12f, unit * 0.07f, unit * 0.38f),
@@ -396,11 +404,11 @@ namespace Labyrinth.Core
 
             var wheels = new Transform[4];
             var rotation = Quaternion.Euler(0f, 0f, 90f);
-            wheels[0] = CreateWheel(parent, new Vector3(unit * -0.32f, unit * 0.1f, unit * -0.18f), rotation);
-            wheels[1] = CreateWheel(parent, new Vector3(unit * 0.32f, unit * 0.1f, unit * -0.18f), rotation);
-            wheels[2] = CreateWheel(parent, new Vector3(unit * -0.32f, unit * 0.1f, unit * 0.18f), rotation);
-            wheels[3] = CreateWheel(parent, new Vector3(unit * 0.32f, unit * 0.1f, unit * 0.18f), rotation);
-            return wheels;
+            wheels[0] = CreateWheel(visualRoot, new Vector3(unit * -0.32f, unit * 0.1f, unit * -0.18f), rotation);
+            wheels[1] = CreateWheel(visualRoot, new Vector3(unit * 0.32f, unit * 0.1f, unit * -0.18f), rotation);
+            wheels[2] = CreateWheel(visualRoot, new Vector3(unit * -0.32f, unit * 0.1f, unit * 0.18f), rotation);
+            wheels[3] = CreateWheel(visualRoot, new Vector3(unit * 0.32f, unit * 0.1f, unit * 0.18f), rotation);
+            return new CartVisuals(visualRoot, wheels);
         }
 
         private Transform CreateWheel(Transform parent, Vector3 localPosition, Quaternion localRotation)
@@ -425,7 +433,7 @@ namespace Labyrinth.Core
             Quaternion localRotation,
             Material material)
         {
-            var part = GameObject.CreatePrimitive(primitiveType);
+            var part = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(primitiveType, partName));
             part.name = partName;
             part.transform.SetParent(parent, false);
             part.transform.localPosition = localPosition;
@@ -433,6 +441,7 @@ namespace Labyrinth.Core
             part.transform.localScale = localScale;
             part.GetComponent<Renderer>().sharedMaterial = material;
             RemoveCollider(part);
+            VoxelVisuals.ApplyBlockStyle(part, primitiveType, material, false);
             return part.transform;
         }
 
@@ -819,24 +828,7 @@ namespace Labyrinth.Core
 
         private static Material CreateMaterial(string materialName, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader)
-            {
-                name = materialName,
-                color = color
-            };
-
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(materialName, color);
         }
 
         private static void RemoveCollider(GameObject target)

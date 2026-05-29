@@ -128,7 +128,7 @@ namespace Labyrinth.Maze
             Vector3 scale,
             Material material)
         {
-            var obj = GameObject.CreatePrimitive(primitive);
+            var obj = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(primitive, name));
             obj.name = name;
             obj.transform.SetParent(parent, false);
             obj.transform.position = position;
@@ -141,24 +141,13 @@ namespace Labyrinth.Maze
                 Object.Destroy(collider);
             }
 
+            VoxelVisuals.ApplyBlockStyle(obj, primitive, material, false);
             return obj;
         }
 
         private static Material CreateMaterial(string name, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader) { name = name, color = color };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(name, color);
         }
     }
 }

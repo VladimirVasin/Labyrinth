@@ -31,13 +31,14 @@ namespace Labyrinth.Maze
             var position = GridToWorld(key.Position);
             keyRoot.transform.position = position;
 
-            var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            var head = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(PrimitiveType.Sphere, "Key Head"));
             head.name = "Key Head";
             head.transform.SetParent(keyRoot.transform, false);
             head.transform.position = position + new Vector3(-cellSize * 0.14f, Scale(0.11f), 0f);
             head.transform.localScale = new Vector3(cellSize * 0.18f, Scale(0.06f), cellSize * 0.18f);
             head.GetComponent<Renderer>().sharedMaterial = keyGoldMaterial;
             RemoveCollider(head);
+            VoxelVisuals.ApplyBlockStyle(head, PrimitiveType.Sphere, keyGoldMaterial, false);
             TrackCellRenderer(key.Position, head);
 
             var shaft = CreateCube(

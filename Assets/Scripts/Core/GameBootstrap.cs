@@ -54,7 +54,7 @@ namespace Labyrinth.Core
         private MapHudView mapHud;
         private DungeonLevelHudView levelHud;
         private FogOfWarView fogOfWarView;
-        private readonly Color normalAmbientLight = new Color(0.7f, 0.72f, 0.78f);
+        private readonly Color normalAmbientLight = new Color(0.58f, 0.61f, 0.68f);
         private Camera mainCamera;
         private CameraClearFlags normalCameraClearFlags;
         private Color normalCameraBackgroundColor;
@@ -217,11 +217,14 @@ namespace Labyrinth.Core
             }
             if (!victoryAchieved)
             {
-                var visibilityHeroesForRespawn = BuildVisibilityHeroes();
-                mobManager.UpdateRespawns(
-                    BuildRespawnBlockedCells(visibilityHeroesForRespawn),
-                    visibilityDisplayMode == HeroVisibilityDisplayMode.Lighting,
-                    heroes);
+                if (mobManager.TryBeginRespawnCheck())
+                {
+                    var visibilityHeroesForRespawn = BuildVisibilityHeroes();
+                    mobManager.UpdateRespawns(
+                        BuildRespawnBlockedCells(visibilityHeroesForRespawn),
+                        visibilityDisplayMode == HeroVisibilityDisplayMode.Lighting,
+                        heroes);
+                }
             }
 
             TryStartHeroEncounter();
@@ -382,106 +385,6 @@ namespace Labyrinth.Core
                 UpgradeBuildingFromBase);
             cameraController.SetInteractionEnabled(false);
             state = GameState.BaseHudOpen;
-        }
-
-        private void StartGame(MazeGenerationSettings settings)
-        {
-            if (settings == null)
-            {
-                GameDebugLog.Error("Game", "Start requested without generation settings.");
-                return;
-            }
-
-            GameDebugLog.Info(
-                "Game",
-                $"Start requested: size={settings.Width}x{settings.Height}, seed={settings.Seed}, preset={settings.Preset}");
-            state = GameState.Generating;
-            mainMenu.Hide();
-            GameAudioController.StopMenuMusic();
-            GameAudioController.StopWorldMusic();
-            timeScaleController.ResetToNormal();
-            SetGameHudVisible(false);
-            mapHud.HideExpanded();
-            baseHud.Hide();
-            heroHud.Hide();
-            mobHud.Hide();
-            buildingMicroHud.Hide();
-            heroLineageHud.Hide();
-            objectMicroHud.Hide();
-            victoryHud.Hide();
-            cameraController.SetInteractionEnabled(false);
-            mazeTerrain.Clear();
-            terrainDecorations.Clear();
-            mazeRenderer.Clear();
-            fogOfWarView.Clear();
-            goldIngotManager.Clear();
-            deathTokenManager.Clear();
-            taxCollectorController.Clear();
-            dungeonFortificationController.Clear();
-            mineConstructionController.Clear();
-            baseAmbience.Clear();
-            houseFundCouriers.Clear();
-            cityAmbience.Clear();
-            DestroyHeroes();
-            DestroyHeroMemoryView();
-            DestroyHeroVisibilityView();
-            cartographerMemory = null;
-            levelOneCartographerMemory = null;
-            levelTwoCartographerMemory = null;
-            resources.ResetToDefault();
-            baseDevelopment.Reset();
-            productionController.ResetProgress();
-            victoryAchieved = false;
-            adventureMusicStarted = false;
-            rootGenerationSettings = settings;
-            visibilityDisplayMode = HeroVisibilityDisplayMode.Lighting;
-            currentDungeonLevel = 1;
-            unlockedDungeonLevel = 1;
-            levelOneMaze = null;
-            levelTwoMaze = null;
-
-            currentMaze = generator.Generate(settings);
-            if (!MazeValidation.ValidateGeneratedMaze(currentMaze, out var error))
-            {
-                GameDebugLog.Error("Maze", $"Generation failed: {error}");
-                state = GameState.MainMenu;
-                mainMenu.Show(StartGame);
-                GameAudioController.StartMenuMusic();
-                return;
-            }
-
-            LogMazeSummary(currentMaze);
-            levelOneMaze = currentMaze;
-            mazeTerrain.Render(currentMaze, mazeRenderer.CellSize);
-            mazeTerrain.SetVisualVisible(true);
-            currentBase = mazeRenderer.Render(currentMaze);
-            terrainDecorations.Render(currentMaze, mazeRenderer, baseDevelopment);
-            baseAmbience.Initialize(currentMaze, mazeRenderer);
-            houseFundCouriers.Clear();
-            cityAmbience.Initialize(currentMaze, mazeRenderer);
-            taxCollectorController.Initialize(currentMaze);
-            cartographerMemory = new HeroMemory(currentMaze.Grid);
-            cartographerMemory.Remember(currentMaze.EntrancePosition);
-            levelOneCartographerMemory = cartographerMemory;
-            levelTwoCartographerMemory = null;
-            dungeonFortificationController.Initialize(currentMaze, cartographerMemory);
-            mineConstructionController.Initialize(currentMaze);
-            RefreshAllBuildingUpgradeVisuals();
-            sharedHeroMemoryView = HeroMemoryView.Create(mazeRenderer);
-            sharedHeroMemoryView.transform.SetParent(transform, true);
-            selectedHeroVisibilityView = HeroVisibilityView.Create(mazeRenderer);
-            selectedHeroVisibilityView.transform.SetParent(transform, true);
-            selectedHeroVisibilityView.SetMode(visibilityDisplayMode);
-            mobManager.Spawn(currentMaze, mazeRenderer);
-            RefreshCentralExitSeal();
-            var mobPositions = new HashSet<Vector2Int>();
-            mobManager.CollectOccupiedPositions(mobPositions);
-            goldIngotManager.Spawn(currentMaze, mazeRenderer, mobPositions);
-            deathTokenManager.Initialize(currentMaze, mazeRenderer, GetHeroHouseView);
-            cameraController.Focus(mainCamera, currentMaze, mazeRenderer.CellSize, true);
-            state = GameState.Playing;
-            SetGameHudVisible(true);
-            GameDebugLog.Info("Game", "Generation completed and play mode started. Music waits for first hero creation.");
         }
 
         private void TogglePauseMenu()
@@ -855,16 +758,23 @@ namespace Labyrinth.Core
 
         private static void EnsureLight()
         {
-            if (FindAnyObjectByType<Light>() != null)
+            var light = FindAnyObjectByType<Light>();
+            if (light == null)
             {
-                return;
+                var lightObject = new GameObject("Directional Light");
+                light = lightObject.AddComponent<Light>();
             }
 
-            var lightObject = new GameObject("Directional Light");
-            var light = lightObject.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.intensity = 2.1f;
-            light.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+            light.intensity = 2.18f;
+            light.shadows = LightShadows.Soft;
+            light.shadowStrength = 0.66f;
+            light.shadowBias = 0.035f;
+            light.shadowNormalBias = 0.28f;
+            light.shadowNearPlane = 0.12f;
+            light.transform.rotation = Quaternion.Euler(46f, -38f, 0f);
+            QualitySettings.shadows = ShadowQuality.All;
+            QualitySettings.shadowDistance = 90f;
         }
 
         private static void LogMazeSummary(MazeGenerationResult result)

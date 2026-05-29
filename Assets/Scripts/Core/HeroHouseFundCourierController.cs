@@ -130,12 +130,12 @@ namespace Labyrinth.Core
                 cells.Add(castleToHouse[i]);
             }
 
-            waypoints = new List<Vector3>(cells.Count);
-            var offset = new Vector3(0f, mazeRenderer.CellSize * CourierYOffset, 0f);
-            for (var i = 0; i < cells.Count; i++)
-            {
-                waypoints.Add(mazeRenderer.GridToWorld(cells[i]) + offset);
-            }
+            waypoints = SubCellPathBuilder.Build(
+                mazeRenderer,
+                cells,
+                mazeRenderer.CellSize * CourierYOffset,
+                SubCellPathBuilder.BuildSeed(cells, delivery.HeroNumber ^ delivery.Generation),
+                SubCellPathProfile.Civilian);
 
             return waypoints.Count >= 2;
         }
@@ -172,16 +172,25 @@ namespace Labyrinth.Core
             var courierRoot = new GameObject("Hero House Fund Courier").transform;
             courierRoot.SetParent(root, false);
             courierRoot.position = position;
+            VoxelVisuals.CreateContactShadow(
+                "Fund Courier Contact Shadow",
+                courierRoot,
+                new Vector3(0f, 0.006f, 0f),
+                new Vector3(unit * 0.34f, 0.004f, unit * 0.27f),
+                0.3f);
             CreatePart(courierRoot, "Body", PrimitiveType.Capsule, new Vector3(0f, unit * 0.35f, 0f), new Vector3(unit * 0.2f, unit * 0.34f, unit * 0.2f), bodyMaterial);
+            CreatePart(courierRoot, "Left Foot", PrimitiveType.Cube, new Vector3(unit * -0.09f, unit * 0.09f, unit * 0.05f), new Vector3(unit * 0.1f, unit * 0.08f, unit * 0.17f), bodyMaterial);
+            CreatePart(courierRoot, "Right Foot", PrimitiveType.Cube, new Vector3(unit * 0.09f, unit * 0.09f, unit * 0.05f), new Vector3(unit * 0.1f, unit * 0.08f, unit * 0.17f), bodyMaterial);
             CreatePart(courierRoot, "Head", PrimitiveType.Sphere, new Vector3(0f, unit * 0.74f, 0f), Vector3.one * unit * 0.18f, headMaterial);
             CreatePart(courierRoot, "Gold Pack", PrimitiveType.Cube, new Vector3(unit * 0.18f, unit * 0.5f, unit * -0.06f), new Vector3(unit * 0.14f, unit * 0.18f, unit * 0.18f), packMaterial);
             CreatePart(courierRoot, "Gold Coin", PrimitiveType.Sphere, new Vector3(unit * 0.23f, unit * 0.68f, unit * -0.02f), Vector3.one * unit * 0.09f, goldMaterial);
+            AmbientWalkerMoveAnimator.Attach(courierRoot, unit, BuildCourierAnimationSeed(courierRoot));
             return courierRoot;
         }
 
         private static void CreatePart(Transform parent, string name, PrimitiveType type, Vector3 localPosition, Vector3 localScale, Material material)
         {
-            var part = GameObject.CreatePrimitive(type);
+            var part = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(type, name));
             part.name = name;
             part.transform.SetParent(parent, false);
             part.transform.localPosition = localPosition;
@@ -192,6 +201,8 @@ namespace Labyrinth.Core
             {
                 Destroy(collider);
             }
+
+            VoxelVisuals.ApplyBlockStyle(part, type, material, false);
         }
 
         private void EnsureRoot()
@@ -220,19 +231,16 @@ namespace Labyrinth.Core
 
         private static Material CreateMaterial(string materialName, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
+            return VoxelVisuals.CreateLitMaterial(materialName, color);
+        }
 
-            var material = new Material(shader) { name = materialName, color = color };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+        private static int BuildCourierAnimationSeed(Transform courierRoot)
+        {
+            var position = courierRoot != null ? courierRoot.position : Vector3.zero;
+            return Mathf.RoundToInt(position.x * 83f)
+                ^ Mathf.RoundToInt(position.y * 41f)
+                ^ Mathf.RoundToInt(position.z * 181f)
+                ^ 0x6f25;
         }
 
         private sealed class PendingDelivery

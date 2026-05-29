@@ -20,7 +20,8 @@ namespace Labyrinth.Mobs
             IReadOnlyList<Vector2Int> spawnPositions,
             Dictionary<Vector2Int, int> distancesFromEntrance,
             int maxDistanceFromEntrance,
-            System.Random random)
+            System.Random random,
+            bool useOpeningSpawnRules)
         {
             var species = new List<MobSpecies>(spawnPositions.Count);
             for (var i = 0; i < spawnPositions.Count; i++)
@@ -29,7 +30,8 @@ namespace Labyrinth.Mobs
                     spawnPositions[i],
                     distancesFromEntrance,
                     maxDistanceFromEntrance,
-                    random));
+                    random,
+                    useOpeningSpawnRules));
             }
 
             if (species.Count == 0)
@@ -42,7 +44,7 @@ namespace Labyrinth.Mobs
                 species[FindClosestToEntranceIndex(spawnPositions, distancesFromEntrance)] = MobSpecies.Goblin;
             }
 
-            if (species.Count >= 8 && !species.Contains(MobSpecies.Orc))
+            if (!useOpeningSpawnRules && species.Count >= 8 && !species.Contains(MobSpecies.Orc))
             {
                 species[FindFarthestFromEntranceIndex(spawnPositions, distancesFromEntrance)] = MobSpecies.Orc;
             }
@@ -54,14 +56,25 @@ namespace Labyrinth.Mobs
             Vector2Int position,
             Dictionary<Vector2Int, int> distancesFromEntrance,
             int maxDistanceFromEntrance,
-            System.Random random)
+            System.Random random,
+            bool useOpeningSpawnRules)
         {
             if (maxDistanceFromEntrance <= 0 || !distancesFromEntrance.TryGetValue(position, out var distance))
             {
-                return MobSpecies.Orc;
+                return useOpeningSpawnRules ? MobSpecies.Goblin : MobSpecies.Orc;
             }
 
             var distanceRatio = distance / (float)maxDistanceFromEntrance;
+            if (useOpeningSpawnRules)
+            {
+                if (distanceRatio <= 0.72f)
+                {
+                    return MobSpecies.Goblin;
+                }
+
+                return random.NextDouble() < 0.82 ? MobSpecies.Goblin : MobSpecies.Orc;
+            }
+
             var goblinChance = distanceRatio <= 0.4f
                 ? 0.92
                 : distanceRatio <= 0.7f

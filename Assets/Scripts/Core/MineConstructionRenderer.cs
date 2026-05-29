@@ -42,7 +42,7 @@ namespace Labyrinth.Core
             beamMaterial = CreateMaterial("Mine Route Beams", new Color(0.22f, 0.12f, 0.05f));
             stoneMaterial = CreateMaterial("Mine Stone", new Color(0.28f, 0.29f, 0.31f));
             metalMaterial = CreateMaterial("Mine Metal", new Color(0.62f, 0.64f, 0.66f));
-            lampMaterial = CreateMaterial("Mine Lamp", new Color(1f, 0.62f, 0.14f));
+            lampMaterial = VoxelVisuals.CreateEmissiveMaterial("Mine Lamp", new Color(1f, 0.62f, 0.14f), 2f);
             workerBodyMaterial = CreateMaterial("Mine Worker Body", new Color(0.34f, 0.25f, 0.17f));
             workerHeadMaterial = CreateMaterial("Mine Worker Head", new Color(0.76f, 0.62f, 0.42f));
         }
@@ -305,8 +305,9 @@ namespace Labyrinth.Core
             light.type = LightType.Point;
             light.color = new Color(1f, 0.55f, 0.18f);
             light.range = mazeRenderer.CellSize * (lightRange + 1.15f);
-            light.intensity = 2.7f;
-            light.shadows = LightShadows.Soft;
+            light.intensity = 2.3f;
+            light.shadows = LightShadows.None;
+            light.bounceIntensity = 0.18f;
         }
 
         public Transform CreateWorker(Vector3 position, bool carryingWood)
@@ -315,11 +316,20 @@ namespace Labyrinth.Core
             worker.SetParent(root, false);
             worker.position = position;
             var unit = mazeRenderer.ModelUnitSize * 1.2f;
+            VoxelVisuals.CreateContactShadow(
+                "Mine Worker Contact Shadow",
+                worker,
+                new Vector3(0f, 0.006f, 0f),
+                new Vector3(unit * 0.34f, 0.004f, unit * 0.27f),
+                0.32f);
             CreateLocalPart("Worker Body", PrimitiveType.Capsule, worker, new Vector3(0f, unit * 0.32f, 0f), new Vector3(unit * 0.2f, unit * 0.34f, unit * 0.2f), workerBodyMaterial);
+            CreateLocalPart("Worker Left Foot", PrimitiveType.Cube, worker, new Vector3(unit * -0.09f, unit * 0.09f, unit * 0.05f), new Vector3(unit * 0.1f, unit * 0.08f, unit * 0.17f), workerBodyMaterial);
+            CreateLocalPart("Worker Right Foot", PrimitiveType.Cube, worker, new Vector3(unit * 0.09f, unit * 0.09f, unit * 0.05f), new Vector3(unit * 0.1f, unit * 0.08f, unit * 0.17f), workerBodyMaterial);
             CreateLocalPart("Worker Head", PrimitiveType.Sphere, worker, new Vector3(0f, unit * 0.76f, 0f), Vector3.one * unit * 0.17f, workerHeadMaterial);
             var timber = CreateLocalPart("Worker Timber", PrimitiveType.Cube, worker, new Vector3(0f, unit * 0.46f, -unit * 0.18f), new Vector3(unit * 0.42f, unit * 0.13f, unit * 0.12f), plankMaterial);
             timber.SetActive(carryingWood);
             CreateLocalPart("Worker Pick", PrimitiveType.Cube, worker, new Vector3(unit * 0.2f, unit * 0.5f, unit * 0.08f), new Vector3(unit * 0.05f, unit * 0.52f, unit * 0.05f), beamMaterial).transform.localRotation = Quaternion.Euler(0f, 0f, 32f);
+            AmbientWalkerMoveAnimator.Attach(worker, unit, BuildWorkerAnimationSeed(worker));
             return worker;
         }
 
@@ -415,6 +425,15 @@ namespace Labyrinth.Core
                 : CreateMaterial("Mine Gold Accent", new Color(1f, 0.72f, 0.14f));
         }
 
+        private static int BuildWorkerAnimationSeed(Transform worker)
+        {
+            var position = worker != null ? worker.position : Vector3.zero;
+            return Mathf.RoundToInt(position.x * 79f)
+                ^ Mathf.RoundToInt(position.y * 43f)
+                ^ Mathf.RoundToInt(position.z * 167f)
+                ^ 0x4c91;
+        }
+
         private void RenderMineUpgradeDetails(Transform caveRoot, Vector3 center, float unit, OreDepositType oreType, int level)
         {
             if (level < 2)
@@ -464,7 +483,7 @@ namespace Labyrinth.Core
 
         private static GameObject CreatePart(string name, PrimitiveType primitive, Transform parent, Vector3 position, Vector3 scale, Material material)
         {
-            var part = GameObject.CreatePrimitive(primitive);
+            var part = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(primitive, name));
             part.name = name;
             part.transform.SetParent(parent, false);
             part.transform.position = position;
@@ -476,12 +495,13 @@ namespace Labyrinth.Core
                 Object.Destroy(collider);
             }
 
+            VoxelVisuals.ApplyBlockStyle(part, primitive, material, false);
             return part;
         }
 
         private static GameObject CreateLocalPart(string name, PrimitiveType primitive, Transform parent, Vector3 localPosition, Vector3 localScale, Material material)
         {
-            var part = GameObject.CreatePrimitive(primitive);
+            var part = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(primitive, name));
             part.name = name;
             part.transform.SetParent(parent, false);
             part.transform.localPosition = localPosition;
@@ -494,6 +514,7 @@ namespace Labyrinth.Core
                 Object.Destroy(collider);
             }
 
+            VoxelVisuals.ApplyBlockStyle(part, primitive, material, false);
             return part;
         }
 
@@ -507,22 +528,7 @@ namespace Labyrinth.Core
 
         private static Material CreateMaterial(string materialName, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader) { name = materialName, color = color };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            if (material.HasProperty("_Color"))
-            {
-                material.SetColor("_Color", color);
-            }
+            var material = VoxelVisuals.CreateLitMaterial(materialName, color);
 
             if (color.a < 0.99f)
             {

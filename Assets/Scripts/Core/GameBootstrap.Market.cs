@@ -1,8 +1,6 @@
 using Labyrinth.Base;
-using Labyrinth.Combat;
 using Labyrinth.Maze;
 using Labyrinth.UI;
-using UnityEngine;
 
 namespace Labyrinth.Core
 {
@@ -171,8 +169,7 @@ namespace Labyrinth.Core
             }
 
             AddMarketResource(resource, quote.Amount);
-            ShowMarketTradeFeedback($"+{quote.Amount} {MarketExchange.GetDisplayName(resource)}", new Color(0.78f, 1f, 0.45f));
-            GameDebugLog.Info("Market", $"Bought {quote.Amount} {resource} for {quote.Gold} gold. stockNow={MarketExchange.GetStock(resources, resource)}, goldLeft={resources.Gold}.");
+            GameDebugLog.Info("Market", $"Bought {quote.Amount} {resource} for {quote.Gold} gold. stockNow={MarketExchange.GetStock(resources, resource)}, goldLeft={resources.Gold}, instant=true, worldAnimation=false.");
         }
 
         private void TrySellMarketResource(MarketResourceKind resource)
@@ -191,8 +188,7 @@ namespace Labyrinth.Core
             }
 
             resources.AddGold(quote.Gold);
-            ShowMarketTradeFeedback($"+{quote.Gold} зол.", new Color(1f, 0.84f, 0.28f));
-            GameDebugLog.Info("Market", $"Sold {quote.Amount} {resource} for {quote.Gold} gold. stockNow={MarketExchange.GetStock(resources, resource)}, goldNow={resources.Gold}.");
+            GameDebugLog.Info("Market", $"Sold {quote.Amount} {resource} for {quote.Gold} gold. stockNow={MarketExchange.GetStock(resources, resource)}, goldNow={resources.Gold}, instant=true, worldAnimation=false.");
         }
 
         private void AddMarketResource(MarketResourceKind resource, int amount)
@@ -224,13 +220,6 @@ namespace Labyrinth.Core
                 default:
                     return resources.TrySpendFood(amount);
             }
-        }
-
-        private void ShowMarketTradeFeedback(string text, Color color)
-        {
-            var position = baseDevelopment.MarketPosition;
-            DamageNumberView.CreateText(mazeRenderer, position, text, color, 3.8f);
-            GameAudioController.Play(GameSfx.Purchase, mazeRenderer.GridToWorld(position), 0.9f);
         }
 
         private static string GetMarketResourceTitle(MarketResourceKind resource)

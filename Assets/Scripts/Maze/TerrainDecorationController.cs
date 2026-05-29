@@ -88,10 +88,10 @@ namespace Labyrinth.Maze
                 riverSegments += CreateRiver(i, random);
             }
 
-            var treeCount = Mathf.Clamp(outsideCells / 34, 35, 360);
-            var bushCount = Mathf.Clamp(outsideCells / 28, 45, 430);
-            var rockCount = Mathf.Clamp(outsideCells / 78, 18, 160);
-            var flowerPatchCount = Mathf.Clamp(outsideCells / 60, 24, 220);
+            var treeCount = Mathf.Clamp(outsideCells / 68, 18, 150);
+            var bushCount = Mathf.Clamp(outsideCells / 58, 24, 170);
+            var rockCount = Mathf.Clamp(outsideCells / 150, 10, 60);
+            var flowerPatchCount = Mathf.Clamp(outsideCells / 126, 12, 90);
 
             CreateNature(treeCount, bushCount, rockCount, flowerPatchCount, random);
             GameDebugLog.Info(
@@ -839,13 +839,14 @@ namespace Labyrinth.Maze
 
         private GameObject CreatePart(string name, PrimitiveType type, Transform parent, Vector3 localPosition, Vector3 localScale, Material material)
         {
-            var part = GameObject.CreatePrimitive(type);
+            var part = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(type, name));
             part.name = name;
             part.transform.SetParent(parent, false);
             part.transform.localPosition = localPosition;
             part.transform.localScale = localScale;
             part.GetComponent<Renderer>().sharedMaterial = material;
             RemoveCollider(part);
+            VoxelVisuals.ApplyBlockStyle(part, type, material, false);
             return part;
         }
 

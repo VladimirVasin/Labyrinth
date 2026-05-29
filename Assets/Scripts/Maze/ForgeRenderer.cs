@@ -31,7 +31,7 @@ namespace Labyrinth.Maze
             var wall = CreateMaterial("Forge Wall", new Color(0.38f, 0.34f, 0.3f));
             var roof = CreateMaterial("Forge Roof", new Color(0.16f, 0.13f, 0.12f));
             var metal = CreateMaterial("Forge Metal", new Color(0.58f, 0.6f, 0.62f));
-            var fire = CreateMaterial("Forge Fire", new Color(1f, 0.28f, 0.06f));
+            var fire = VoxelVisuals.CreateEmissiveMaterial("Forge Fire", new Color(1f, 0.28f, 0.06f), 2.2f);
             var wood = CreateMaterial("Forge Wood", new Color(0.28f, 0.15f, 0.07f));
             var coal = CreateMaterial("Forge Coal", new Color(0.04f, 0.04f, 0.04f));
             var smoke = CreateMaterial("Forge Smoke", new Color(0.42f, 0.42f, 0.42f, 0.8f));
@@ -65,34 +65,25 @@ namespace Labyrinth.Maze
             {
                 RemoveCollider(cube);
             }
+
+            VoxelVisuals.ApplyBlockStyle(cube, PrimitiveType.Cube, material, keepCollider);
         }
 
         private static Material CreateMaterial(string name, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader) { name = name, color = color };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(name, color);
         }
 
         private static void CreateSphere(string name, Transform parent, Vector3 position, Vector3 scale, Material material)
         {
-            var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            var sphere = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(PrimitiveType.Sphere, name));
             sphere.name = name;
             sphere.transform.SetParent(parent, false);
             sphere.transform.position = position;
             sphere.transform.localScale = scale;
             sphere.GetComponent<Renderer>().sharedMaterial = material;
             RemoveCollider(sphere);
+            VoxelVisuals.ApplyBlockStyle(sphere, PrimitiveType.Sphere, material, false);
         }
 
         private static void RemoveCollider(GameObject target)

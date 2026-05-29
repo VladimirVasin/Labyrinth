@@ -1,3 +1,4 @@
+using Labyrinth.Core;
 using UnityEngine;
 
 namespace Labyrinth.Maze
@@ -53,13 +54,14 @@ namespace Labyrinth.Maze
 
         private static void CreateBottle(string name, Transform parent, Vector3 position, float unit, Material material)
         {
-            var bottle = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            var bottle = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(PrimitiveType.Sphere, name));
             bottle.name = name;
             bottle.transform.SetParent(parent, false);
             bottle.transform.position = position;
             bottle.transform.localScale = new Vector3(unit * 0.12f, unit * 0.18f, unit * 0.12f);
             bottle.GetComponent<Renderer>().sharedMaterial = material;
             RemoveCollider(bottle);
+            VoxelVisuals.ApplyBlockStyle(bottle, PrimitiveType.Sphere, material, false);
         }
 
         private static void CreateCube(string name, Transform parent, Vector3 position, Vector3 scale, Material material, bool keepCollider)
@@ -74,23 +76,13 @@ namespace Labyrinth.Maze
             {
                 RemoveCollider(cube);
             }
+
+            VoxelVisuals.ApplyBlockStyle(cube, PrimitiveType.Cube, material, keepCollider);
         }
 
         private static Material CreateMaterial(string name, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader) { name = name, color = color };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(name, color);
         }
 
         private static void RemoveCollider(GameObject target)

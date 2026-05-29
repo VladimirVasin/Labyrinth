@@ -69,22 +69,30 @@ namespace Labyrinth.Core
         {
             private const float ArrivalSqrDistance = 0.0025f;
             private const float WheelRollSpeed = 240f;
+            private const float ShakeDistanceFrequency = 9.5f;
 
             private readonly GameObject root;
             private readonly List<Vector3> waypoints;
+            private readonly Transform visualRoot;
             private readonly Transform[] wheels;
+            private readonly Vector3 visualBaseLocalPosition;
+            private readonly Quaternion visualBaseLocalRotation;
             private int nextWaypoint = 1;
+            private float shakePhase;
 
             public CartRuntime(
                 GameObject root,
                 List<Vector3> waypoints,
-                Transform[] wheels,
+                CartVisuals visuals,
                 Vector2Int farmPosition,
                 int foodAmount)
             {
                 this.root = root;
                 this.waypoints = waypoints;
-                this.wheels = wheels;
+                visualRoot = visuals.Root;
+                wheels = visuals.Wheels;
+                visualBaseLocalPosition = visualRoot != null ? visualRoot.localPosition : Vector3.zero;
+                visualBaseLocalRotation = visualRoot != null ? visualRoot.localRotation : Quaternion.identity;
                 FarmPosition = farmPosition;
                 FoodAmount = foodAmount;
                 FaceNextWaypoint();
@@ -102,6 +110,7 @@ namespace Labyrinth.Core
                 }
 
                 var remaining = distance;
+                var traveled = 0f;
                 while (remaining > 0f && nextWaypoint < waypoints.Count)
                 {
                     var target = waypoints[nextWaypoint];
@@ -111,6 +120,8 @@ namespace Labyrinth.Core
                     {
                         root.transform.position = target;
                         remaining -= stepDistance;
+                        traveled += stepDistance;
+                        RotateWheels(stepDistance);
                         nextWaypoint++;
                         FaceNextWaypoint();
                         continue;
@@ -120,9 +131,11 @@ namespace Labyrinth.Core
                     root.transform.position += direction * remaining;
                     root.transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
                     RotateWheels(remaining);
+                    traveled += remaining;
                     remaining = 0f;
                 }
 
+                ApplyRideShake(traveled);
                 return nextWaypoint >= waypoints.Count
                     || (waypoints[waypoints.Count - 1] - root.transform.position).sqrMagnitude <= ArrivalSqrDistance;
             }
@@ -149,6 +162,29 @@ namespace Labyrinth.Core
                 }
             }
 
+            private void ApplyRideShake(float distance)
+            {
+                if (visualRoot == null)
+                {
+                    return;
+                }
+
+                if (distance <= 0.0001f)
+                {
+                    visualRoot.localPosition = Vector3.Lerp(visualRoot.localPosition, visualBaseLocalPosition, Time.deltaTime * 8f);
+                    visualRoot.localRotation = Quaternion.Slerp(visualRoot.localRotation, visualBaseLocalRotation, Time.deltaTime * 8f);
+                    return;
+                }
+
+                shakePhase += distance * ShakeDistanceFrequency;
+                var hop = Mathf.Abs(Mathf.Sin(shakePhase * 1.7f)) * 0.026f;
+                var side = Mathf.Sin(shakePhase * 0.82f) * 0.018f;
+                var pitch = Mathf.Sin(shakePhase * 1.35f) * 2.2f;
+                var roll = Mathf.Sin(shakePhase * 0.95f) * 3.6f;
+                visualRoot.localPosition = visualBaseLocalPosition + new Vector3(side, hop, 0f);
+                visualRoot.localRotation = visualBaseLocalRotation * Quaternion.Euler(pitch, 0f, roll);
+            }
+
             private void RotateWheels(float distance)
             {
                 var angle = distance * WheelRollSpeed;
@@ -156,10 +192,22 @@ namespace Labyrinth.Core
                 {
                     if (wheel != null)
                     {
-                        wheel.Rotate(Vector3.right, angle, Space.Self);
+                        wheel.Rotate(Vector3.up, angle, Space.Self);
                     }
                 }
             }
+        }
+
+        private readonly struct CartVisuals
+        {
+            public CartVisuals(Transform root, Transform[] wheels)
+            {
+                Root = root;
+                Wheels = wheels;
+            }
+
+            public Transform Root { get; }
+            public Transform[] Wheels { get; }
         }
     }
 }

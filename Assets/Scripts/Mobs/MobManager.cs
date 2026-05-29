@@ -13,6 +13,8 @@ namespace Labyrinth.Mobs
         private const int MinimumRegularMobCount = 4;
         private const int MaximumRegularMobCount = 120;
         private const int MaximumRatMobCount = 80;
+        private const int NormalEntranceMobBuffer = 4;
+        private const int OpeningEntranceMobBuffer = 8;
         private const int MinimumMobDistanceFloor = 4;
         private const int MinimumMobDistanceDivisor = 12;
         private const float RespawnCheckInterval = 1.75f;
@@ -20,6 +22,10 @@ namespace Labyrinth.Mobs
         private const int RespawnDarkPaddingCells = 1;
         private const int RespawnMaxCandidateChecks = 180;
         private const float RespawnSummaryInterval = 12f;
+        private const float OpeningRespawnGraceSeconds = 24f;
+        private const float OpeningMobWanderDelaySeconds = 5.25f;
+        private const float OpeningRegularTargetMultiplier = 1.12f;
+        private const float RegularTargetMultiplier = 1.45f;
 
         private readonly List<MobController> mobs = new List<MobController>();
         private MazeGenerationResult result;
@@ -38,6 +44,7 @@ namespace Labyrinth.Mobs
         private int respawnSuccessesSinceSummary;
         private float respawnTimer;
         private float respawnSummaryTimer;
+        private float openingRespawnGraceTimer;
 
         public bool HasCentralMiniBossAlive => centralMiniBoss != null && centralMiniBoss.Model != null && centralMiniBoss.Model.IsAlive;
 
@@ -55,7 +62,8 @@ namespace Labyrinth.Mobs
             root = new GameObject("MobsRoot").transform;
             root.SetParent(transform, false);
 
-            var spawnCandidates = CollectSpawnCandidates(result);
+            var useOpeningRegularStats = result.LevelNumber <= 1;
+            var spawnCandidates = CollectSpawnCandidates(result, useOpeningRegularStats);
             var random = new System.Random(result.Settings.Seed ^ 0x51f3a8d);
             if (spawnCandidates.Count == 0)
             {
@@ -64,7 +72,6 @@ namespace Labyrinth.Mobs
             }
 
             var initialCandidateCount = spawnCandidates.Count;
-            var useOpeningRegularStats = result.LevelNumber <= 1;
             var bossCandidates = CollectBossSpawnCandidates(result, spawnCandidates);
             var bossPosition = SelectBossSpawnPosition(
                 result,
@@ -111,6 +118,7 @@ namespace Labyrinth.Mobs
             maxDistanceFromEntrance = CalculateMaxDistance(distancesFromEntrance);
             respawnRandom = new System.Random(result.Settings.Seed ^ 0x7b61c21);
             respawnTimer = RespawnCheckInterval;
+            openingRespawnGraceTimer = useOpeningRegularStats ? OpeningRespawnGraceSeconds : 0f;
             var minimumDistance = CalculateMinimumMobDistance(result.Grid);
             var ratCandidates = CollectRatSpawnCandidates(result, spawnCandidates);
             var ratSpawnCount = CalculateRatMobCount(ratCandidates.Count);
@@ -157,8 +165,10 @@ namespace Labyrinth.Mobs
                 spawnPositions,
                 distancesFromEntrance,
                 maxDistanceFromEntrance,
-                random);
-            regularMobTargetCount = Mathf.CeilToInt((ratPositions.Count + easyGoblinPositions.Count + spawnPositions.Count) * 1.45f);
+                random,
+                useOpeningRegularStats);
+            var targetMultiplier = useOpeningRegularStats ? OpeningRegularTargetMultiplier : RegularTargetMultiplier;
+            regularMobTargetCount = Mathf.CeilToInt((ratPositions.Count + easyGoblinPositions.Count + spawnPositions.Count) * targetMultiplier);
 
             for (var i = 0; i < ratPositions.Count; i++)
             {
@@ -170,7 +180,8 @@ namespace Labyrinth.Mobs
                     MobSpecies.Rat,
                     MobRank.Regular,
                     result.LevelNumber,
-                    useOpeningRegularStats);
+                    useOpeningRegularStats,
+                    useOpeningRegularStats ? OpeningMobWanderDelaySeconds : 0f);
                 mob.transform.SetParent(root, true);
                 mobs.Add(mob);
             }
@@ -185,7 +196,8 @@ namespace Labyrinth.Mobs
                     MobSpecies.Goblin,
                     MobRank.Regular,
                     result.LevelNumber,
-                    useOpeningRegularStats);
+                    useOpeningRegularStats,
+                    useOpeningRegularStats ? OpeningMobWanderDelaySeconds : 0f);
                 mob.transform.SetParent(root, true);
                 mobs.Add(mob);
             }
@@ -200,14 +212,15 @@ namespace Labyrinth.Mobs
                     spawnSpecies[i],
                     MobRank.Regular,
                     result.LevelNumber,
-                    useOpeningRegularStats);
+                    useOpeningRegularStats,
+                    useOpeningRegularStats ? OpeningMobWanderDelaySeconds : 0f);
                 mob.transform.SetParent(root, true);
                 mobs.Add(mob);
             }
 
             GameDebugLog.Info(
                 "Mobs",
-                $"Spawned regular={CountRegularMobs()}/{regularMobTargetCount} (rats={ratPositions.Count}, easyGoblins={easyGoblinPositions.Count}, goblins={easyGoblinPositions.Count + CountSpecies(spawnSpecies, MobSpecies.Goblin)}, orcs={CountSpecies(spawnSpecies, MobSpecies.Orc)}), openingRegularStats={useOpeningRegularStats}, miniBoss={(miniBossSpawned ? $"{miniBossSpecies} at {GameDebugLog.Position(miniBossPosition)} {BuildStatsText(centralMiniBoss)}" : "none")}, boss={bossSpecies} at {GameDebugLog.Position(bossPosition)} {BuildStatsText(boss)}, dungeonLevel={result.LevelNumber}, candidates={initialCandidateCount}, ratCandidates={ratCandidates.Count}, bossCandidates={bossCandidates.Count}, minDistance={minimumDistance}, maxEntranceDistance={maxDistanceFromEntrance}");
+                $"Spawned regular={CountRegularMobs()}/{regularMobTargetCount} (rats={ratPositions.Count}, easyGoblins={easyGoblinPositions.Count}, goblins={easyGoblinPositions.Count + CountSpecies(spawnSpecies, MobSpecies.Goblin)}, orcs={CountSpecies(spawnSpecies, MobSpecies.Orc)}), openingRegularStats={useOpeningRegularStats}, entranceBuffer={GetEntranceMobBuffer(result)}, openingRespawnGrace={openingRespawnGraceTimer:0.0}, targetMultiplier={targetMultiplier:0.00}, miniBoss={(miniBossSpawned ? $"{miniBossSpecies} at {GameDebugLog.Position(miniBossPosition)} {BuildStatsText(centralMiniBoss)}" : "none")}, boss={bossSpecies} at {GameDebugLog.Position(bossPosition)} {BuildStatsText(boss)}, dungeonLevel={result.LevelNumber}, candidates={initialCandidateCount}, ratCandidates={ratCandidates.Count}, bossCandidates={bossCandidates.Count}, minDistance={minimumDistance}, maxEntranceDistance={maxDistanceFromEntrance}");
         }
 
         public void Clear()
@@ -227,6 +240,7 @@ namespace Labyrinth.Mobs
             respawnSuccessesSinceSummary = 0;
             respawnTimer = 0f;
             respawnSummaryTimer = 0f;
+            openingRespawnGraceTimer = 0f;
             centralMiniBoss = null;
 
             if (root == null)
@@ -253,6 +267,32 @@ namespace Labyrinth.Mobs
             Destroy(mob.gameObject);
         }
 
+        public bool TryBeginRespawnCheck()
+        {
+            if (result == null
+                || mazeRenderer == null
+                || respawnRandom == null
+                || regularMobTargetCount <= 0)
+            {
+                return false;
+            }
+
+            respawnTimer -= Time.deltaTime;
+            if (openingRespawnGraceTimer > 0f)
+            {
+                openingRespawnGraceTimer = Mathf.Max(0f, openingRespawnGraceTimer - Time.deltaTime);
+                return false;
+            }
+
+            if (respawnTimer > 0f)
+            {
+                return false;
+            }
+
+            respawnTimer = RespawnCheckInterval;
+            return true;
+        }
+
         public void UpdateRespawns(HashSet<Vector2Int> respawnBlockedCells, bool hideUnlitMobs, IReadOnlyList<HeroController> activeHeroes)
         {
             if (result == null
@@ -263,14 +303,6 @@ namespace Labyrinth.Mobs
             {
                 return;
             }
-
-            respawnTimer -= Time.deltaTime;
-            if (respawnTimer > 0f)
-            {
-                return;
-            }
-
-            respawnTimer = RespawnCheckInterval;
             var threatStage = CalculateThreatStage(activeHeroes);
             if (CountPendingRemovalMobs() > 0)
             {
@@ -315,7 +347,8 @@ namespace Labyrinth.Mobs
                 result.Settings.Seed ^ 0x348f17 ^ (++respawnSerial * 104729),
                 species,
                 respawnRank,
-                result.LevelNumber);
+                result.LevelNumber,
+                result.LevelNumber <= 1 && threatStage == MobThreatStage.Early);
             if (mob.Model == null || !CanRespawnInDarkness(mob.Model.Rank))
             {
                 Destroy(mob.gameObject);
@@ -454,9 +487,10 @@ namespace Labyrinth.Mobs
             respawnSummaryTimer = RespawnSummaryInterval;
         }
 
-        private static List<Vector2Int> CollectSpawnCandidates(MazeGenerationResult result)
+        private static List<Vector2Int> CollectSpawnCandidates(MazeGenerationResult result, bool useOpeningSpawnRules)
         {
             var candidates = new List<Vector2Int>();
+            var entranceBuffer = useOpeningSpawnRules ? OpeningEntranceMobBuffer : NormalEntranceMobBuffer;
             foreach (var cell in result.Grid.Cells())
             {
                 if (!cell.IsWalkable || cell.Type == MazeCellType.Entrance)
@@ -470,7 +504,7 @@ namespace Labyrinth.Mobs
                     continue;
                 }
 
-                if (GridDistance(position, result.EntrancePosition) <= 4)
+                if (GridDistance(position, result.EntrancePosition) <= entranceBuffer)
                 {
                     continue;
                 }
@@ -567,7 +601,7 @@ namespace Labyrinth.Mobs
 
         private bool IsValidRespawnCell(Vector2Int position, HashSet<Vector2Int> respawnBlockedCells, MobSpecies species)
         {
-            if (GridDistance(position, result.EntrancePosition) <= 4
+            if (GridDistance(position, result.EntrancePosition) <= GetEntranceMobBuffer(result)
                 || IsNearRespawnBlockedCell(position, respawnBlockedCells)
                 || IsOccupiedByMob(position))
             {
@@ -922,6 +956,13 @@ namespace Labyrinth.Mobs
             return Mathf.Clamp(desiredCount, minimumCount, maximumCount);
         }
 
+        private static int GetEntranceMobBuffer(MazeGenerationResult result)
+        {
+            return result != null && result.LevelNumber <= 1
+                ? OpeningEntranceMobBuffer
+                : NormalEntranceMobBuffer;
+        }
+
         private static string BuildStatsText(MobController mob)
         {
             if (mob == null || mob.Model == null)
@@ -954,6 +995,5 @@ namespace Labyrinth.Mobs
 
             return Mathf.Max(MinimumMobDistanceFloor, Mathf.Min(grid.Width, grid.Height) / MinimumMobDistanceDivisor);
         }
-
     }
 }

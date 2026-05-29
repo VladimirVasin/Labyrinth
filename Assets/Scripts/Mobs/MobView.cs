@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using Labyrinth.Core;
 using Labyrinth.Maze;
 using UnityEngine;
 
@@ -8,7 +10,12 @@ namespace Labyrinth.Mobs
         private const float MoveSpeed = 3.4f;
         private const float WalkAnimationSpeed = 7.5f;
         private const float AttackDuration = 0.3f;
+        private static readonly Vector3 HumanoidVisualFootprintScale = new Vector3(0.82f, 0.94f, 0.82f);
+        private static readonly Vector3 RatVisualFootprintScale = new Vector3(0.76f, 0.92f, 0.76f);
 
+        private static int nextLaneSerial;
+
+        private readonly List<Vector3> movePath = new List<Vector3>();
         private MazeRenderer mazeRenderer;
         private Vector3 targetPosition;
         private Transform visualRoot;
@@ -16,10 +23,21 @@ namespace Labyrinth.Mobs
         private Transform rightLegPivot;
         private Transform clubArmPivot;
         private Transform freeArmPivot;
+        private Transform bodyPart;
+        private Transform beltPart;
+        private Transform headPart;
+        private Transform secondaryBodyPart;
+        private Transform tailPart;
+        private Vector3 bodyBaseScale;
+        private Vector3 headBasePosition;
+        private Vector3 secondaryBodyBasePosition;
         private float animationTime;
         private float attackTimer;
         private Vector3 attackLocalDirection;
         private float moveSpeed = MoveSpeed;
+        private int moveWaypointIndex;
+        private int laneSeed;
+        private Vector2Int visualGridPosition;
         private MobSpecies species;
         private MobRank rank;
 
@@ -57,12 +75,32 @@ namespace Labyrinth.Mobs
 
         public void MoveTo(Vector2Int gridPosition)
         {
-            targetPosition = ToWorldPosition(gridPosition);
+            var path = SubCellPathBuilder.BuildStep(
+                mazeRenderer,
+                visualGridPosition,
+                gridPosition,
+                0f,
+                laneSeed,
+                SubCellPathProfile.Mob,
+                transform.position);
+            if (path.Count == 0)
+            {
+                return;
+            }
+
+            movePath.Clear();
+            movePath.AddRange(path);
+            moveWaypointIndex = Mathf.Min(1, movePath.Count);
+            targetPosition = movePath[movePath.Count - 1];
+            visualGridPosition = gridPosition;
         }
 
         public void SetGridPositionImmediate(Vector2Int gridPosition)
         {
             targetPosition = ToWorldPosition(gridPosition);
+            movePath.Clear();
+            moveWaypointIndex = 0;
+            visualGridPosition = gridPosition;
             transform.position = targetPosition;
         }
 
@@ -87,23 +125,29 @@ namespace Labyrinth.Mobs
         {
             visualRoot.localRotation = Quaternion.Euler(0f, 0f, 72f);
             visualRoot.localPosition = new Vector3(0f, 0.16f, 0f);
+            visualRoot.localScale = GetVisualFootprintScale();
         }
 
         private void Update()
         {
-            var offsetToTarget = targetPosition - transform.position;
-            var isMoving = offsetToTarget.sqrMagnitude > 0.0025f;
+            var isMoving = movePath.Count > 0 && moveWaypointIndex < movePath.Count;
 
             if (isMoving)
             {
-                var direction = Vector3.ProjectOnPlane(offsetToTarget, Vector3.up).normalized;
+                var direction = Vector3.ProjectOnPlane(movePath[moveWaypointIndex] - transform.position, Vector3.up).normalized;
                 if (direction.sqrMagnitude > 0.01f)
                 {
                     transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
                 }
+
+                MoveAlongPath(moveSpeed * Time.deltaTime);
+                if (moveWaypointIndex >= movePath.Count)
+                {
+                    transform.position = targetPosition;
+                    movePath.Clear();
+                }
             }
 
-            transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
             AnimateMob(isMoving);
         }
 
@@ -112,6 +156,8 @@ namespace Labyrinth.Mobs
             this.species = species;
             this.rank = rank;
             mazeRenderer = renderer;
+            laneSeed = BuildLaneSeed(startPosition, species, rank, ++nextLaneSerial);
+            visualGridPosition = startPosition;
             BuildModel();
             transform.localScale = Vector3.one * renderer.ModelUnitSize * BuildScaleMultiplier(species, rank);
             moveSpeed = MoveSpeed * renderer.CellSize * (species == MobSpecies.Rat && rank == MobRank.Regular ? 1.18f : 1f);
@@ -119,10 +165,48 @@ namespace Labyrinth.Mobs
             transform.position = targetPosition;
         }
 
+        private void MoveAlongPath(float distance)
+        {
+            var remaining = distance;
+            while (remaining > 0f && moveWaypointIndex < movePath.Count)
+            {
+                var target = movePath[moveWaypointIndex];
+                var offset = target - transform.position;
+                var stepDistance = offset.magnitude;
+                if (stepDistance <= Mathf.Max(remaining, 0.001f))
+                {
+                    transform.position = target;
+                    remaining -= stepDistance;
+                    moveWaypointIndex++;
+                    continue;
+                }
+
+                transform.position += offset / stepDistance * remaining;
+                remaining = 0f;
+            }
+        }
+
+        private static int BuildLaneSeed(Vector2Int startPosition, MobSpecies mobSpecies, MobRank mobRank, int serial)
+        {
+            return serial * 265443576
+                ^ startPosition.x * 73856093
+                ^ startPosition.y * 19349663
+                ^ (int)mobSpecies * 83492791
+                ^ (int)mobRank * 265443576
+                ^ 0x41d3;
+        }
+
         private void BuildModel()
         {
             visualRoot = new GameObject($"{species} Visual").transform;
             visualRoot.SetParent(transform, false);
+            visualRoot.localScale = GetVisualFootprintScale();
+            VoxelVisuals.CreateContactShadow(
+                "Mob Contact Shadow",
+                transform,
+                new Vector3(0f, 0.006f, 0f),
+                species == MobSpecies.Rat ? new Vector3(0.72f, 0.004f, 0.86f) : new Vector3(0.78f, 0.004f, 0.64f),
+                rank == MobRank.Regular ? 0.36f : 0.48f);
 
             var isBoss = rank == MobRank.Boss;
             var isMiniBoss = rank == MobRank.MiniBoss;
@@ -152,9 +236,11 @@ namespace Labyrinth.Mobs
             collider.center = new Vector3(0f, isGoblin ? 0.52f : 0.62f, 0f);
             collider.size = isGoblin ? new Vector3(0.58f, 1.08f, 0.58f) : new Vector3(0.72f, 1.28f, 0.72f);
 
-            CreatePart("Body", visualRoot, PrimitiveType.Cube, isGoblin ? new Vector3(0f, 0.49f, 0f) : new Vector3(0f, 0.56f, 0f), isGoblin ? new Vector3(0.38f, 0.42f, 0.24f) : new Vector3(0.46f, 0.5f, 0.28f), skin);
-            CreatePart("Belt", visualRoot, PrimitiveType.Cube, isGoblin ? new Vector3(0f, 0.3f, 0f) : new Vector3(0f, 0.34f, 0f), isGoblin ? new Vector3(0.44f, 0.07f, 0.28f) : new Vector3(0.52f, 0.08f, 0.32f), leather);
-            CreatePart("Head", visualRoot, PrimitiveType.Sphere, isGoblin ? new Vector3(0f, 0.82f, 0.03f) : new Vector3(0f, 0.96f, 0.03f), isGoblin ? new Vector3(0.36f, 0.32f, 0.34f) : new Vector3(0.34f, 0.3f, 0.32f), skin);
+            bodyPart = CreatePart("Body", visualRoot, PrimitiveType.Cube, isGoblin ? new Vector3(0f, 0.49f, 0f) : new Vector3(0f, 0.56f, 0f), isGoblin ? new Vector3(0.38f, 0.42f, 0.24f) : new Vector3(0.46f, 0.5f, 0.28f), skin);
+            beltPart = CreatePart("Belt", visualRoot, PrimitiveType.Cube, isGoblin ? new Vector3(0f, 0.3f, 0f) : new Vector3(0f, 0.34f, 0f), isGoblin ? new Vector3(0.44f, 0.07f, 0.28f) : new Vector3(0.52f, 0.08f, 0.32f), leather);
+            headPart = CreatePart("Head", visualRoot, PrimitiveType.Sphere, isGoblin ? new Vector3(0f, 0.82f, 0.03f) : new Vector3(0f, 0.96f, 0.03f), isGoblin ? new Vector3(0.36f, 0.32f, 0.34f) : new Vector3(0.34f, 0.3f, 0.32f), skin);
+            bodyBaseScale = bodyPart.localScale;
+            headBasePosition = headPart.localPosition;
             CreatePart("Brow", visualRoot, PrimitiveType.Cube, isGoblin ? new Vector3(0f, 0.88f, 0.19f) : new Vector3(0f, 1.02f, 0.19f), new Vector3(0.34f, 0.07f, 0.05f), darkSkin);
             CreatePart("Left Tusk", visualRoot, PrimitiveType.Cube, isGoblin ? new Vector3(-0.08f, 0.74f, 0.23f) : new Vector3(-0.09f, 0.88f, 0.23f), isGoblin ? new Vector3(0.04f, 0.07f, 0.04f) : new Vector3(0.05f, 0.1f, 0.05f), bone);
             CreatePart("Right Tusk", visualRoot, PrimitiveType.Cube, isGoblin ? new Vector3(0.08f, 0.74f, 0.23f) : new Vector3(0.09f, 0.88f, 0.23f), isGoblin ? new Vector3(0.04f, 0.07f, 0.04f) : new Vector3(0.05f, 0.1f, 0.05f), bone);
@@ -198,15 +284,18 @@ namespace Labyrinth.Mobs
             collider.center = new Vector3(0f, 0.22f, 0.03f);
             collider.size = new Vector3(0.72f, 0.42f, 0.82f);
 
-            CreatePart("Rat Body", visualRoot, PrimitiveType.Sphere, new Vector3(0f, 0.24f, 0f), new Vector3(0.58f, 0.34f, 0.7f), fur);
-            CreatePart("Rat Back", visualRoot, PrimitiveType.Sphere, new Vector3(0f, 0.28f, -0.16f), new Vector3(0.5f, 0.28f, 0.42f), darkFur);
-            CreatePart("Rat Head", visualRoot, PrimitiveType.Sphere, new Vector3(0f, 0.3f, 0.43f), new Vector3(0.36f, 0.28f, 0.34f), fur);
+            bodyPart = CreatePart("Rat Body", visualRoot, PrimitiveType.Sphere, new Vector3(0f, 0.24f, 0f), new Vector3(0.58f, 0.34f, 0.7f), fur);
+            secondaryBodyPart = CreatePart("Rat Back", visualRoot, PrimitiveType.Sphere, new Vector3(0f, 0.28f, -0.16f), new Vector3(0.5f, 0.28f, 0.42f), darkFur);
+            headPart = CreatePart("Rat Head", visualRoot, PrimitiveType.Sphere, new Vector3(0f, 0.3f, 0.43f), new Vector3(0.36f, 0.28f, 0.34f), fur);
+            bodyBaseScale = bodyPart.localScale;
+            headBasePosition = headPart.localPosition;
+            secondaryBodyBasePosition = secondaryBodyPart.localPosition;
             CreatePart("Rat Snout", visualRoot, PrimitiveType.Sphere, new Vector3(0f, 0.25f, 0.64f), new Vector3(0.24f, 0.16f, 0.24f), darkFur);
             CreatePart("Rat Left Ear", visualRoot, PrimitiveType.Sphere, new Vector3(-0.14f, 0.48f, 0.38f), new Vector3(0.14f, 0.12f, 0.08f), ear);
             CreatePart("Rat Right Ear", visualRoot, PrimitiveType.Sphere, new Vector3(0.14f, 0.48f, 0.38f), new Vector3(0.14f, 0.12f, 0.08f), ear);
             CreatePart("Rat Left Eye", visualRoot, PrimitiveType.Sphere, new Vector3(-0.1f, 0.34f, 0.66f), new Vector3(0.055f, 0.055f, 0.055f), eye);
             CreatePart("Rat Right Eye", visualRoot, PrimitiveType.Sphere, new Vector3(0.1f, 0.34f, 0.66f), new Vector3(0.055f, 0.055f, 0.055f), eye);
-            CreatePart("Rat Tail", visualRoot, PrimitiveType.Cube, new Vector3(0f, 0.21f, -0.56f), new Vector3(0.08f, 0.08f, 0.58f), tail);
+            tailPart = CreatePart("Rat Tail", visualRoot, PrimitiveType.Cube, new Vector3(0f, 0.21f, -0.56f), new Vector3(0.08f, 0.08f, 0.58f), tail);
 
             freeArmPivot = CreatePivot("Rat Front Left Pivot", new Vector3(-0.2f, 0.18f, 0.28f));
             clubArmPivot = CreatePivot("Rat Front Right Pivot", new Vector3(0.2f, 0.18f, 0.28f));
@@ -253,22 +342,98 @@ namespace Labyrinth.Mobs
                 return;
             }
 
-            animationTime += Time.deltaTime * WalkAnimationSpeed;
-            var swing = Mathf.Sin(animationTime) * 20f;
-            var bob = Mathf.Abs(Mathf.Sin(animationTime)) * 0.035f;
-
-            visualRoot.localPosition = new Vector3(0f, bob, 0f) + lunge;
-            leftLegPivot.localRotation = Quaternion.Euler(swing, 0f, 0f);
-            rightLegPivot.localRotation = Quaternion.Euler(-swing, 0f, 0f);
-            freeArmPivot.localRotation = Quaternion.Euler(-swing * 0.35f, 0f, 12f);
-            if (attackTimer <= 0f)
+            animationTime += Time.deltaTime * WalkAnimationSpeed * (species == MobSpecies.Rat ? 1.45f : 1f);
+            if (species == MobSpecies.Rat)
             {
-                clubArmPivot.localRotation = Quaternion.Euler(swing * 0.3f, 0f, -18f);
+                AnimateRatMove(lunge);
+                return;
             }
+
+            AnimateHumanoidMove(lunge, attackTimer > 0f);
+        }
+
+        private void AnimateHumanoidMove(Vector3 lunge, bool attacking)
+        {
+            var isGoblin = species == MobSpecies.Goblin;
+            var wave = Mathf.Sin(animationTime);
+            var counter = Mathf.Cos(animationTime);
+            var impact = Mathf.Abs(counter);
+            var swing = wave * (isGoblin ? 27f : 22f);
+            var stomp = impact * (isGoblin ? 0.038f : 0.052f);
+            var sway = wave * (isGoblin ? 0.025f : 0.035f);
+
+            visualRoot.localPosition = new Vector3(sway * 0.22f, stomp, counter * 0.008f) + lunge;
+            visualRoot.localRotation = Quaternion.Euler(counter * 2f, 0f, -wave * (isGoblin ? 4f : 6f));
+            bodyPart.localRotation = Quaternion.Euler(counter * 1.4f, wave * 1.2f, -wave * 3f);
+            bodyPart.localScale = Vector3.Scale(
+                bodyBaseScale,
+                new Vector3(1f + impact * 0.012f, 1f - impact * 0.02f, 1f + impact * 0.01f));
+            beltPart.localRotation = bodyPart.localRotation;
+            headPart.localPosition = headBasePosition + new Vector3(-sway * 0.3f, impact * 0.014f, 0f);
+            headPart.localRotation = Quaternion.Euler(-counter * 1.8f, wave * 1.5f, wave * 3f);
+
+            leftLegPivot.localRotation = Quaternion.Euler(swing, 0f, -Mathf.Max(0f, wave) * 5f);
+            rightLegPivot.localRotation = Quaternion.Euler(-swing, 0f, Mathf.Max(0f, -wave) * 5f);
+            freeArmPivot.localRotation = Quaternion.Euler(-swing * 0.45f, 0f, 12f + counter * 4f);
+            if (!attacking)
+            {
+                clubArmPivot.localRotation = Quaternion.Euler(swing * 0.38f - impact * 4f, 0f, -18f - counter * 4f);
+            }
+        }
+
+        private void AnimateRatMove(Vector3 lunge)
+        {
+            var wave = Mathf.Sin(animationTime);
+            var fast = Mathf.Sin(animationTime * 2f);
+            var impact = Mathf.Abs(fast);
+            visualRoot.localPosition = new Vector3(wave * 0.018f, impact * 0.028f, fast * 0.012f) + lunge;
+            visualRoot.localRotation = Quaternion.Euler(fast * 2.2f, wave * 4.5f, -wave * 3.5f);
+            bodyPart.localScale = Vector3.Scale(
+                bodyBaseScale,
+                new Vector3(1f + impact * 0.035f, 1f - impact * 0.025f, 1f + Mathf.Max(0f, fast) * 0.035f));
+            secondaryBodyPart.localPosition = secondaryBodyBasePosition
+                + new Vector3(0f, impact * 0.012f, -Mathf.Max(0f, fast) * 0.025f);
+            headPart.localPosition = headBasePosition + new Vector3(0f, impact * 0.018f, Mathf.Max(0f, fast) * 0.03f);
+            headPart.localRotation = Quaternion.Euler(-fast * 4f, wave * 5f, 0f);
+            tailPart.localRotation = Quaternion.Euler(wave * 8f, 0f, -fast * 12f);
+            freeArmPivot.localRotation = Quaternion.Euler(fast * 28f, 0f, 0f);
+            clubArmPivot.localRotation = Quaternion.Euler(-fast * 28f, 0f, 0f);
+            leftLegPivot.localRotation = Quaternion.Euler(-fast * 24f, 0f, 0f);
+            rightLegPivot.localRotation = Quaternion.Euler(fast * 24f, 0f, 0f);
         }
 
         private void SetIdlePose()
         {
+            visualRoot.localRotation = Quaternion.identity;
+            visualRoot.localScale = GetVisualFootprintScale();
+            if (bodyPart != null)
+            {
+                bodyPart.localRotation = Quaternion.identity;
+                bodyPart.localScale = bodyBaseScale;
+            }
+
+            if (beltPart != null)
+            {
+                beltPart.localRotation = Quaternion.identity;
+            }
+
+            if (headPart != null)
+            {
+                headPart.localRotation = Quaternion.identity;
+                headPart.localPosition = headBasePosition;
+            }
+
+            if (secondaryBodyPart != null)
+            {
+                secondaryBodyPart.localPosition = secondaryBodyBasePosition;
+                secondaryBodyPart.localRotation = Quaternion.identity;
+            }
+
+            if (tailPart != null)
+            {
+                tailPart.localRotation = Quaternion.identity;
+            }
+
             leftLegPivot.localRotation = Quaternion.identity;
             rightLegPivot.localRotation = Quaternion.identity;
             freeArmPivot.localRotation = Quaternion.Euler(0f, 0f, 12f);
@@ -283,9 +448,14 @@ namespace Labyrinth.Mobs
             return pivot;
         }
 
+        private Vector3 GetVisualFootprintScale()
+        {
+            return species == MobSpecies.Rat ? RatVisualFootprintScale : HumanoidVisualFootprintScale;
+        }
+
         private Transform CreatePart(string partName, Transform parent, PrimitiveType primitiveType, Vector3 localPosition, Vector3 localScale, Material material)
         {
-            var part = GameObject.CreatePrimitive(primitiveType);
+            var part = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(primitiveType, partName));
             part.name = partName;
             part.transform.SetParent(parent, false);
             part.transform.localPosition = localPosition;
@@ -298,6 +468,7 @@ namespace Labyrinth.Mobs
                 Destroy(collider);
             }
 
+            VoxelVisuals.ApplyBlockStyle(part, primitiveType, material, false);
             return part.transform;
         }
 
@@ -308,24 +479,7 @@ namespace Labyrinth.Mobs
 
         private static Material CreateMaterial(string materialName, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader)
-            {
-                name = materialName,
-                color = color
-            };
-
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(materialName, color);
         }
 
         private static string BuildSpeciesMaterialPrefix(MobSpecies mobSpecies)

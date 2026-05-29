@@ -84,36 +84,26 @@ namespace Labyrinth.Maze
                 RemoveCollider(cube);
             }
 
+            VoxelVisuals.ApplyBlockStyle(cube, PrimitiveType.Cube, material, keepCollider);
             return cube;
         }
 
         private static GameObject CreateCylinder(string name, Transform parent, Vector3 position, Vector3 scale, Quaternion rotation, Material material)
         {
-            var cylinder = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            var cylinder = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(PrimitiveType.Cylinder, name));
             cylinder.name = name;
             cylinder.transform.SetParent(parent, false);
             cylinder.transform.position = position;
             cylinder.transform.rotation = rotation;
             cylinder.transform.localScale = scale;
             cylinder.GetComponent<Renderer>().sharedMaterial = material;
+            VoxelVisuals.ApplyBlockStyle(cylinder, PrimitiveType.Cylinder, material, true);
             return cylinder;
         }
 
         private static Material CreateMaterial(string name, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader) { name = name, color = color };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(name, color);
         }
 
         private static void RemoveCollider(GameObject target)

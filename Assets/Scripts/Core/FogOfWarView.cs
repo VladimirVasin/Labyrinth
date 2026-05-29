@@ -16,9 +16,9 @@ namespace Labyrinth.Core
         public void Configure(MazeRenderer renderer)
         {
             mazeRenderer = renderer;
-            floorFogMaterial = CreateMaterial("Known Floor Fog", new Color(0.17f, 0.17f, 0.16f, 1f));
-            wallFogMaterial = CreateMaterial("Known Wall Fog Body", new Color(0.055f, 0.058f, 0.065f, 1f));
-            wallTopFogMaterial = CreateMaterial("Known Wall Fog Top", new Color(0.2f, 0.2f, 0.215f, 1f));
+            floorFogMaterial = CreateMaterial("Known Floor Fog", new Color(0.125f, 0.14f, 0.165f, 1f));
+            wallFogMaterial = CreateMaterial("Known Wall Fog Body", new Color(0.07f, 0.078f, 0.095f, 1f));
+            wallTopFogMaterial = CreateMaterial("Known Wall Fog Top", new Color(0.18f, 0.19f, 0.215f, 1f));
         }
 
         public void Show(MazeGrid grid, HashSet<Vector2Int> exploredCells, HashSet<Vector2Int> visibleCells)
@@ -36,14 +36,14 @@ namespace Labyrinth.Core
                     continue;
                 }
 
-                EnsureOverlay(grid, position).SetActive(true);
+                SetOverlayActive(EnsureOverlay(grid, position), true);
             }
 
             foreach (var pair in overlays)
             {
                 var shouldShow = exploredCells.Contains(pair.Key)
                     && (visibleCells == null || !visibleCells.Contains(pair.Key));
-                pair.Value.SetActive(shouldShow);
+                SetOverlayActive(pair.Value, shouldShow);
             }
         }
 
@@ -53,7 +53,7 @@ namespace Labyrinth.Core
             {
                 if (overlay != null)
                 {
-                    overlay.SetActive(false);
+                    SetOverlayActive(overlay, false);
                 }
             }
         }
@@ -98,6 +98,14 @@ namespace Labyrinth.Core
 
             overlays[position] = overlay;
             return overlay;
+        }
+
+        private static void SetOverlayActive(GameObject overlay, bool active)
+        {
+            if (overlay != null && overlay.activeSelf != active)
+            {
+                overlay.SetActive(active);
+            }
         }
 
         private void CreateWallOverlay(Transform parent, Vector2Int position, float cellSize)

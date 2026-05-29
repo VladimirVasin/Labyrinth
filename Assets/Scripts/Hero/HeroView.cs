@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Labyrinth.Core;
 using Labyrinth.Maze;
 using UnityEngine;
@@ -10,7 +11,11 @@ namespace Labyrinth.Hero
         private const float RotationSpeed = 720f;
         private const float WalkAnimationSpeed = 10f;
         private const float MapClickColliderHeight = 1.42f;
+        private static readonly Vector3 VisualFootprintScale = new Vector3(0.78f, 0.92f, 0.78f);
 
+        private static int nextLaneSerial;
+
+        private readonly List<Vector3> movePath = new List<Vector3>();
         private MazeRenderer mazeRenderer;
         private Vector3 moveStartPosition;
         private Vector3 targetPosition;
@@ -20,12 +25,26 @@ namespace Labyrinth.Hero
         private Transform swordArmPivot;
         private Transform shieldArmPivot;
         private Transform cape;
+        private Transform bodyArmor;
+        private Transform chestPlate;
+        private Transform belt;
+        private Transform head;
+        private Transform helmetDome;
+        private Transform helmetVisor;
+        private Transform helmetCrest;
+        private Transform lanternGlow;
+        private Transform leftBoot;
+        private Transform rightBoot;
         private GameObject selectionMarker;
         private float animationTime;
         private float attackTimer;
         private Vector3 attackLocalDirection;
         private bool defeated;
         private float moveTimer;
+        private float activeMoveSpeed;
+        private int moveWaypointIndex;
+        private int laneSeed;
+        private Vector2Int visualGridPosition;
 
         private const float AttackDuration = 0.28f;
 
@@ -46,15 +65,33 @@ namespace Labyrinth.Hero
 
         public void MoveTo(Vector2Int gridPosition)
         {
-            var nextTarget = ToWorldPosition(gridPosition);
-            if ((nextTarget - targetPosition).sqrMagnitude <= 0.0001f)
+            var nextPath = SubCellPathBuilder.BuildStep(
+                mazeRenderer,
+                visualGridPosition,
+                gridPosition,
+                0f,
+                laneSeed,
+                SubCellPathProfile.Hero,
+                transform.position);
+            if (nextPath.Count == 0)
             {
                 return;
             }
 
+            var nextTarget = nextPath[nextPath.Count - 1];
+            if ((nextTarget - targetPosition).sqrMagnitude <= 0.0001f && movePath.Count == 0)
+            {
+                return;
+            }
+
+            movePath.Clear();
+            movePath.AddRange(nextPath);
+            moveWaypointIndex = Mathf.Min(1, movePath.Count);
             moveStartPosition = transform.position;
             targetPosition = nextTarget;
+            activeMoveSpeed = Mathf.Max(0.01f, SubCellPathBuilder.CalculateLength(movePath) / MoveDuration);
             moveTimer = 0f;
+            visualGridPosition = gridPosition;
             GameAudioController.Play(GameSfx.Footstep, nextTarget);
         }
 
@@ -63,6 +100,9 @@ namespace Labyrinth.Hero
             targetPosition = ToWorldPosition(gridPosition);
             moveStartPosition = targetPosition;
             moveTimer = MoveDuration;
+            movePath.Clear();
+            moveWaypointIndex = 0;
+            visualGridPosition = gridPosition;
             transform.position = targetPosition;
         }
 
@@ -111,6 +151,7 @@ namespace Labyrinth.Hero
             {
                 visualRoot.localRotation = Quaternion.Euler(0f, 0f, 76f);
                 visualRoot.localPosition = new Vector3(0f, 0.16f, 0f);
+                visualRoot.localScale = VisualFootprintScale;
             }
         }
 
@@ -121,16 +162,12 @@ namespace Labyrinth.Hero
                 return;
             }
 
-            var progress = Mathf.Clamp01(moveTimer / MoveDuration);
-            var isMoving = progress < 1f || (targetPosition - transform.position).sqrMagnitude > 0.0004f;
+            var isMoving = movePath.Count > 0 && moveWaypointIndex < movePath.Count;
 
             if (isMoving)
             {
                 moveTimer += Time.deltaTime;
-                progress = Mathf.Clamp01(moveTimer / MoveDuration);
-                var eased = progress * progress * (3f - 2f * progress);
-                var nextPosition = Vector3.Lerp(moveStartPosition, targetPosition, eased);
-                var direction = Vector3.ProjectOnPlane(targetPosition - transform.position, Vector3.up).normalized;
+                var direction = Vector3.ProjectOnPlane(movePath[moveWaypointIndex] - transform.position, Vector3.up).normalized;
                 if (direction.sqrMagnitude > 0.01f)
                 {
                     var targetRotation = Quaternion.LookRotation(direction, Vector3.up);
@@ -140,11 +177,12 @@ namespace Labyrinth.Hero
                         RotationSpeed * Time.deltaTime);
                 }
 
-                transform.position = nextPosition;
-                if (progress >= 1f)
+                MoveAlongPath(activeMoveSpeed * Time.deltaTime);
+                if (moveWaypointIndex >= movePath.Count)
                 {
                     moveStartPosition = targetPosition;
                     transform.position = targetPosition;
+                    movePath.Clear();
                 }
             }
 
@@ -154,10 +192,41 @@ namespace Labyrinth.Hero
         private void Initialize(MazeRenderer renderer, Vector2Int startPosition)
         {
             mazeRenderer = renderer;
+            laneSeed = BuildLaneSeed(startPosition, ++nextLaneSerial);
+            visualGridPosition = startPosition;
             BuildKnightModel();
             AddMapClickCollider();
             transform.localScale = Vector3.one * renderer.ModelUnitSize;
             SetGridPositionImmediate(startPosition);
+        }
+
+        private void MoveAlongPath(float distance)
+        {
+            var remaining = distance;
+            while (remaining > 0f && moveWaypointIndex < movePath.Count)
+            {
+                var target = movePath[moveWaypointIndex];
+                var offset = target - transform.position;
+                var stepDistance = offset.magnitude;
+                if (stepDistance <= Mathf.Max(remaining, 0.001f))
+                {
+                    transform.position = target;
+                    remaining -= stepDistance;
+                    moveWaypointIndex++;
+                    continue;
+                }
+
+                transform.position += offset / stepDistance * remaining;
+                remaining = 0f;
+            }
+        }
+
+        private static int BuildLaneSeed(Vector2Int startPosition, int serial)
+        {
+            return serial * 265443576
+                ^ startPosition.x * 73856093
+                ^ startPosition.y * 19349663
+                ^ 0x6a57;
         }
 
         private void AddMapClickCollider()
@@ -171,6 +240,7 @@ namespace Labyrinth.Hero
         {
             visualRoot = new GameObject("Knight Visual").transform;
             visualRoot.SetParent(transform, false);
+            visualRoot.localScale = VisualFootprintScale;
 
             var armor = CreateMaterial("Knight Armor", new Color(0.72f, 0.74f, 0.78f));
             var darkArmor = CreateMaterial("Knight Dark Armor", new Color(0.32f, 0.34f, 0.38f));
@@ -180,24 +250,32 @@ namespace Labyrinth.Hero
             var leather = CreateMaterial("Knight Leather", new Color(0.22f, 0.12f, 0.05f));
             var blade = CreateMaterial("Knight Sword", new Color(0.88f, 0.9f, 0.95f));
             var shield = CreateMaterial("Knight Shield", new Color(0.7f, 0.04f, 0.05f));
-            var selection = CreateMaterial("Hero Selection", new Color(1f, 0.86f, 0.24f, 0.75f));
+            var lantern = VoxelVisuals.CreateEmissiveMaterial("Knight Lantern", new Color(1f, 0.58f, 0.16f), 2.25f);
+            var selection = CreateMaterial("Hero Selection", new Color(1f, 0.86f, 0.24f, 0.48f));
 
-            CreatePart("Body Armor", visualRoot, PrimitiveType.Cube, new Vector3(0f, 0.62f, 0f), new Vector3(0.42f, 0.54f, 0.26f), armor);
-            CreatePart("Chest Plate", visualRoot, PrimitiveType.Cube, new Vector3(0f, 0.68f, 0.15f), new Vector3(0.34f, 0.38f, 0.05f), cloth);
-            CreatePart("Belt", visualRoot, PrimitiveType.Cube, new Vector3(0f, 0.42f, -0.01f), new Vector3(0.48f, 0.08f, 0.3f), leather);
+            VoxelVisuals.CreateContactShadow(
+                "Hero Contact Shadow",
+                transform,
+                new Vector3(0f, 0.006f, 0f),
+                new Vector3(0.68f, 0.004f, 0.56f),
+                0.42f);
+
+            bodyArmor = CreatePart("Body Armor", visualRoot, PrimitiveType.Cube, new Vector3(0f, 0.62f, 0f), new Vector3(0.42f, 0.54f, 0.26f), armor);
+            chestPlate = CreatePart("Chest Plate", visualRoot, PrimitiveType.Cube, new Vector3(0f, 0.68f, 0.15f), new Vector3(0.34f, 0.38f, 0.05f), cloth);
+            belt = CreatePart("Belt", visualRoot, PrimitiveType.Cube, new Vector3(0f, 0.42f, -0.01f), new Vector3(0.48f, 0.08f, 0.3f), leather);
             cape = CreatePart("Cape", visualRoot, PrimitiveType.Cube, new Vector3(0f, 0.61f, -0.19f), new Vector3(0.46f, 0.62f, 0.06f), capeMaterial);
 
-            CreatePart("Head", visualRoot, PrimitiveType.Sphere, new Vector3(0f, 1.02f, 0.01f), new Vector3(0.3f, 0.28f, 0.3f), skin);
-            CreatePart("Helmet Dome", visualRoot, PrimitiveType.Sphere, new Vector3(0f, 1.08f, 0.01f), new Vector3(0.34f, 0.24f, 0.34f), armor);
-            CreatePart("Helmet Visor", visualRoot, PrimitiveType.Cube, new Vector3(0f, 1.03f, 0.18f), new Vector3(0.32f, 0.08f, 0.06f), darkArmor);
-            CreatePart("Helmet Crest", visualRoot, PrimitiveType.Cube, new Vector3(0f, 1.27f, 0f), new Vector3(0.08f, 0.2f, 0.38f), capeMaterial);
+            head = CreatePart("Head", visualRoot, PrimitiveType.Sphere, new Vector3(0f, 1.02f, 0.01f), new Vector3(0.3f, 0.28f, 0.3f), skin);
+            helmetDome = CreatePart("Helmet Dome", visualRoot, PrimitiveType.Sphere, new Vector3(0f, 1.08f, 0.01f), new Vector3(0.34f, 0.24f, 0.34f), armor);
+            helmetVisor = CreatePart("Helmet Visor", visualRoot, PrimitiveType.Cube, new Vector3(0f, 1.03f, 0.18f), new Vector3(0.32f, 0.08f, 0.06f), darkArmor);
+            helmetCrest = CreatePart("Helmet Crest", visualRoot, PrimitiveType.Cube, new Vector3(0f, 1.27f, 0f), new Vector3(0.08f, 0.2f, 0.38f), capeMaterial);
 
             leftLegPivot = CreatePivot("Left Leg Pivot", new Vector3(-0.13f, 0.42f, 0f));
             rightLegPivot = CreatePivot("Right Leg Pivot", new Vector3(0.13f, 0.42f, 0f));
             CreatePart("Left Greave", leftLegPivot, PrimitiveType.Cube, new Vector3(0f, -0.22f, -0.01f), new Vector3(0.14f, 0.44f, 0.14f), darkArmor);
             CreatePart("Right Greave", rightLegPivot, PrimitiveType.Cube, new Vector3(0f, -0.22f, -0.01f), new Vector3(0.14f, 0.44f, 0.14f), darkArmor);
-            CreatePart("Left Boot", leftLegPivot, PrimitiveType.Cube, new Vector3(0f, -0.46f, 0.06f), new Vector3(0.18f, 0.08f, 0.24f), leather);
-            CreatePart("Right Boot", rightLegPivot, PrimitiveType.Cube, new Vector3(0f, -0.46f, 0.06f), new Vector3(0.18f, 0.08f, 0.24f), leather);
+            leftBoot = CreatePart("Left Boot", leftLegPivot, PrimitiveType.Cube, new Vector3(0f, -0.46f, 0.06f), new Vector3(0.18f, 0.08f, 0.24f), leather);
+            rightBoot = CreatePart("Right Boot", rightLegPivot, PrimitiveType.Cube, new Vector3(0f, -0.46f, 0.06f), new Vector3(0.18f, 0.08f, 0.24f), leather);
 
             shieldArmPivot = CreatePivot("Shield Arm Pivot", new Vector3(-0.3f, 0.82f, 0f));
             swordArmPivot = CreatePivot("Sword Arm Pivot", new Vector3(0.3f, 0.82f, 0f));
@@ -205,10 +283,11 @@ namespace Labyrinth.Hero
             CreatePart("Sword Arm", swordArmPivot, PrimitiveType.Cube, new Vector3(0.02f, -0.2f, 0f), new Vector3(0.12f, 0.4f, 0.12f), armor);
             CreatePart("Shield", shieldArmPivot, PrimitiveType.Cube, new Vector3(-0.11f, -0.18f, 0.17f), new Vector3(0.08f, 0.44f, 0.34f), shield);
             CreatePart("Shield Boss", shieldArmPivot, PrimitiveType.Sphere, new Vector3(-0.16f, -0.18f, 0.34f), new Vector3(0.12f, 0.12f, 0.06f), armor);
+            lanternGlow = CreatePart("Lantern Flame", shieldArmPivot, PrimitiveType.Cube, new Vector3(-0.19f, -0.46f, 0.22f), new Vector3(0.12f, 0.16f, 0.12f), lantern);
             CreatePart("Sword Blade", swordArmPivot, PrimitiveType.Cube, new Vector3(0.12f, 0.08f, 0.08f), new Vector3(0.05f, 0.72f, 0.05f), blade);
             CreatePart("Sword Guard", swordArmPivot, PrimitiveType.Cube, new Vector3(0.12f, -0.25f, 0.08f), new Vector3(0.25f, 0.05f, 0.05f), leather);
 
-            selectionMarker = CreatePart("Selection Marker", transform, PrimitiveType.Cylinder, new Vector3(0f, 0.02f, 0f), new Vector3(0.72f, 0.02f, 0.72f), selection).gameObject;
+            selectionMarker = CreatePart("Selection Marker", transform, PrimitiveType.Cylinder, new Vector3(0f, 0.012f, 0f), new Vector3(0.38f, 0.006f, 0.38f), selection).gameObject;
             selectionMarker.SetActive(false);
             SetIdlePose();
         }
@@ -228,19 +307,46 @@ namespace Labyrinth.Hero
                     SetIdlePose();
                 }
 
+                AnimateLantern();
                 return;
             }
 
+            var attacking = attackTimer > 0f;
+            var attackOffset = GetAttackOffset();
             animationTime += Time.deltaTime * WalkAnimationSpeed;
-            var swing = Mathf.Sin(animationTime) * 22f;
-            var bob = Mathf.Abs(Mathf.Sin(animationTime)) * 0.045f;
+            var wave = Mathf.Sin(animationTime);
+            var counter = Mathf.Cos(animationTime);
+            var stepImpact = Mathf.Abs(counter);
+            var leftLift = Mathf.Max(0f, wave);
+            var rightLift = Mathf.Max(0f, -wave);
+            var bob = 0.012f + stepImpact * 0.045f;
+            var sway = wave * 0.024f;
+            var squash = stepImpact * 0.018f;
 
-            visualRoot.localPosition = new Vector3(0f, bob, 0f) + GetAttackOffset();
-            leftLegPivot.localRotation = Quaternion.Euler(swing, 0f, 0f);
-            rightLegPivot.localRotation = Quaternion.Euler(-swing, 0f, 0f);
-            swordArmPivot.localRotation = Quaternion.Euler(-swing * 0.45f, 0f, -14f);
-            shieldArmPivot.localRotation = Quaternion.Euler(swing * 0.35f, 0f, 14f);
-            cape.localRotation = Quaternion.Euler(Mathf.Sin(animationTime) * 3f, 0f, 0f);
+            visualRoot.localPosition = new Vector3(sway * 0.35f, bob, counter * 0.008f) + attackOffset;
+            visualRoot.localRotation = Quaternion.Euler(counter * 1.4f, wave * 1.6f, -wave * 3.2f);
+            visualRoot.localScale = Vector3.Scale(
+                VisualFootprintScale,
+                new Vector3(1f + squash * 0.45f, 1f - squash, 1f + squash * 0.25f));
+            SetBodyOffset(new Vector3(sway * 0.28f, stepImpact * 0.01f, 0f), Quaternion.Euler(counter * 1.2f, 0f, -wave * 2.4f));
+            SetHeadOffset(new Vector3(-sway * 0.35f, stepImpact * 0.016f, 0f), Quaternion.Euler(-counter * 0.9f, wave * 1.1f, wave * 2.2f));
+
+            leftLegPivot.localRotation = Quaternion.Euler(wave * 30f, 0f, -leftLift * 5f);
+            rightLegPivot.localRotation = Quaternion.Euler(-wave * 30f, 0f, rightLift * 5f);
+            leftBoot.localPosition = new Vector3(0f, -0.46f + leftLift * 0.065f, 0.06f + leftLift * 0.035f);
+            rightBoot.localPosition = new Vector3(0f, -0.46f + rightLift * 0.065f, 0.06f + rightLift * 0.035f);
+            leftBoot.localRotation = Quaternion.Euler(-wave * 12f, 0f, -leftLift * 8f);
+            rightBoot.localRotation = Quaternion.Euler(wave * 12f, 0f, rightLift * 8f);
+
+            if (!attacking)
+            {
+                swordArmPivot.localRotation = Quaternion.Euler(-wave * 12f - stepImpact * 2f, 0f, -14f - counter * 3f);
+            }
+
+            shieldArmPivot.localRotation = Quaternion.Euler(wave * 10f, 0f, 14f + counter * 2.5f);
+            cape.localPosition = new Vector3(0f, 0.61f + stepImpact * 0.012f, -0.19f - stepImpact * 0.018f);
+            cape.localRotation = Quaternion.Euler(-8f - counter * 5f, wave * 1.5f, -wave * 2f);
+            AnimateLantern();
         }
 
         private Vector3 GetAttackOffset()
@@ -258,11 +364,54 @@ namespace Labyrinth.Hero
 
         private void SetIdlePose()
         {
+            visualRoot.localRotation = Quaternion.identity;
+            visualRoot.localScale = VisualFootprintScale;
+            SetBodyOffset(Vector3.zero, Quaternion.identity);
+            SetHeadOffset(Vector3.zero, Quaternion.identity);
             leftLegPivot.localRotation = Quaternion.identity;
             rightLegPivot.localRotation = Quaternion.identity;
+            leftBoot.localPosition = new Vector3(0f, -0.46f, 0.06f);
+            rightBoot.localPosition = new Vector3(0f, -0.46f, 0.06f);
+            leftBoot.localRotation = Quaternion.identity;
+            rightBoot.localRotation = Quaternion.identity;
             swordArmPivot.localRotation = Quaternion.Euler(0f, 0f, -14f);
             shieldArmPivot.localRotation = Quaternion.Euler(0f, 0f, 14f);
+            cape.localPosition = new Vector3(0f, 0.61f, -0.19f);
             cape.localRotation = Quaternion.identity;
+        }
+
+        private void AnimateLantern()
+        {
+            if (lanternGlow == null)
+            {
+                return;
+            }
+
+            var pulse = 1f + Mathf.Sin(Time.time * 7.3f) * 0.08f + Mathf.Sin(Time.time * 11.7f) * 0.035f;
+            lanternGlow.localScale = new Vector3(0.12f, 0.16f * pulse, 0.12f);
+            lanternGlow.localRotation = Quaternion.Euler(0f, Time.time * 35f, 0f);
+        }
+
+        private void SetBodyOffset(Vector3 offset, Quaternion rotation)
+        {
+            bodyArmor.localPosition = new Vector3(0f, 0.62f, 0f) + offset;
+            chestPlate.localPosition = new Vector3(0f, 0.68f, 0.15f) + offset;
+            belt.localPosition = new Vector3(0f, 0.42f, -0.01f) + offset * 0.6f;
+            bodyArmor.localRotation = rotation;
+            chestPlate.localRotation = rotation;
+            belt.localRotation = rotation;
+        }
+
+        private void SetHeadOffset(Vector3 offset, Quaternion rotation)
+        {
+            head.localPosition = new Vector3(0f, 1.02f, 0.01f) + offset;
+            helmetDome.localPosition = new Vector3(0f, 1.08f, 0.01f) + offset;
+            helmetVisor.localPosition = new Vector3(0f, 1.03f, 0.18f) + offset;
+            helmetCrest.localPosition = new Vector3(0f, 1.27f, 0f) + offset * 1.15f;
+            head.localRotation = rotation;
+            helmetDome.localRotation = rotation;
+            helmetVisor.localRotation = rotation;
+            helmetCrest.localRotation = rotation * Quaternion.Euler(-Mathf.Sign(offset.x) * 1.2f, 0f, 0f);
         }
 
         private Transform CreatePivot(string pivotName, Vector3 localPosition)
@@ -281,7 +430,7 @@ namespace Labyrinth.Hero
             Vector3 localScale,
             Material material)
         {
-            var part = GameObject.CreatePrimitive(primitiveType);
+            var part = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(primitiveType, partName));
             part.name = partName;
             part.transform.SetParent(parent, false);
             part.transform.localPosition = localPosition;
@@ -294,6 +443,7 @@ namespace Labyrinth.Hero
                 Destroy(collider);
             }
 
+            VoxelVisuals.ApplyBlockStyle(part, primitiveType, material, false);
             return part.transform;
         }
 
@@ -304,24 +454,7 @@ namespace Labyrinth.Hero
 
         private static Material CreateMaterial(string materialName, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader)
-            {
-                name = materialName,
-                color = color
-            };
-
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(materialName, color);
         }
     }
 }

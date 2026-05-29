@@ -22,9 +22,12 @@ namespace Labyrinth.Core
                 return false;
             }
 
-            var offset = new Vector3(0f, mazeRenderer.CellSize * WorkerYOffset, 0f);
-            AddWorldPathCells(worldPath, roadCells, offset);
-            EnsureWorldPathStartsAt(worldPath, baseDevelopment.MinersGuildPosition, offset);
+            worldPath = SubCellPathBuilder.Build(
+                mazeRenderer,
+                roadCells,
+                mazeRenderer.CellSize * WorkerYOffset,
+                SubCellPathBuilder.BuildSeed(roadCells, 0x59ab),
+                SubCellPathProfile.Worker);
             GameDebugLog.Info(
                 "Mine",
                 $"Mine worker guild-to-castle road confirmed: cells={roadCells.Count}, path={FormatCellPathPreview(roadCells)}.");
@@ -49,13 +52,19 @@ namespace Labyrinth.Core
                 return false;
             }
 
-            var offset = new Vector3(0f, mazeRenderer.CellSize * WorkerYOffset, 0f);
-            AddWorldPathCells(worldPath, roadCells, offset);
+            var cells = new List<Vector2Int>(roadCells.Count + targetIndex);
+            cells.AddRange(roadCells);
             for (var i = 1; i <= targetIndex; i++)
             {
-                AddWorldPoint(worldPath, route[i], offset);
+                cells.Add(route[i]);
             }
 
+            worldPath = SubCellPathBuilder.Build(
+                mazeRenderer,
+                cells,
+                mazeRenderer.CellSize * WorkerYOffset,
+                SubCellPathBuilder.BuildSeed(cells, 0x6c21 ^ targetIndex),
+                SubCellPathProfile.Worker);
             return true;
         }
 
@@ -73,13 +82,23 @@ namespace Labyrinth.Core
                 return false;
             }
 
-            var offset = new Vector3(0f, mazeRenderer.CellSize * WorkerYOffset, 0f);
+            var cells = new List<Vector2Int>(targetIndex + 1 + roadCells.Count);
             for (var i = targetIndex; i >= 0; i--)
             {
-                AddWorldPoint(worldPath, route[i], offset);
+                cells.Add(route[i]);
             }
 
-            AddWorldPathCells(worldPath, roadCells, offset);
+            for (var i = 1; i < roadCells.Count; i++)
+            {
+                cells.Add(roadCells[i]);
+            }
+
+            worldPath = SubCellPathBuilder.Build(
+                mazeRenderer,
+                cells,
+                mazeRenderer.CellSize * WorkerYOffset,
+                SubCellPathBuilder.BuildSeed(cells, 0x73f5 ^ targetIndex),
+                SubCellPathProfile.Worker);
             return worldPath.Count > 1;
         }
 

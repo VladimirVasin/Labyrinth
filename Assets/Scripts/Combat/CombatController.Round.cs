@@ -194,12 +194,17 @@ namespace Labyrinth.Combat
         private CombatActionDefinition SelectMobAction()
         {
             var hpRatio = mob.Model.MaxHitPoints > 0 ? mob.Model.HitPoints / (float)mob.Model.MaxHitPoints : 1f;
+            var openingRookieCombat = mob.Model.Rank == MobRank.Regular
+                && mob.Model.DungeonLevel <= 1
+                && hero.Model.DungeonLevel <= 1
+                && hero.Model.Level <= OpeningRookieSafetyMaxHeroLevel
+                && hero.Model.StepsTaken <= OpeningRookieSafetyMaxHeroSteps;
             if (mobCombat.Stamina <= 1)
             {
                 return GetAction(CombatActionType.Recover);
             }
 
-            if (hpRatio <= 0.26f && CanUse(mobCombat, CombatActionType.DesperateStrike))
+            if (!openingRookieCombat && hpRatio <= 0.26f && CanUse(mobCombat, CombatActionType.DesperateStrike))
             {
                 return GetAction(CombatActionType.DesperateStrike);
             }
@@ -235,7 +240,8 @@ namespace Labyrinth.Combat
                     }
 
                     if (CanUse(mobCombat, CombatActionType.BreakArmor)
-                        && (hero.Model.ArmorPoints - heroCombat.ArmorBreak >= 2 || rewardRandom.Next(100) < 35))
+                        && (hero.Model.ArmorPoints - heroCombat.ArmorBreak >= 2
+                            || (!openingRookieCombat && rewardRandom.Next(100) < 35)))
                     {
                         return GetAction(CombatActionType.BreakArmor);
                     }

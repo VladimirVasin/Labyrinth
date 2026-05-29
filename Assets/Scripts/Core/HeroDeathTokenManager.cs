@@ -569,7 +569,7 @@ namespace Labyrinth.Core
             Transform parent,
             Vector2Int? trackedCell)
         {
-            var primitive = GameObject.CreatePrimitive(primitiveType);
+            var primitive = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(primitiveType, objectName));
             primitive.name = objectName;
             primitive.transform.SetParent(parent, true);
             primitive.transform.position = position;
@@ -581,6 +581,7 @@ namespace Labyrinth.Core
                 Destroy(collider);
             }
 
+            VoxelVisuals.ApplyBlockStyle(primitive, primitiveType, material, false);
             if (trackedCell.HasValue)
             {
                 mazeRenderer.TrackExternalCellRenderer(trackedCell.Value, primitive);
@@ -612,19 +613,7 @@ namespace Labyrinth.Core
 
         private static Material CreateMaterial(string materialName, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader) { name = materialName, color = color };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(materialName, color);
         }
     }
 }

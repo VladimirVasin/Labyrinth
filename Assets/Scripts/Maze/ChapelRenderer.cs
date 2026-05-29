@@ -34,7 +34,7 @@ namespace Labyrinth.Maze
             var wood = CreateMaterial("Chapel Wood", new Color(0.34f, 0.18f, 0.08f));
             var gold = CreateMaterial("Chapel Gold", new Color(1f, 0.78f, 0.24f));
             var glass = CreateMaterial("Chapel Glass", new Color(0.32f, 0.74f, 1f));
-            var candle = CreateMaterial("Chapel Candle", new Color(1f, 0.86f, 0.42f));
+            var candle = VoxelVisuals.CreateEmissiveMaterial("Chapel Candle", new Color(1f, 0.86f, 0.42f), 1.75f);
 
             CreateCube("Chapel Nave", root.transform, center + new Vector3(0f, unit * 0.5f, 0f), new Vector3(unit * 1.08f, unit, unit * 0.86f), wall, true);
             CreateCube("Chapel Roof", root.transform, center + new Vector3(0f, unit * 1.1f, 0f), new Vector3(unit * 1.3f, unit * 0.32f, unit * 1.04f), roof, true);
@@ -62,23 +62,13 @@ namespace Labyrinth.Maze
             {
                 RemoveCollider(cube);
             }
+
+            VoxelVisuals.ApplyBlockStyle(cube, PrimitiveType.Cube, material, keepCollider);
         }
 
         private static Material CreateMaterial(string name, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader) { name = name, color = color };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(name, color);
         }
 
         private static void RemoveCollider(GameObject target)

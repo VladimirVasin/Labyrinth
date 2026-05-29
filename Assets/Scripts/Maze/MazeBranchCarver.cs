@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Labyrinth.Maze
 {
-    public static class MazeBranchCarver
+    public static partial class MazeBranchCarver
     {
         private const int ExtraConnectionAreaDivisor = 180;
         private const int MinimumExtraConnections = 4;
@@ -13,6 +13,7 @@ namespace Labyrinth.Maze
         private const int EntranceBranchFallbackDistance = 3;
         private const int AlternativeRoutePathRadius = 5;
         private const int MaxAlternativeCarvesPerGoal = 18;
+        private const int MaxAlternativeRouteStabilizationPasses = 8;
 
         public static void AddExtraConnections(
             MazeGrid grid,
@@ -67,38 +68,75 @@ namespace Labyrinth.Maze
             var failed = 0;
             var carvedDetails = string.Empty;
 
-            foreach (var goal in goals)
+            for (var pass = 0; pass < MaxAlternativeRouteStabilizationPasses; pass++)
             {
-                if (IsRouteGoalSatisfied(grid, goal, out _))
+                goals = BuildRouteGoals(grid, entrance, centralRoom, centralRoomKey, downStairs, caves);
+                if (goals.Count == 0)
                 {
-                    satisfiedBefore++;
-                    satisfiedAfter++;
-                    continue;
+                    break;
                 }
 
-                var carvedForGoal = 0;
-                while (carvedForGoal < MaxAlternativeCarvesPerGoal
-                    && !IsRouteGoalSatisfied(grid, goal, out _))
+                var carvedThisPass = 0;
+                foreach (var goal in goals)
                 {
-                    var candidates = CollectExtraConnectionCandidates(grid, centralRoom);
-                    Shuffle(candidates, random);
-                    if (!TryCarveAlternativeRouteConnection(
-                        grid,
-                        centralRoom,
-                        goal,
-                        candidates,
-                        random,
-                        carvedForGoal < 2,
-                        out var carvedPosition))
+                    if (IsRouteGoalSatisfied(grid, goal, out _))
                     {
-                        break;
+                        if (pass == 0)
+                        {
+                            satisfiedBefore++;
+                        }
+
+                        continue;
                     }
 
-                    carvedForGoal++;
-                    carved++;
-                    AppendCarvedDetail(ref carvedDetails, goal.Name, carvedPosition);
+                    var carvedForGoal = 0;
+                    while (carvedForGoal < MaxAlternativeCarvesPerGoal
+                        && !IsRouteGoalSatisfied(grid, goal, out _))
+                    {
+                        var candidates = CollectExtraConnectionCandidates(grid, centralRoom);
+                        Shuffle(candidates, random);
+                        if (!TryCarveAlternativeRouteConnection(
+                            grid,
+                            centralRoom,
+                            goal,
+                            candidates,
+                            random,
+                            carvedForGoal < 2,
+                            out var carvedPosition))
+                        {
+                            break;
+                        }
+
+                        carvedForGoal++;
+                        carvedThisPass++;
+                        carved++;
+                        AppendCarvedDetail(ref carvedDetails, goal.Name, carvedPosition);
+                    }
+
+                    if (carvedForGoal == 0 && pass == MaxAlternativeRouteStabilizationPasses - 1)
+                    {
+                        IsRouteGoalSatisfied(grid, goal, out var failedDetails);
+                        GameDebugLog.Warning(
+                            "Maze",
+                            $"Early alternative route still limited: goal={goal.Name}, start={GameDebugLog.Position(goal.Start)}, target={GameDebugLog.Position(goal.Target)}, pass={pass + 1}, details={failedDetails}.");
+                    }
                 }
 
+                goals = BuildRouteGoals(grid, entrance, centralRoom, centralRoomKey, downStairs, caves);
+                if (AreAllRouteGoalsSatisfied(grid, goals))
+                {
+                    break;
+                }
+
+                if (carvedThisPass == 0)
+                {
+                    break;
+                }
+            }
+
+            goals = BuildRouteGoals(grid, entrance, centralRoom, centralRoomKey, downStairs, caves);
+            foreach (var goal in goals)
+            {
                 if (IsRouteGoalSatisfied(grid, goal, out _))
                 {
                     satisfiedAfter++;
@@ -109,12 +147,25 @@ namespace Labyrinth.Maze
                 failed++;
                 GameDebugLog.Warning(
                     "Maze",
-                    $"Early alternative route still limited: goal={goal.Name}, start={GameDebugLog.Position(goal.Start)}, target={GameDebugLog.Position(goal.Target)}, carvedForGoal={carvedForGoal}, details={failedDetails}.");
+                    $"Early alternative route still limited after stabilization: goal={goal.Name}, start={GameDebugLog.Position(goal.Start)}, target={GameDebugLog.Position(goal.Target)}, details={failedDetails}.");
             }
 
             GameDebugLog.Info(
                 "Maze",
                 $"Early alternative routes: goals={goals.Count}, initialCandidates={initialCandidateCount}, satisfiedBefore={satisfiedBefore}, satisfiedAfter={satisfiedAfter}, carved={carved}, failed={failed}{(string.IsNullOrEmpty(carvedDetails) ? string.Empty : $", carvedAt={carvedDetails}")}");
+        }
+
+        private static bool AreAllRouteGoalsSatisfied(MazeGrid grid, IReadOnlyList<RouteGoal> goals)
+        {
+            foreach (var goal in goals)
+            {
+                if (!IsRouteGoalSatisfied(grid, goal, out _))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static int PlaceExtraConnections(

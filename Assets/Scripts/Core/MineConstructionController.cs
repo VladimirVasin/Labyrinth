@@ -25,6 +25,8 @@ namespace Labyrinth.Core
         private const int UpgradedMineBatchCapacity = 15;
         private const int UpgradedMineUnitsPerTick = 2;
         private const int MaxActiveMineWorkers = 5;
+        private const int MaxActiveMineCarts = 8;
+        private const int MaxActiveMineCartsPerZone = 1;
 
         private readonly List<CaveInfo> selectableCaves = new List<CaveInfo>();
         private readonly List<MineZone> zones = new List<MineZone>();
@@ -454,9 +456,26 @@ namespace Labyrinth.Core
 
         private bool TryDispatchMineCart(MineZone zone)
         {
+            if (zone == null)
+            {
+                return false;
+            }
+
             var capacity = GetMineBatchCapacity(zone);
             if (zone.StoredAmount < capacity || constructionRenderer == null)
             {
+                return false;
+            }
+
+            if (zone.ActiveCartCount >= MaxActiveMineCartsPerZone)
+            {
+                lastStatus = $"{GetOreTypeName(zone.OreType)} караван ждёт разгрузки";
+                return false;
+            }
+
+            if (mineCarts.Count >= MaxActiveMineCarts)
+            {
+                lastStatus = "шахтные караваны ждут свободную дорогу";
                 return false;
             }
 
@@ -531,18 +550,24 @@ namespace Labyrinth.Core
                 return false;
             }
 
-            var offset = new Vector3(0f, mazeRenderer.CellSize * CartYOffset, 0f);
-            AddWorldPoint(waypoints, zone.Cave.Center, offset);
+            var cells = new List<Vector2Int>(zone.Route.Count + roadPath.Count);
+            cells.Add(zone.Cave.Center);
             for (var i = zone.Route.Count - 2; i >= 0; i--)
             {
-                AddWorldPoint(waypoints, zone.Route[i], offset);
+                cells.Add(zone.Route[i]);
             }
 
             for (var i = 1; i < roadPath.Count; i++)
             {
-                waypoints.Add(mazeRenderer.GridToWorld(roadPath[i]) + offset);
+                cells.Add(roadPath[i]);
             }
 
+            waypoints = SubCellPathBuilder.Build(
+                mazeRenderer,
+                cells,
+                mazeRenderer.CellSize * CartYOffset,
+                SubCellPathBuilder.BuildSeed(cells, zone.Level ^ (int)zone.OreType * 31),
+                SubCellPathProfile.Cart);
             GameDebugLog.Info(
                 "Mine",
                 $"Mine cart path confirmed: cave={GameDebugLog.Position(zone.Cave.Center)}, mineToEntrance={FormatCellPathPreviewReverse(zone.Route)}, road={FormatCellPathPreview(roadPath)}.");

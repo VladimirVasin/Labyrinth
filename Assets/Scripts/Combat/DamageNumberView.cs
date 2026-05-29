@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Labyrinth.Core;
 using Labyrinth.Maze;
 using UnityEngine;
 
@@ -105,6 +106,24 @@ namespace Labyrinth.Combat
 
             var view = numberObject.AddComponent<DamageNumberView>();
             view.Initialize(text, color, renderer.ModelUnitSize, characterSize, fontSize, lifetime, riseSpeed, scaleGrowth, effectiveDelay);
+            if (!autoStagger && ShouldSpawnCombatBurst(text))
+            {
+                VoxelVisuals.SpawnCombatBurst(renderer, gridPosition, color, effectiveDelay);
+            }
+            else if (autoStagger && ShouldSpawnPickupBurst(text))
+            {
+                VoxelVisuals.SpawnPickupBurst(renderer, gridPosition, color, effectiveDelay);
+            }
+        }
+
+        private static bool ShouldSpawnCombatBurst(string text)
+        {
+            return !string.IsNullOrEmpty(text) && text.StartsWith("-");
+        }
+
+        private static bool ShouldSpawnPickupBurst(string text)
+        {
+            return !string.IsNullOrEmpty(text) && text.StartsWith("+");
         }
 
         private static float ReserveStaggerDelay(MazeRenderer renderer, Vector2Int gridPosition, float requestedDelay)

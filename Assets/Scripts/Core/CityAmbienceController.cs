@@ -303,7 +303,7 @@ namespace Labyrinth.Core
 
                 if (TryBuildOutsidePath(walker.CurrentCell, target, out var path))
                 {
-                    walker.SetPath(path, BuildWorldPath(path));
+                    walker.SetPath(BuildWorldPathNodes(path, walkerIndex));
                     return;
                 }
             }
@@ -312,12 +312,32 @@ namespace Labyrinth.Core
         private void BuildWalkerModel(Transform parent, CityWalkerRole role)
         {
             var unit = mazeRenderer.ModelUnitSize * WalkerVisualScale * GetRoleScale(role);
+            VoxelVisuals.CreateContactShadow(
+                "City Walker Contact Shadow",
+                parent,
+                new Vector3(0f, 0.006f, 0f),
+                new Vector3(unit * 0.34f, 0.004f, unit * 0.27f),
+                0.3f);
             CreatePart(
                 parent,
                 "Walker Body",
                 PrimitiveType.Capsule,
                 new Vector3(0f, unit * 0.28f, 0f),
                 new Vector3(unit * 0.18f, unit * 0.28f, unit * 0.18f),
+                GetRoleBodyMaterial(role));
+            CreatePart(
+                parent,
+                "Walker Left Foot",
+                PrimitiveType.Cube,
+                new Vector3(unit * -0.08f, unit * 0.08f, unit * 0.05f),
+                new Vector3(unit * 0.09f, unit * 0.08f, unit * 0.16f),
+                GetRoleBodyMaterial(role));
+            CreatePart(
+                parent,
+                "Walker Right Foot",
+                PrimitiveType.Cube,
+                new Vector3(unit * 0.08f, unit * 0.08f, unit * 0.05f),
+                new Vector3(unit * 0.09f, unit * 0.08f, unit * 0.16f),
                 GetRoleBodyMaterial(role));
             CreatePart(
                 parent,
@@ -334,6 +354,7 @@ namespace Labyrinth.Core
                 new Vector3(unit * 0.16f, unit * 0.16f, unit * 0.08f),
                 villagerPackMaterial);
             AddRoleDetails(parent, role, unit);
+            AmbientWalkerMoveAnimator.Attach(parent, unit, BuildWalkerAnimationSeed(parent, (int)role));
         }
 
         private void AddRoleDetails(Transform parent, CityWalkerRole role, float unit)
@@ -389,13 +410,14 @@ namespace Labyrinth.Core
             Vector3 localScale,
             Material material)
         {
-            var part = GameObject.CreatePrimitive(primitive);
+            var part = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(primitive, name));
             part.name = name;
             part.transform.SetParent(parent, false);
             part.transform.localPosition = localPosition;
             part.transform.localScale = localScale;
             part.GetComponent<Renderer>().sharedMaterial = material;
             RemoveCollider(part);
+            VoxelVisuals.ApplyBlockStyle(part, primitive, material, false);
         }
 
         private Vector3 ToWorld(Vector2Int cell)
@@ -467,15 +489,14 @@ namespace Labyrinth.Core
             return path.Count > 1;
         }
 
-        private List<Vector3> BuildWorldPath(IReadOnlyList<Vector2Int> path)
+        private List<SubCellPathNode> BuildWorldPathNodes(IReadOnlyList<Vector2Int> path, int walkerIndex)
         {
-            var worldPath = new List<Vector3>(path.Count);
-            for (var i = 0; i < path.Count; i++)
-            {
-                worldPath.Add(ToWorld(path[i]));
-            }
-
-            return worldPath;
+            return SubCellPathBuilder.BuildNodes(
+                mazeRenderer,
+                path,
+                WalkerYOffset,
+                SubCellPathBuilder.BuildSeed(path, walkerIndex ^ 0x44a9),
+                SubCellPathProfile.Civilian);
         }
 
         private bool IsInsideAnyBuildingFootprint(Vector2Int cell)
@@ -665,6 +686,15 @@ namespace Labyrinth.Core
             }
         }
 
+        private static int BuildWalkerAnimationSeed(Transform parent, int salt)
+        {
+            var position = parent != null ? parent.position : Vector3.zero;
+            return Mathf.RoundToInt(position.x * 97f)
+                ^ Mathf.RoundToInt(position.y * 53f)
+                ^ Mathf.RoundToInt(position.z * 193f)
+                ^ salt * 397;
+        }
+
         private void EnsureMaterials()
         {
             if (villagerBodyMaterial != null)
@@ -695,23 +725,7 @@ namespace Labyrinth.Core
 
         private static Material CreateMaterial(string name, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader)
-            {
-                name = name,
-                color = color
-            };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(name, color);
         }
 
         private static void RemoveCollider(GameObject target)
@@ -799,20 +813,20 @@ namespace Labyrinth.Core
                 return !TryAdvanceTarget();
             }
 
-            public void SetPath(IReadOnlyList<Vector2Int> path, IReadOnlyList<Vector3> worldPath)
+            public void SetPath(IReadOnlyList<SubCellPathNode> worldPath)
             {
                 targetCells.Clear();
                 targetWorlds.Clear();
-                if (path == null || worldPath == null)
+                if (worldPath == null)
                 {
                     hasTarget = false;
                     return;
                 }
 
-                for (var i = 1; i < path.Count && i < worldPath.Count; i++)
+                for (var i = 1; i < worldPath.Count; i++)
                 {
-                    targetCells.Enqueue(path[i]);
-                    targetWorlds.Enqueue(worldPath[i]);
+                    targetCells.Enqueue(worldPath[i].Cell);
+                    targetWorlds.Enqueue(worldPath[i].Position);
                 }
 
                 hasTarget = TryAdvanceTarget();

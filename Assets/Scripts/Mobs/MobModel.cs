@@ -172,13 +172,13 @@ namespace Labyrinth.Mobs
             switch (species)
             {
                 case MobSpecies.Orc:
-                    return new MobStatRange(new IntRange(38, 48), new IntRange(8, 10), new IntRange(2, 4));
+                    return new MobStatRange(new IntRange(28, 36), new IntRange(5, 7), new IntRange(1, 2));
                 case MobSpecies.Goblin:
-                    return new MobStatRange(new IntRange(17, 22), new IntRange(4, 6), new IntRange(1, 2));
+                    return new MobStatRange(new IntRange(12, 16), new IntRange(2, 4), new IntRange(0, 1));
                 case MobSpecies.Rat:
-                    return new MobStatRange(new IntRange(10, 13), new IntRange(2, 4), new IntRange(0, 1));
+                    return new MobStatRange(new IntRange(6, 9), new IntRange(1, 2), new IntRange(0, 0));
                 default:
-                    return new MobStatRange(new IntRange(17, 22), new IntRange(4, 6), new IntRange(1, 2));
+                    return new MobStatRange(new IntRange(12, 16), new IntRange(2, 4), new IntRange(0, 1));
             }
         }
 

@@ -29,7 +29,7 @@ namespace Labyrinth.Core
             queuedMaterial = CreateMaterial("Fortification Queued Cell", new Color(0.25f, 0.72f, 1f));
             plankMaterial = CreateMaterial("Fortification Planks", new Color(0.48f, 0.29f, 0.12f));
             beamMaterial = CreateMaterial("Fortification Beams", new Color(0.25f, 0.13f, 0.05f));
-            flameMaterial = CreateMaterial("Fortification Flame", new Color(1f, 0.48f, 0.08f));
+            flameMaterial = VoxelVisuals.CreateEmissiveMaterial("Fortification Flame", new Color(1f, 0.48f, 0.08f), 2.15f);
             workerBodyMaterial = CreateMaterial("Fortification Worker Body", new Color(0.42f, 0.34f, 0.22f));
             workerHeadMaterial = CreateMaterial("Fortification Worker Head", new Color(0.76f, 0.62f, 0.42f));
         }
@@ -172,8 +172,9 @@ namespace Labyrinth.Core
             light.type = LightType.Point;
             light.color = new Color(1f, 0.55f, 0.18f);
             light.range = mazeRenderer.CellSize * (lightRange + 1.15f);
-            light.intensity = 2.8f;
-            light.shadows = LightShadows.Soft;
+            light.intensity = 2.35f;
+            light.shadows = LightShadows.None;
+            light.bounceIntensity = 0.18f;
         }
 
         public Transform CreateWorker(Vector3 position)
@@ -252,7 +253,7 @@ namespace Labyrinth.Core
             Vector3 scale,
             Material material)
         {
-            var part = GameObject.CreatePrimitive(primitive);
+            var part = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(primitive, name));
             part.name = name;
             part.transform.SetParent(parent, false);
             part.transform.position = position;
@@ -264,28 +265,13 @@ namespace Labyrinth.Core
                 Object.Destroy(collider);
             }
 
+            VoxelVisuals.ApplyBlockStyle(part, primitive, material, false);
             return part;
         }
 
         private static Material CreateMaterial(string materialName, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader)
-            {
-                name = materialName,
-                color = color
-            };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(materialName, color);
         }
     }
 }

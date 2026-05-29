@@ -234,11 +234,12 @@ namespace Labyrinth.Core
                 return false;
             }
 
-            worldPath = new List<Vector3>(cellPath.Count);
-            foreach (var cell in cellPath)
-            {
-                worldPath.Add(mazeRenderer.GridToWorld(cell) + new Vector3(0f, CollectorYOffset, 0f));
-            }
+            worldPath = SubCellPathBuilder.Build(
+                mazeRenderer,
+                cellPath,
+                CollectorYOffset,
+                SubCellPathBuilder.BuildSeed(cellPath, returning ? 0x4d91 : 0x1b37),
+                SubCellPathProfile.Civilian);
 
             return worldPath.Count > 1;
         }
@@ -386,14 +387,24 @@ namespace Labyrinth.Core
         private Transform BuildCollectorModel(Transform parent)
         {
             var unit = mazeRenderer.ModelUnitSize;
+            VoxelVisuals.CreateContactShadow(
+                "Tax Collector Contact Shadow",
+                parent,
+                new Vector3(0f, 0.006f, 0f),
+                new Vector3(unit * 0.34f, 0.004f, unit * 0.27f),
+                0.32f);
             CreatePart(parent, "Tax Collector Body", PrimitiveType.Capsule, new Vector3(0f, unit * 0.28f, 0f), new Vector3(unit * 0.17f, unit * 0.3f, unit * 0.17f), bodyMaterial);
+            CreatePart(parent, "Tax Collector Left Foot", PrimitiveType.Cube, new Vector3(unit * -0.08f, unit * 0.08f, unit * 0.05f), new Vector3(unit * 0.09f, unit * 0.08f, unit * 0.16f), bodyMaterial);
+            CreatePart(parent, "Tax Collector Right Foot", PrimitiveType.Cube, new Vector3(unit * 0.08f, unit * 0.08f, unit * 0.05f), new Vector3(unit * 0.09f, unit * 0.08f, unit * 0.16f), bodyMaterial);
             CreatePart(parent, "Tax Collector Head", PrimitiveType.Sphere, new Vector3(0f, unit * 0.66f, 0f), Vector3.one * unit * 0.15f, headMaterial);
-            return CreatePart(parent, "Tax Collector Coin Bag", PrimitiveType.Cube, new Vector3(unit * 0.18f, unit * 0.34f, unit * 0.08f), new Vector3(unit * 0.16f, unit * 0.18f, unit * 0.12f), bagMaterial);
+            var bag = CreatePart(parent, "Tax Collector Coin Bag", PrimitiveType.Cube, new Vector3(unit * 0.18f, unit * 0.34f, unit * 0.08f), new Vector3(unit * 0.16f, unit * 0.18f, unit * 0.12f), bagMaterial);
+            AmbientWalkerMoveAnimator.Attach(parent, unit, BuildCollectorAnimationSeed(parent));
+            return bag;
         }
 
         private Transform CreatePart(Transform parent, string name, PrimitiveType primitive, Vector3 localPosition, Vector3 localScale, Material material)
         {
-            var part = GameObject.CreatePrimitive(primitive);
+            var part = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(primitive, name));
             part.name = name;
             part.transform.SetParent(parent, false);
             part.transform.localPosition = localPosition;
@@ -405,6 +416,7 @@ namespace Labyrinth.Core
                 Destroy(collider);
             }
 
+            VoxelVisuals.ApplyBlockStyle(part, primitive, material, false);
             return part.transform;
         }
 
@@ -427,19 +439,16 @@ namespace Labyrinth.Core
 
         private static Material CreateMaterial(string name, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
+            return VoxelVisuals.CreateLitMaterial(name, color);
+        }
 
-            var material = new Material(shader) { name = name, color = color };
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+        private static int BuildCollectorAnimationSeed(Transform parent)
+        {
+            var position = parent != null ? parent.position : Vector3.zero;
+            return Mathf.RoundToInt(position.x * 89f)
+                ^ Mathf.RoundToInt(position.y * 47f)
+                ^ Mathf.RoundToInt(position.z * 173f)
+                ^ 0x2d71;
         }
 
         private sealed class HutTaxRuntime

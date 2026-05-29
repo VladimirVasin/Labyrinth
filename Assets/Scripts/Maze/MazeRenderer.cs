@@ -11,6 +11,9 @@ namespace Labyrinth.Maze
         private const float ModelUnit = 1.35f;
         private const float BuildingScale = 2f;
         private const float BuildingUnit = ModelUnit * BuildingScale;
+        private const float VisualWallHeightMultiplier = 0.9f;
+        private const float VisualWallWidthRatio = 0.78f;
+        private const float VisualFloorWidthRatio = 1f;
 
         [SerializeField]
         private float cellSize = 1.65f;
@@ -50,14 +53,17 @@ namespace Labyrinth.Maze
         private Material lightingFogMaterial;
         private GameObject lightingFogCover;
         private readonly Dictionary<Vector2Int, List<Renderer>> cellRenderers = new Dictionary<Vector2Int, List<Renderer>>();
+        private readonly Dictionary<Vector2Int, bool> cellVisibilityStates = new Dictionary<Vector2Int, bool>();
 
         public float CellSize => cellSize;
 
         public float ModelUnitSize => ModelUnit;
 
-        public float WallHeight => wallHeight * cellSize;
+        public float WallHeight => wallHeight * cellSize * VisualWallHeightMultiplier;
 
         public Transform ContentRoot => root;
+
+        partial void EnsureVoxelMaterials();
 
         public BaseView Render(MazeGenerationResult result)
         {
@@ -83,7 +89,9 @@ namespace Labyrinth.Maze
                 RenderEntranceMarker(result.EntrancePosition);
             }
 
-            return RenderBase(result);
+            var baseView = RenderBase(result);
+            ApplyStaticVoxelLightGrid(result);
+            return baseView;
         }
 
         public Vector3 GridToWorld(Vector2Int gridPosition)
@@ -284,13 +292,14 @@ namespace Labyrinth.Maze
                 shopRoot.transform,
                 false);
 
-            var bottle = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            var bottle = GameObject.CreatePrimitive(VoxelVisuals.ResolvePrimitive(PrimitiveType.Sphere, "Potion Bottle"));
             bottle.name = "Potion Bottle";
             bottle.transform.SetParent(shopRoot.transform, false);
             bottle.transform.position = shopCenter + new Vector3(BuildingUnit * -0.28f, ScaleBuilding(1.38f), BuildingUnit * 0.18f);
             bottle.transform.localScale = new Vector3(BuildingUnit * 0.2f, ScaleBuilding(0.28f), BuildingUnit * 0.2f);
             bottle.GetComponent<Renderer>().sharedMaterial = alchemistBottleMaterial;
             RemoveCollider(bottle);
+            VoxelVisuals.ApplyBlockStyle(bottle, PrimitiveType.Sphere, alchemistBottleMaterial, false);
 
             CreateCube(
                 "Potion Bottle Cork",
@@ -367,7 +376,9 @@ namespace Labyrinth.Maze
 
         public void Clear()
         {
+            ClearHeroLightTints();
             cellRenderers.Clear();
+            cellVisibilityStates.Clear();
             lightingFogCover = null;
             if (root == null)
             {
@@ -380,9 +391,10 @@ namespace Labyrinth.Maze
 
         public void ShowAllCells()
         {
-            foreach (var renderers in cellRenderers.Values)
+            ClearHeroLightTints();
+            foreach (var pair in cellRenderers)
             {
-                SetRenderersEnabled(renderers, true);
+                SetCellRenderersVisible(pair.Key, pair.Value, true);
             }
 
             SetLightingFogVisible(false);
@@ -403,7 +415,7 @@ namespace Labyrinth.Maze
 
             foreach (var pair in cellRenderers)
             {
-                SetRenderersEnabled(pair.Value, ShouldShowInLightingMode(grid, pair.Key, visibility.IsVisible(pair.Key)));
+                SetCellRenderersVisible(pair.Key, pair.Value, ShouldShowInLightingMode(grid, pair.Key, visibility.IsVisible(pair.Key)));
             }
 
             SetLightingFogVisible(true);
@@ -419,7 +431,7 @@ namespace Labyrinth.Maze
 
             foreach (var pair in cellRenderers)
             {
-                SetRenderersEnabled(pair.Value, ShouldShowInLightingMode(grid, pair.Key, visibleCells.Contains(pair.Key)));
+                SetCellRenderersVisible(pair.Key, pair.Value, ShouldShowInLightingMode(grid, pair.Key, visibleCells.Contains(pair.Key)));
             }
 
             SetLightingFogVisible(true);
@@ -427,6 +439,11 @@ namespace Labyrinth.Maze
 
         private void RenderCell(MazeCell cell)
         {
+            if (RenderVoxelCell(cell))
+            {
+                return;
+            }
+
             var cellPosition = new Vector2Int(cell.X, cell.Y);
             var position = GridToWorld(cellPosition);
 
@@ -436,7 +453,7 @@ namespace Labyrinth.Maze
                 var wall = CreateCube(
                     "Wall",
                     position + new Vector3(0f, currentWallHeight * 0.5f, 0f),
-                    new Vector3(cellSize * 0.98f, currentWallHeight, cellSize * 0.98f),
+                    new Vector3(cellSize * VisualWallWidthRatio, currentWallHeight, cellSize * VisualWallWidthRatio),
                     wallMaterial,
                     root,
                     false);
@@ -452,7 +469,7 @@ namespace Labyrinth.Maze
             var floor = CreateCube(
                 cell.Type.ToString(),
                 position + new Vector3(0f, Scale(-0.03f), 0f),
-                new Vector3(cellSize * 0.94f, Scale(0.06f), cellSize * 0.94f),
+                new Vector3(cellSize * VisualFloorWidthRatio, Scale(0.05f), cellSize * VisualFloorWidthRatio),
                 material,
                 root,
                 false);
@@ -775,6 +792,7 @@ namespace Labyrinth.Maze
                 RemoveCollider(cube);
             }
 
+            VoxelVisuals.ApplyBlockStyle(cube, PrimitiveType.Cube, material, keepCollider);
             return cube;
         }
 
@@ -785,8 +803,8 @@ namespace Labyrinth.Maze
                 return;
             }
 
-            wallMaterial = CreateMaterial("Maze Wall", new Color(0.17f, 0.18f, 0.2f));
-            pathMaterial = CreateMaterial("Maze Path", new Color(0.62f, 0.62f, 0.57f));
+            wallMaterial = CreateMaterial("Maze Wall", new Color(0.2f, 0.215f, 0.245f));
+            pathMaterial = CreateMaterial("Maze Path", new Color(0.68f, 0.66f, 0.58f));
             entranceMaterial = CreateMaterial("Maze Entrance", new Color(0.15f, 0.72f, 0.78f));
             castleStoneMaterial = CreateMaterial("Castle Stone", new Color(0.44f, 0.45f, 0.47f));
             castleRoofMaterial = CreateMaterial("Castle Roof", new Color(0.34f, 0.09f, 0.08f));
@@ -801,7 +819,7 @@ namespace Labyrinth.Maze
             heroHouseDoorMaterial = CreateMaterial("Hero House Door", new Color(0.18f, 0.1f, 0.05f));
             alchemistWallMaterial = CreateMaterial("Alchemist Shop Wall", new Color(0.44f, 0.38f, 0.56f));
             alchemistRoofMaterial = CreateMaterial("Alchemist Shop Roof", new Color(0.16f, 0.1f, 0.24f));
-            alchemistBottleMaterial = CreateMaterial("Alchemist Potion Bottle", new Color(0.12f, 0.88f, 0.68f));
+            alchemistBottleMaterial = VoxelVisuals.CreateEmissiveMaterial("Alchemist Potion Bottle", new Color(0.12f, 0.88f, 0.68f), 1.55f);
             alchemistAccentMaterial = CreateMaterial("Alchemist Accent", new Color(0.72f, 0.9f, 0.36f));
             tavernWallMaterial = CreateMaterial("Tavern Wall", new Color(0.5f, 0.32f, 0.18f));
             tavernRoofMaterial = CreateMaterial("Tavern Roof", new Color(0.3f, 0.12f, 0.07f));
@@ -809,33 +827,17 @@ namespace Labyrinth.Maze
             rationMaterial = CreateMaterial("Ration Bread", new Color(0.86f, 0.58f, 0.25f));
             centralDoorMaterial = CreateMaterial("Central Door Wood", new Color(0.3f, 0.16f, 0.07f));
             centralDoorMetalMaterial = CreateMaterial("Central Door Metal", new Color(0.09f, 0.1f, 0.11f));
-            keyGoldMaterial = CreateMaterial("Central Key Gold", new Color(1f, 0.74f, 0.16f));
+            keyGoldMaterial = VoxelVisuals.CreateEmissiveMaterial("Central Key Gold", new Color(1f, 0.74f, 0.16f), 1.45f);
             chestWoodMaterial = CreateMaterial("Chest Wood", new Color(0.42f, 0.22f, 0.08f));
             chestDarkWoodMaterial = CreateMaterial("Chest Dark Wood", new Color(0.24f, 0.11f, 0.04f));
             chestMetalMaterial = CreateMaterial("Chest Metal", new Color(0.12f, 0.12f, 0.12f));
-            lightingFogMaterial = CreateUnlitMaterial("Maze Lighting Fog", Color.black);
+            lightingFogMaterial = CreateUnlitMaterial("Maze Lighting Fog", new Color(0.005f, 0.006f, 0.008f));
+            EnsureVoxelMaterials();
         }
 
         private static Material CreateMaterial(string materialName, Color color)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader)
-            {
-                name = materialName,
-                color = color
-            };
-
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-
-            return material;
+            return VoxelVisuals.CreateLitMaterial(materialName, color);
         }
 
         private static Material CreateUnlitMaterial(string materialName, Color color)
@@ -887,7 +889,32 @@ namespace Labyrinth.Maze
                 cellRenderers[cellPosition] = renderers;
             }
 
-            renderers.AddRange(target.GetComponentsInChildren<Renderer>());
+            var trackedRenderers = target.GetComponentsInChildren<Renderer>();
+            renderers.AddRange(trackedRenderers);
+            if (cellVisibilityStates.TryGetValue(cellPosition, out var visible))
+            {
+                SetRenderersEnabled(trackedRenderers, visible);
+            }
+        }
+
+        private void TrackCellRenderer(Vector2Int cellPosition, Renderer renderer)
+        {
+            if (renderer == null)
+            {
+                return;
+            }
+
+            if (!cellRenderers.TryGetValue(cellPosition, out var renderers))
+            {
+                renderers = new List<Renderer>(1);
+                cellRenderers[cellPosition] = renderers;
+            }
+
+            renderers.Add(renderer);
+            if (cellVisibilityStates.TryGetValue(cellPosition, out var visible))
+            {
+                renderer.enabled = visible;
+            }
         }
 
         private static bool ShouldShowInLightingMode(MazeGrid grid, Vector2Int position, bool isVisible)
@@ -932,6 +959,17 @@ namespace Labyrinth.Maze
             {
                 lightingFogCover.SetActive(visible);
             }
+        }
+
+        private void SetCellRenderersVisible(Vector2Int cellPosition, List<Renderer> renderers, bool visible)
+        {
+            if (cellVisibilityStates.TryGetValue(cellPosition, out var current) && current == visible)
+            {
+                return;
+            }
+
+            SetRenderersEnabled(renderers, visible);
+            cellVisibilityStates[cellPosition] = visible;
         }
 
         private static void SetRenderersEnabled(IEnumerable<Renderer> renderers, bool enabled)

@@ -35,11 +35,12 @@ namespace Labyrinth.Mobs
             MobSpecies species = MobSpecies.Orc,
             MobRank rank = MobRank.Regular,
             int dungeonLevel = 1,
-            bool useOpeningSpawnStats = false)
+            bool useOpeningSpawnStats = false,
+            float initialWanderDelaySeconds = 0f)
         {
             var controllerObject = new GameObject(BuildControllerName(rank));
             var controller = controllerObject.AddComponent<MobController>();
-            controller.Initialize(mazeGrid, renderer, spawnPosition, seed, species, rank, dungeonLevel, useOpeningSpawnStats);
+            controller.Initialize(mazeGrid, renderer, spawnPosition, seed, species, rank, dungeonLevel, useOpeningSpawnStats, initialWanderDelaySeconds);
             return controller;
         }
 
@@ -146,7 +147,8 @@ namespace Labyrinth.Mobs
             MobSpecies species,
             MobRank rank,
             int dungeonLevel,
-            bool useOpeningSpawnStats)
+            bool useOpeningSpawnStats,
+            float initialWanderDelaySeconds)
         {
             grid = mazeGrid;
             random = new System.Random(seed);
@@ -155,7 +157,16 @@ namespace Labyrinth.Mobs
             view = MobView.Create(renderer, spawnPosition, species, rank);
             view.SetController(this);
             view.transform.SetParent(transform, true);
-            timeUntilNextWander = (float)random.NextDouble() * WanderInterval;
+            timeUntilNextWander = initialWanderDelaySeconds > 0f
+                ? initialWanderDelaySeconds + (float)random.NextDouble() * WanderInterval
+                : (float)random.NextDouble() * WanderInterval;
+            if (rank == MobRank.Regular && useOpeningSpawnStats)
+            {
+                GameDebugLog.Info(
+                    "Mobs",
+                    $"{DebugName} rookie spawn at {GameDebugLog.Position(spawnPosition)}: hp={Model.HitPoints}/{Model.MaxHitPoints}, atk={Model.AttackPoints}, armor={Model.ArmorPoints}, initialWanderDelay={timeUntilNextWander:0.00}s.");
+            }
+
             if (rank != MobRank.Regular)
             {
                 GameDebugLog.Info(
