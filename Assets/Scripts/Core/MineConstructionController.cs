@@ -11,11 +11,14 @@ namespace Labyrinth.Core
     {
         public const int RouteWoodCost = 1;
         public const int MineWoodCost = 10;
+        public const int OutpostWoodCost = 15;
 
         public const int BaseMineBatchCapacity = 10;
         private const int TorchLightRange = 2;
         private const int CompletedMineLightRange = 3;
+        private const int CompletedOutpostLightRange = 4;
         private const int DynamicMineLightRange = 2;
+        private const int MinimumOutpostDistanceFromEntrance = 8;
         private const float WorkerSpeedCellsPerSecond = 2.25f;
         private const float WorkerYOffset = 0.08f;
         private const float CartYOffset = 0.06f;
@@ -36,6 +39,7 @@ namespace Labyrinth.Core
         private readonly HashSet<Vector2Int> fortifiedCells = new HashSet<Vector2Int>();
         private readonly HashSet<Vector2Int> torchPositions = new HashSet<Vector2Int>();
         private readonly HashSet<Vector2Int> completedMineLightPositions = new HashSet<Vector2Int>();
+        private readonly HashSet<Vector2Int> completedOutpostLightPositions = new HashSet<Vector2Int>();
         private readonly HashSet<Vector2Int> torchLitCells = new HashSet<Vector2Int>();
         private readonly HashSet<string> reinforcedWallFaces = new HashSet<string>();
 
@@ -53,14 +57,16 @@ namespace Labyrinth.Core
         private float cartTraceTimer;
         private int mineWorkerSerial;
         private int mineCartSerial;
-        private bool selectionModeActive;
+        private MineSelectionMode selectionMode = MineSelectionMode.None;
         private string lastStatus = "ожидает гильдию";
 
-        public bool SelectionModeActive => selectionModeActive;
+        public bool SelectionModeActive => selectionMode != MineSelectionMode.None;
 
         public IReadOnlyCollection<Vector2Int> TorchPositions => torchPositions;
 
         public IReadOnlyCollection<Vector2Int> CompletedMineLightPositions => completedMineLightPositions;
+
+        public IReadOnlyCollection<Vector2Int> CompletedOutpostLightPositions => completedOutpostLightPositions;
 
         public void AddActiveLightOrigins(List<Vector2Int> origins)
         {
@@ -91,22 +97,9 @@ namespace Labyrinth.Core
             return fortifiedCells.Contains(cell);
         }
 
-        public string StatusText
-        {
-            get
-            {
-                var completed = 0;
-                for (var i = 0; i < zones.Count; i++)
-                {
-                    if (zones[i].State == MineZoneState.Completed)
-                    {
-                        completed++;
-                    }
-                }
+        public string StatusText => BuildZoneStatusText(MineZoneKind.Mine);
 
-                return $"зон {zones.Count}, готово {completed}, {lastStatus}";
-            }
-        }
+        public string OutpostStatusText => BuildZoneStatusText(MineZoneKind.Outpost);
 
         public void Configure(ResourceWallet wallet, BaseDevelopment development, MazeRenderer activeMazeRenderer, BaseAmbienceController ambience = null)
         {
@@ -142,9 +135,10 @@ namespace Labyrinth.Core
             fortifiedCells.Clear();
             torchPositions.Clear();
             completedMineLightPositions.Clear();
+            completedOutpostLightPositions.Clear();
             torchLitCells.Clear();
             reinforcedWallFaces.Clear();
-            selectionModeActive = false;
+            selectionMode = MineSelectionMode.None;
             for (var i = 0; i < activeWorkers.Count; i++)
             {
                 constructionRenderer?.DestroyWorker(activeWorkers[i].Root);
@@ -175,10 +169,30 @@ namespace Labyrinth.Core
                 return false;
             }
 
-            return CountSelectableCaves(knownMap) > 0;
+            return CountSelectableCaves(knownMap, MineZoneKind.Mine) > 0;
+        }
+
+        public bool CanBeginOutpostSelection(HeroMemory knownMap)
+        {
+            if (result == null || constructionRenderer == null || knownMap == null)
+            {
+                return false;
+            }
+
+            return CountSelectableCaves(knownMap, MineZoneKind.Outpost) > 0;
         }
 
         public void BeginSelectionMode(HeroMemory knownMap)
+        {
+            BeginSelectionMode(knownMap, MineSelectionMode.Mine);
+        }
+
+        public void BeginOutpostSelectionMode(HeroMemory knownMap)
+        {
+            BeginSelectionMode(knownMap, MineSelectionMode.Outpost);
+        }
+
+        private void BeginSelectionMode(HeroMemory knownMap, MineSelectionMode mode)
         {
             if (result == null || constructionRenderer == null)
             {
@@ -186,26 +200,27 @@ namespace Labyrinth.Core
             }
 
             knowledge = knownMap;
-            selectionModeActive = true;
+            selectionMode = mode;
             RebuildSelectableCaves();
-            constructionRenderer.RenderCaveSelection(selectableCaves);
+            constructionRenderer.RenderCaveSelection(selectableCaves, mode == MineSelectionMode.Outpost);
+            var noun = mode == MineSelectionMode.Outpost ? "аванпоста" : "шахты";
             lastStatus = selectableCaves.Count > 0
-                ? $"выберите пещеру, доступно {selectableCaves.Count}"
+                ? $"выберите пещеру для {noun}, доступно {selectableCaves.Count}"
                 : "нет изученных свободных минипещер";
-            GameDebugLog.Info("Mine", $"Mine selection mode started: selectableCaves={selectableCaves.Count}, zones={zones.Count}.");
+            GameDebugLog.Info("Mine", $"Dungeon construction selection mode started: mode={mode}, selectableCaves={selectableCaves.Count}, zones={zones.Count}.");
         }
 
         public void CancelSelectionMode()
         {
-            selectionModeActive = false;
+            selectionMode = MineSelectionMode.None;
             constructionRenderer?.ClearSelection();
             lastStatus = zones.Count > 0 ? "строительство выполняется" : "ожидает выбор";
-            GameDebugLog.Info("Mine", "Mine selection mode cancelled.");
+            GameDebugLog.Info("Mine", "Dungeon construction selection mode cancelled.");
         }
 
         public void UpdateHoverCell(Vector2Int cell)
         {
-            if (!selectionModeActive || constructionRenderer == null)
+            if (selectionMode == MineSelectionMode.None || constructionRenderer == null)
             {
                 return;
             }
@@ -232,7 +247,7 @@ namespace Labyrinth.Core
 
         public bool TrySelectCave(Vector2Int cell)
         {
-            if (!selectionModeActive || result == null || constructionRenderer == null)
+            if (selectionMode == MineSelectionMode.None || result == null || constructionRenderer == null)
             {
                 return false;
             }
@@ -249,6 +264,11 @@ namespace Labyrinth.Core
                 return false;
             }
 
+            if (selectionMode == MineSelectionMode.Outpost)
+            {
+                return TrySelectOutpostCave(cave, path);
+            }
+
             if (!TryGetCaveOreType(cave, out var oreType))
             {
                 lastStatus = $"в пещере {GameDebugLog.Position(cave.Center)} нет залежей";
@@ -261,11 +281,33 @@ namespace Labyrinth.Core
             var mineRoot = constructionRenderer.RenderMineZone(cave, oreType);
             ConfigureMineHud(zone, mineRoot);
             mazeRenderer.TrackExternalCellRenderer(cave.Center, constructionRenderer.GetCellRoot(cave.Center));
-            selectionModeActive = false;
+            selectionMode = MineSelectionMode.None;
             constructionRenderer.ClearSelection();
             lastStatus = $"стройзона шахты поставлена {GameDebugLog.Position(cave.Center)}, маршрут 0/{path.Count}";
             GameAudioController.Play(GameSfx.HudConfirm, mazeRenderer.GridToWorld(cave.Center), 0.9f);
             GameDebugLog.Info("Mine", $"Mine zone placed at {GameDebugLog.Position(cave.Center)}. routeLength={path.Count}, construction=route-first, caveFootprint=center, zones={zones.Count}.");
+            return true;
+        }
+
+        private bool TrySelectOutpostCave(CaveInfo cave, List<Vector2Int> path)
+        {
+            if (!IsOutpostCaveCandidate(cave, knowledge))
+            {
+                lastStatus = "выберите промежуточную свободную пещеру без руды";
+                return false;
+            }
+
+            path = BuildMineRouteWithCaveFootprint(cave, path);
+            var zone = new MineZone(cave, path, MineZoneKind.Outpost);
+            zones.Add(zone);
+            var outpostRoot = constructionRenderer.RenderOutpostZone(cave);
+            ConfigureOutpostHud(zone, outpostRoot);
+            mazeRenderer.TrackExternalCellRenderer(cave.Center, constructionRenderer.GetCellRoot(cave.Center));
+            selectionMode = MineSelectionMode.None;
+            constructionRenderer.ClearSelection();
+            lastStatus = $"стройзона аванпоста поставлена {GameDebugLog.Position(cave.Center)}, маршрут 0/{path.Count}";
+            GameAudioController.Play(GameSfx.HudConfirm, mazeRenderer.GridToWorld(cave.Center), 0.9f);
+            GameDebugLog.Info("Mine", $"Outpost zone placed at {GameDebugLog.Position(cave.Center)}. routeLength={path.Count}, construction=route-first, zones={zones.Count}.");
             return true;
         }
 
@@ -354,6 +396,26 @@ namespace Labyrinth.Core
             GameDebugLog.Info("Mine", $"Mine completed at {GameDebugLog.Position(zone.Cave.Center)}. ore={zone.OreType}, caveFortifiedCells={caveFortifiedCells}, completedZones={CountCompletedZones()}.");
         }
 
+        private void CompleteOutpost(MineZone zone)
+        {
+            if (zone == null)
+            {
+                return;
+            }
+
+            zone.State = MineZoneState.Completed;
+            zone.AssignedRouteCells.Clear();
+            var outpostRoot = constructionRenderer.RenderOutpost(zone.Cave, zone.Level);
+            var caveFortifiedCells = FortifyCompletedMineCave(zone);
+            completedOutpostLightPositions.Add(zone.Cave.Center);
+            RefreshTorchLight();
+            ConfigureOutpostHud(zone, outpostRoot);
+            mazeRenderer.TrackExternalCellRenderer(zone.Cave.Center, constructionRenderer.GetCellRoot(zone.Cave.Center));
+            lastStatus = $"аванпост готов {GameDebugLog.Position(zone.Cave.Center)}";
+            GameAudioController.Play(GameSfx.Build, mazeRenderer.GridToWorld(zone.Cave.Center), 1f);
+            GameDebugLog.Info("Mine", $"Outpost completed at {GameDebugLog.Position(zone.Cave.Center)}. caveFortifiedCells={caveFortifiedCells}, completedOutposts={CountCompletedZones(MineZoneKind.Outpost)}.");
+        }
+
         private int FortifyCompletedMineCave(MineZone zone)
         {
             if (zone == null)
@@ -415,11 +477,52 @@ namespace Labyrinth.Core
             }
         }
 
+        private void ConfigureOutpostHud(MineZone zone, GameObject outpostRoot)
+        {
+            if (zone == null || outpostRoot == null)
+            {
+                return;
+            }
+
+            var hudTarget = outpostRoot.GetComponent<ObjectMicroHudTarget>();
+            if (hudTarget == null)
+            {
+                hudTarget = outpostRoot.AddComponent<ObjectMicroHudTarget>();
+            }
+
+            var completed = zone.State == MineZoneState.Completed;
+            hudTarget.Configure(
+                completed ? "Аванпост" : "Стройзона аванпоста",
+                completed ? "промежуточная база" : "аванпост строится",
+                "Аванпост",
+                zone.Cave.Center,
+                GetOutpostAccentColor(),
+                () => GetZoneHudStatus(zone),
+                () => zone.State == MineZoneState.Completed
+                    ? "Освещает и закрепляет промежуточную пещеру. Вся пещерка считается укреплённой и безопасной для тёмных респавнов."
+                    : "Рабочие сначала укрепляют маршрут от входа до пещеры, затем несут материалы в центр и постепенно возводят аванпост.");
+        }
+
         private string GetZoneHudStatus(MineZone zone)
         {
             if (zone == null)
             {
                 return "нет данных";
+            }
+
+            if (zone.Kind == MineZoneKind.Outpost)
+            {
+                if (zone.State == MineZoneState.Completed)
+                {
+                    return "готов, пещера укреплена, свет включён";
+                }
+
+                if (zone.State == MineZoneState.BuildingRoute)
+                {
+                    return $"укрепляется маршрут {CountFortifiedRouteCells(zone)}/{zone.Route.Count}";
+                }
+
+                return $"строится, материалы {zone.MineBuildDeliveredWood}/{OutpostWoodCost}";
             }
 
             if (zone.State == MineZoneState.Completed)
@@ -499,8 +602,13 @@ namespace Labyrinth.Core
                 for (var i = 0; i < zones.Count; i++)
                 {
                     var zone = zones[i];
+                    if (zone.Kind != MineZoneKind.Mine || zone.State != MineZoneState.Completed)
+                    {
+                        continue;
+                    }
+
                     var capacity = GetMineBatchCapacity(zone);
-                    if (zone.State != MineZoneState.Completed || zone.StoredAmount >= capacity)
+                    if (zone.StoredAmount >= capacity)
                     {
                         continue;
                     }
@@ -521,7 +629,9 @@ namespace Labyrinth.Core
         {
             for (var i = 0; i < zones.Count; i++)
             {
-                if (zones[i].State == MineZoneState.Completed && zones[i].StoredAmount >= GetMineBatchCapacity(zones[i]))
+                if (zones[i].Kind == MineZoneKind.Mine
+                    && zones[i].State == MineZoneState.Completed
+                    && zones[i].StoredAmount >= GetMineBatchCapacity(zones[i]))
                 {
                     TryDispatchMineCart(zones[i]);
                 }
@@ -530,7 +640,7 @@ namespace Labyrinth.Core
 
         private bool TryDispatchMineCart(MineZone zone)
         {
-            if (zone == null)
+            if (zone == null || zone.Kind != MineZoneKind.Mine)
             {
                 return false;
             }
@@ -578,6 +688,26 @@ namespace Labyrinth.Core
         private static int GetMineUnitsPerTick(MineZone zone)
         {
             return zone != null && zone.Level >= 3 ? UpgradedMineUnitsPerTick : 1;
+        }
+
+        private static int GetZoneBuildWoodCost(MineZone zone)
+        {
+            return zone != null && zone.Kind == MineZoneKind.Outpost ? OutpostWoodCost : MineWoodCost;
+        }
+
+        private static string GetZoneBuildNameNominative(MineZone zone)
+        {
+            return zone != null && zone.Kind == MineZoneKind.Outpost ? "аванпост" : "шахта";
+        }
+
+        private static string GetZoneBuildNameAccusative(MineZone zone)
+        {
+            return zone != null && zone.Kind == MineZoneKind.Outpost ? "аванпост" : "шахту";
+        }
+
+        private static string GetZoneBuildNameDative(MineZone zone)
+        {
+            return zone != null && zone.Kind == MineZoneKind.Outpost ? "аванпосту" : "шахте";
         }
 
         private static BuildingCost GetMineUpgradeCost(MineZone zone)
@@ -887,16 +1017,43 @@ namespace Labyrinth.Core
 
         private int CountCompletedZones()
         {
+            return CountCompletedZones(MineZoneKind.Mine);
+        }
+
+        private int CountCompletedZones(MineZoneKind kind)
+        {
             var completed = 0;
             for (var i = 0; i < zones.Count; i++)
             {
-                if (zones[i].State == MineZoneState.Completed)
+                if (zones[i].Kind == kind && zones[i].State == MineZoneState.Completed)
                 {
                     completed++;
                 }
             }
 
             return completed;
+        }
+
+        private string BuildZoneStatusText(MineZoneKind kind)
+        {
+            var total = 0;
+            var completed = 0;
+            for (var i = 0; i < zones.Count; i++)
+            {
+                if (zones[i].Kind != kind)
+                {
+                    continue;
+                }
+
+                total++;
+                if (zones[i].State == MineZoneState.Completed)
+                {
+                    completed++;
+                }
+            }
+
+            var noun = kind == MineZoneKind.Outpost ? "аванпостов" : "шахт";
+            return $"{noun} {total}, готово {completed}, {lastStatus}";
         }
 
         private int CountFortifiedRouteCells(MineZone zone)
@@ -992,6 +1149,11 @@ namespace Labyrinth.Core
             foreach (var cell in completedMineLightPositions)
             {
                 AddLightFrom(cell, CompletedMineLightRange);
+            }
+
+            foreach (var cell in completedOutpostLightPositions)
+            {
+                AddLightFrom(cell, CompletedOutpostLightRange);
             }
         }
 

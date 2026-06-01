@@ -87,6 +87,8 @@ namespace Labyrinth.UI
             y += 24f;
             DrawStatRow(new Rect(contentX, y, contentWidth, 26f), "Тип", BuildSpeciesName(selectedMob.Model.Species));
             y += 30f;
+            DrawStatRow(new Rect(contentX, y, contentWidth, 26f), "Lvl", selectedMob.Model.Level.ToString());
+            y += 30f;
             DrawStatRow(new Rect(contentX, y, contentWidth, 26f), "Награда", BuildRewardText(selectedMob.Model));
             y += 36f;
             DrawProgressBar(
@@ -203,7 +205,7 @@ namespace Labyrinth.UI
         private static Rect CalculatePanelRect()
         {
             var width = Mathf.Min(370f, Screen.width - 120f);
-            var height = Mathf.Min(382f, Screen.height - 96f);
+            var height = Mathf.Min(412f, Screen.height - 96f);
             return new Rect(Screen.width - width - 18f, 74f, width, height);
         }
 

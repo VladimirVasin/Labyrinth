@@ -102,7 +102,11 @@ namespace Labyrinth.UI
             new BuildingServiceEntry(
                 "Шахта",
                 $"{MineConstructionController.RouteWoodCost} дер./клетка + {MineConstructionController.MineWoodCost} дер.",
-                "В замке открывает выбор изученной малой пещеры. Сначала рабочие укрепляют маршрут от входа, затем ставят саму шахту.")
+                "В замке открывает выбор изученной малой пещеры с рудой. Сначала рабочие укрепляют маршрут от входа, затем ставят саму шахту."),
+            new BuildingServiceEntry(
+                "Аванпост",
+                $"{MineConstructionController.RouteWoodCost} дер./клетка + {MineConstructionController.OutpostWoodCost} дер.",
+                "В замке открывает выбор промежуточной изученной малой пещеры без руды. Аванпост укрепляет пещеру и даёт стационарный свет.")
         };
 
         private static readonly BuildingServiceEntry[] MarketEntries =

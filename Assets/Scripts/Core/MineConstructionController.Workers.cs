@@ -62,8 +62,8 @@ namespace Labyrinth.Core
             {
                 zone.AssignedRouteCells.Clear();
                 zone.State = MineZoneState.BuildingMine;
-                lastStatus = "маршрут укреплён, шахта ждёт строительство";
-                GameDebugLog.Info("Mine", $"Mine route completed. cave={GameDebugLog.Position(zone.Cave.Center)}, routeLength={zone.Route.Count}.");
+                lastStatus = $"маршрут укреплён, {GetZoneBuildNameNominative(zone)} ждёт строительство";
+                GameDebugLog.Info("Mine", $"Dungeon construction route completed. kind={zone.Kind}, cave={GameDebugLog.Position(zone.Cave.Center)}, routeLength={zone.Route.Count}.");
                 return;
             }
 
@@ -89,7 +89,7 @@ namespace Labyrinth.Core
             {
                 GameDebugLog.Info(
                     "Mine",
-                    $"Mine build assignment pass: assigned={assigned}, deliveredWood={zone.MineBuildDeliveredWood}/{MineWoodCost}, activeBuildWorkers={CountActiveMineBuildWorkers(zone)}.");
+                    $"Dungeon building assignment pass: kind={zone.Kind}, assigned={assigned}, deliveredWood={zone.MineBuildDeliveredWood}/{GetZoneBuildWoodCost(zone)}, activeBuildWorkers={CountActiveMineBuildWorkers(zone)}.");
             }
         }
 
@@ -107,17 +107,36 @@ namespace Labyrinth.Core
             var zone = worker.Zone;
             if (worker.BuildsMine)
             {
-                zone.MineBuildDeliveredWood = Mathf.Min(MineWoodCost, zone.MineBuildDeliveredWood + RouteWoodCost);
-                constructionRenderer.RenderMineBuildProgress(
-                    zone.Cave,
-                    zone.OreType,
-                    Mathf.Clamp01(zone.MineBuildDeliveredWood / (float)MineWoodCost));
+                var buildWoodCost = GetZoneBuildWoodCost(zone);
+                zone.MineBuildDeliveredWood = Mathf.Min(buildWoodCost, zone.MineBuildDeliveredWood + RouteWoodCost);
+                if (zone.Kind == MineZoneKind.Outpost)
+                {
+                    constructionRenderer.RenderOutpostBuildProgress(
+                        zone.Cave,
+                        Mathf.Clamp01(zone.MineBuildDeliveredWood / (float)buildWoodCost));
+                }
+                else
+                {
+                    constructionRenderer.RenderMineBuildProgress(
+                        zone.Cave,
+                        zone.OreType,
+                        Mathf.Clamp01(zone.MineBuildDeliveredWood / (float)buildWoodCost));
+                }
+
                 GameDebugLog.Info(
                     "Mine",
-                    $"Mine worker #{worker.Id} delivered mine materials: cave={GameDebugLog.Position(zone.Cave.Center)}, deliveredWood={zone.MineBuildDeliveredWood}/{MineWoodCost}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, buildSeconds={FormatSeconds(worker.BuildSeconds)}.");
-                if (zone.MineBuildDeliveredWood >= MineWoodCost)
+                    $"Mine worker #{worker.Id} delivered dungeon building materials: kind={zone.Kind}, cave={GameDebugLog.Position(zone.Cave.Center)}, deliveredWood={zone.MineBuildDeliveredWood}/{buildWoodCost}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, buildSeconds={FormatSeconds(worker.BuildSeconds)}.");
+                if (zone.MineBuildDeliveredWood >= buildWoodCost)
                 {
-                    CompleteMine(zone);
+                    if (zone.Kind == MineZoneKind.Outpost)
+                    {
+                        CompleteOutpost(zone);
+                    }
+                    else
+                    {
+                        CompleteMine(zone);
+                    }
+
                     DismissWorkersForZone(zone);
                     return;
                 }
@@ -131,7 +150,7 @@ namespace Labyrinth.Core
 
                 GameDebugLog.Warning(
                     "Mine",
-                    $"Mine worker #{worker.Id} removed after mine material delivery: no valid return path, cave={GameDebugLog.Position(zone.Cave.Center)}.");
+                    $"Mine worker #{worker.Id} removed after dungeon building material delivery: kind={zone.Kind}, no valid return path, cave={GameDebugLog.Position(zone.Cave.Center)}.");
                 constructionRenderer.DestroyWorker(worker.Root);
                 activeWorkers.RemoveAt(workerIndex);
                 return;
@@ -167,11 +186,11 @@ namespace Labyrinth.Core
                 constructionRenderer.SetWorkerCarryingWood(worker.Root, false);
                 worker.BeginBuild();
                 lastStatus = worker.BuildsMine
-                    ? $"шахтёр строит шахту {GameDebugLog.Position(worker.TargetCell)}"
+                    ? $"шахтёр строит {GetZoneBuildNameAccusative(worker.Zone)} {GameDebugLog.Position(worker.TargetCell)}"
                     : $"шахтёр укрепляет {GameDebugLog.Position(worker.TargetCell)}";
                 GameDebugLog.Info(
                     "Mine",
-                    $"Mine worker #{worker.Id} reached target and started build: target={GameDebugLog.Position(worker.TargetCell)}, buildsMine={worker.BuildsMine}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, buildSeconds={FormatSeconds(worker.BuildSeconds)}.");
+                    $"Mine worker #{worker.Id} reached target and started build: kind={worker.Zone.Kind}, target={GameDebugLog.Position(worker.TargetCell)}, buildsMine={worker.BuildsMine}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, buildSeconds={FormatSeconds(worker.BuildSeconds)}.");
                 return;
             }
 
@@ -276,34 +295,35 @@ namespace Labyrinth.Core
             if (CountFortifiedRouteCells(zone) < zone.Route.Count)
             {
                 zone.State = MineZoneState.BuildingRoute;
-                lastStatus = "сначала нужно укрепить маршрут шахты";
+                lastStatus = $"сначала нужно укрепить маршрут к {GetZoneBuildNameDative(zone)}";
                 return false;
             }
 
-            if (zone.MineBuildDeliveredWood + CountActiveMineBuildWorkers(zone) * RouteWoodCost >= MineWoodCost)
+            var buildWoodCost = GetZoneBuildWoodCost(zone);
+            if (zone.MineBuildDeliveredWood + CountActiveMineBuildWorkers(zone) * RouteWoodCost >= buildWoodCost)
             {
                 return false;
             }
 
             if (!TryBuildCastleToMineWorldPath(zone.Route, out var path))
             {
-                lastStatus = "шахта ждёт укреплённый маршрут";
+                lastStatus = $"{GetZoneBuildNameNominative(zone)} ждёт укреплённый маршрут";
                 return false;
             }
 
             if (!resources.TrySpendWood(RouteWoodCost))
             {
-                lastStatus = $"нужно {RouteWoodCost} дерева для материалов шахты";
+                lastStatus = $"нужно {RouteWoodCost} дерева для материалов {GetZoneBuildNameDative(zone)}";
                 return false;
             }
 
             var targetIndex = Mathf.Max(0, zone.Route.Count - 1);
-            worker.AssignTarget(zone, zone.Cave.Center, targetIndex, path, Mathf.Max(0.65f, MineBuildSeconds / MineWoodCost), true);
+            worker.AssignTarget(zone, zone.Cave.Center, targetIndex, path, Mathf.Max(0.65f, MineBuildSeconds / buildWoodCost), true);
             constructionRenderer.SetWorkerCarryingWood(worker.Root, true);
-            lastStatus = $"шахтёр несёт материалы к шахте {GameDebugLog.Position(zone.Cave.Center)}";
+            lastStatus = $"шахтёр несёт материалы к {GetZoneBuildNameDative(zone)} {GameDebugLog.Position(zone.Cave.Center)}";
             GameDebugLog.Info(
                 "Mine",
-                $"Mine worker #{worker.Id} assigned mine material trip: cave={GameDebugLog.Position(zone.Cave.Center)}, from={FormatWorldPosition(worker.CurrentWorldPosition)}, destination={FormatWorldPosition(worker.DestinationWorld)}, pathWaypoints={worker.PathLength}, deliveredWood={zone.MineBuildDeliveredWood}/{MineWoodCost}, woodLeft={resources.Wood}.");
+                $"Mine worker #{worker.Id} assigned dungeon building material trip: kind={zone.Kind}, cave={GameDebugLog.Position(zone.Cave.Center)}, from={FormatWorldPosition(worker.CurrentWorldPosition)}, destination={FormatWorldPosition(worker.DestinationWorld)}, pathWaypoints={worker.PathLength}, deliveredWood={zone.MineBuildDeliveredWood}/{buildWoodCost}, woodLeft={resources.Wood}.");
             return true;
         }
 
@@ -395,7 +415,7 @@ namespace Labyrinth.Core
 
                 GameDebugLog.Info(
                     "Mine",
-                    $"Mine worker #{activeWorkers[i].Id} dismissed for completed zone: cave={GameDebugLog.Position(zone.Cave.Center)}, state={activeWorkers[i].State}, position={FormatWorldPosition(activeWorkers[i].CurrentWorldPosition)}.");
+                    $"Mine worker #{activeWorkers[i].Id} dismissed for completed zone: kind={zone.Kind}, cave={GameDebugLog.Position(zone.Cave.Center)}, state={activeWorkers[i].State}, position={FormatWorldPosition(activeWorkers[i].CurrentWorldPosition)}.");
                 constructionRenderer.DestroyWorker(activeWorkers[i].Root);
                 activeWorkers.RemoveAt(i);
             }
@@ -432,7 +452,7 @@ namespace Labyrinth.Core
 
                 GameDebugLog.Info(
                     "Mine",
-                    $"Mine worker #{worker.Id} trace: state={worker.State}, carryingWood={worker.CarryingWood}, buildsMine={worker.BuildsMine}, cave={GameDebugLog.Position(worker.Zone.Cave.Center)}, target={GameDebugLog.Position(worker.TargetCell)}, targetIndex={worker.TargetIndex}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, next={FormatWorldPosition(worker.NextWaypointWorld)}, remainingWaypoints={worker.RemainingWaypoints}, buildRemaining={FormatSeconds(worker.BuildRemaining)}.");
+                    $"Mine worker #{worker.Id} trace: kind={worker.Zone.Kind}, state={worker.State}, carryingWood={worker.CarryingWood}, buildsMine={worker.BuildsMine}, cave={GameDebugLog.Position(worker.Zone.Cave.Center)}, target={GameDebugLog.Position(worker.TargetCell)}, targetIndex={worker.TargetIndex}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, next={FormatWorldPosition(worker.NextWaypointWorld)}, remainingWaypoints={worker.RemainingWaypoints}, buildRemaining={FormatSeconds(worker.BuildRemaining)}.");
             }
         }
     }

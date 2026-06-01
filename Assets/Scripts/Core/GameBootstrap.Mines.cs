@@ -25,11 +25,39 @@ namespace Labyrinth.Core
             return mineConstructionController.StatusText;
         }
 
+        private string GetOutpostStatus()
+        {
+            if (!baseDevelopment.HasMinersGuild)
+            {
+                return "нужна Гильдия шахтёров";
+            }
+
+            if (mineConstructionController == null)
+            {
+                return "недоступно";
+            }
+
+            var knowledge = GetMineKnowledgeMemory();
+            if (knowledge == null)
+            {
+                return "нужна разведанная общая карта";
+            }
+
+            return mineConstructionController.OutpostStatusText;
+        }
+
         private bool CanStartMineSelection()
         {
             return baseDevelopment.HasMinersGuild
                 && mineConstructionController != null
                 && mineConstructionController.CanBeginSelection(GetMineKnowledgeMemory());
+        }
+
+        private bool CanStartOutpostSelection()
+        {
+            return baseDevelopment.HasMinersGuild
+                && mineConstructionController != null
+                && mineConstructionController.CanBeginOutpostSelection(GetMineKnowledgeMemory());
         }
 
         private void BeginMineSelection()
@@ -53,6 +81,29 @@ namespace Labyrinth.Core
             state = GameState.Playing;
             cameraController.SetInteractionEnabled(true);
             GameDebugLog.Info("Mine", "Mine cave selection mode started from castle HUD.");
+        }
+
+        private void BeginOutpostSelection()
+        {
+            if (!baseDevelopment.HasMinersGuild || mineConstructionController == null)
+            {
+                return;
+            }
+
+            var knowledge = GetMineKnowledgeMemory();
+            if (knowledge == null)
+            {
+                GameDebugLog.Warning("Mine", "Outpost selection blocked: no shared cartographer knowledge.");
+                return;
+            }
+
+            mineConstructionController.BeginOutpostSelectionMode(knowledge);
+            baseHud.Hide();
+            buildingMicroHud.Hide();
+            objectMicroHud.Hide();
+            state = GameState.Playing;
+            cameraController.SetInteractionEnabled(true);
+            GameDebugLog.Info("Mine", "Outpost cave selection mode started from castle HUD.");
         }
 
         private void CancelMineSelection()

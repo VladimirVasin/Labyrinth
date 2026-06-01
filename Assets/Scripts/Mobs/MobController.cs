@@ -76,7 +76,7 @@ namespace Labyrinth.Mobs
             if (Model.IsAlive)
             {
                 Model.SetState(MobState.Wandering);
-                wanderingPaused = Model.Rank == MobRank.MiniBoss;
+                wanderingPaused = Model.Rank != MobRank.Regular;
                 timeUntilNextWander = WanderInterval;
                 GameDebugLog.Info("Mobs", $"{DebugName} left combat: pos={GameDebugLog.Position(Model.Position)}, hp={Model.HitPoints}/{Model.MaxHitPoints}, wanderingPaused={wanderingPaused}.");
             }
@@ -162,7 +162,7 @@ namespace Labyrinth.Mobs
             random = new System.Random(seed);
             DebugId = ++nextDebugId;
             Model = new MobModel(spawnPosition, species, rank, dungeonLevel, seed, useOpeningSpawnStats);
-            view = MobView.Create(renderer, spawnPosition, species, rank);
+            view = MobView.Create(renderer, spawnPosition, species, rank, Model.Level);
             view.SetController(this);
             view.transform.SetParent(transform, true);
             timeUntilNextWander = initialWanderDelaySeconds > 0f
@@ -179,7 +179,7 @@ namespace Labyrinth.Mobs
             {
                 GameDebugLog.Info(
                     "Mobs",
-                    $"{DebugName} spawned at {GameDebugLog.Position(spawnPosition)}: level={dungeonLevel}, hp={Model.HitPoints}/{Model.MaxHitPoints}, atk={Model.AttackPoints}, armor={Model.ArmorPoints}.");
+                    $"{DebugName} spawned at {GameDebugLog.Position(spawnPosition)}: dungeonLevel={dungeonLevel}, mobLevel={Model.Level}, hp={Model.HitPoints}/{Model.MaxHitPoints}, atk={Model.AttackPoints}, armor={Model.ArmorPoints}.");
             }
         }
 

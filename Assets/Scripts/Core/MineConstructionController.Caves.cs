@@ -18,7 +18,7 @@ namespace Labyrinth.Core
             for (var i = 0; i < result.Caves.Count; i++)
             {
                 var cave = result.Caves[i];
-                if (IsCaveAlreadyUsed(cave) || !TryGetCaveOreType(cave, out _) || !IsCaveKnown(cave, knowledge))
+                if (!IsSelectableCaveForMode(cave, knowledge, selectionMode))
                 {
                     continue;
                 }
@@ -27,13 +27,13 @@ namespace Labyrinth.Core
             }
         }
 
-        private int CountSelectableCaves(HeroMemory knownMap)
+        private int CountSelectableCaves(HeroMemory knownMap, MineZoneKind kind)
         {
             var count = 0;
             for (var i = 0; i < result.Caves.Count; i++)
             {
                 var cave = result.Caves[i];
-                if (!IsCaveAlreadyUsed(cave) && TryGetCaveOreType(cave, out _) && IsCaveKnown(cave, knownMap))
+                if (IsSelectableCaveForKind(cave, knownMap, kind))
                 {
                     count++;
                 }
@@ -78,6 +78,28 @@ namespace Labyrinth.Core
             return false;
         }
 
+        private bool IsSelectableCaveForMode(CaveInfo cave, HeroMemory knownMap, MineSelectionMode mode)
+        {
+            return mode == MineSelectionMode.Outpost
+                ? IsSelectableCaveForKind(cave, knownMap, MineZoneKind.Outpost)
+                : IsSelectableCaveForKind(cave, knownMap, MineZoneKind.Mine);
+        }
+
+        private bool IsSelectableCaveForKind(CaveInfo cave, HeroMemory knownMap, MineZoneKind kind)
+        {
+            if (IsCaveAlreadyUsed(cave) || !IsCaveKnown(cave, knownMap))
+            {
+                return false;
+            }
+
+            if (kind == MineZoneKind.Outpost)
+            {
+                return IsOutpostCaveCandidate(cave, knownMap);
+            }
+
+            return TryGetCaveOreType(cave, out _);
+        }
+
         private bool TryBuildKnownPathToCave(CaveInfo cave, out List<Vector2Int> path)
         {
             path = null;
@@ -109,6 +131,68 @@ namespace Labyrinth.Core
 
                     cameFrom[neighbor] = current;
                     queue.Enqueue(neighbor);
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsOutpostCaveCandidate(CaveInfo cave, HeroMemory knownMap)
+        {
+            if (knownMap == null
+                || TryGetCaveOreType(cave, out _)
+                || !IsCaveKnown(cave, knownMap)
+                || ManhattanDistance(cave.Center, result.EntrancePosition) < MinimumOutpostDistanceFromEntrance)
+            {
+                return false;
+            }
+
+            if (result.CentralRoom.IsValid && result.CentralRoom.IsBeyondExitSide(cave.Center))
+            {
+                return false;
+            }
+
+            foreach (var cell in EnumerateCaveCells(cave))
+            {
+                if (IsReservedDungeonFeatureCell(cell))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool IsReservedDungeonFeatureCell(Vector2Int cell)
+        {
+            if (result.CentralRoom.IsValid && result.CentralRoom.Contains(cell))
+            {
+                return true;
+            }
+
+            if (result.CentralRoomKey != null && result.CentralRoomKey.Position == cell)
+            {
+                return true;
+            }
+
+            if (result.DownStairs != null && result.DownStairs.Position == cell)
+            {
+                return true;
+            }
+
+            if (result.UpStairs != null && result.UpStairs.Position == cell)
+            {
+                return true;
+            }
+
+            if (result.Chests != null)
+            {
+                for (var i = 0; i < result.Chests.Count; i++)
+                {
+                    if (result.Chests[i] != null && result.Chests[i].Position == cell)
+                    {
+                        return true;
+                    }
                 }
             }
 
@@ -241,6 +325,11 @@ namespace Labyrinth.Core
             return oreType == OreDepositType.Iron
                 ? new Color(0.62f, 0.68f, 0.74f)
                 : new Color(1f, 0.72f, 0.14f);
+        }
+
+        private static Color GetOutpostAccentColor()
+        {
+            return new Color(0.58f, 0.9f, 0.46f);
         }
 
         private static bool ContainsCaveCell(CaveInfo cave, Vector2Int cell)

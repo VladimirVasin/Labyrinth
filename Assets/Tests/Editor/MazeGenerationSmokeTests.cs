@@ -29,6 +29,18 @@ namespace Labyrinth.Tests
             var result = new MazeGenerator().Generate(settings);
 
             Assert.That(MazeValidation.ValidateGeneratedMaze(result, out var error), Is.True, error);
+            Assert.That(result.BossCave.IsValid, Is.True);
+            Assert.That(result.CentralRoom.IsBeyondExitSide(result.BossCave.Center), Is.True);
+            Assert.That(result.DownStairs.Position, Is.Not.EqualTo(result.BossCave.Center));
+            foreach (var chest in result.Chests)
+            {
+                Assert.That(chest.Position, Is.Not.EqualTo(result.BossCave.Center));
+            }
+
+            foreach (var deposit in result.OreDeposits)
+            {
+                Assert.That(deposit.Cave.Center, Is.Not.EqualTo(result.BossCave.Center));
+            }
         }
     }
 }

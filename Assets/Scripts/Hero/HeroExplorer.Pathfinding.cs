@@ -14,8 +14,7 @@ namespace Labyrinth.Hero
                 && GridDistance(position, reservedTarget) == 1
                 && grid.InBounds(reservedTarget)
                 && grid.Get(reservedTarget).IsWalkable
-                && !model.Memory.IsRemembered(reservedTarget)
-                && IsWithinAllowedExplorationDepth(reservedTarget))
+                && !model.Memory.IsRemembered(reservedTarget))
             {
                 next = reservedTarget;
                 return true;
@@ -24,7 +23,7 @@ namespace Labyrinth.Hero
             var candidates = new List<HeroExplorationCandidate>();
             foreach (var neighbor in grid.WalkableNeighbors(position))
             {
-                if (!model.Memory.IsRemembered(neighbor) && IsWithinAllowedExplorationDepth(neighbor))
+                if (!model.Memory.IsRemembered(neighbor))
                 {
                     candidates.Add(new HeroExplorationCandidate(
                         position,
@@ -143,7 +142,7 @@ namespace Labyrinth.Hero
             {
                 var current = queue.Dequeue();
                 var currentDistance = GridDistance(model.Position, current);
-                if (currentDistance > farthestDistance && IsWithinAllowedPatrolDepth(current))
+                if (currentDistance > farthestDistance)
                 {
                     farthestDistance = currentDistance;
                     farthest = current;
@@ -159,6 +158,90 @@ namespace Labyrinth.Hero
 
             path = BuildPath(cameFrom, model.Position, farthest);
             return path.Count > 0;
+        }
+
+        private bool TryBuildPathToStalePatrolTarget(
+            out Queue<Vector2Int> path,
+            out HeroPatrolCandidate selected)
+        {
+            path = new Queue<Vector2Int>();
+            selected = default;
+            if (explorationCoordinator == null)
+            {
+                return false;
+            }
+
+            var candidates = BuildStalePatrolCandidates();
+            if (candidates.Count == 0
+                || !explorationCoordinator.TryChoosePatrolTarget(heroNumber, model.Position, candidates, out selected))
+            {
+                return false;
+            }
+
+            path = new Queue<Vector2Int>(selected.Path);
+            return path.Count > 0;
+        }
+
+        private List<HeroPatrolCandidate> BuildStalePatrolCandidates()
+        {
+            var candidates = new List<HeroPatrolCandidate>();
+            var queue = new Queue<Vector2Int>();
+            var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
+
+            queue.Enqueue(model.Position);
+            cameFrom[model.Position] = model.Position;
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                if (current != model.Position)
+                {
+                    AddStalePatrolCandidate(current, cameFrom, candidates);
+                }
+
+                EnqueueRememberedNeighbors(current, queue, cameFrom);
+            }
+
+            return candidates;
+        }
+
+        private void AddStalePatrolCandidate(
+            Vector2Int targetCell,
+            IReadOnlyDictionary<Vector2Int, Vector2Int> cameFrom,
+            ICollection<HeroPatrolCandidate> candidates)
+        {
+            if (targetCell == entrancePosition)
+            {
+                return;
+            }
+
+            var path = BuildPath(cameFrom, model.Position, targetCell);
+            if (path.Count == 0)
+            {
+                return;
+            }
+
+            var routeStaleScore = 0;
+            var staleRouteCells = 0;
+            foreach (var cell in path)
+            {
+                var staleness = explorationCoordinator.GetCellStaleness(cell);
+                routeStaleScore += Mathf.Min(staleness, 160);
+                if (staleness >= 12)
+                {
+                    staleRouteCells++;
+                }
+            }
+
+            var targetStaleness = explorationCoordinator.GetCellStaleness(targetCell);
+            candidates.Add(new HeroPatrolCandidate(
+                targetCell,
+                path,
+                path.Count,
+                targetStaleness,
+                explorationCoordinator.GetCellVisitCount(targetCell),
+                routeStaleScore,
+                staleRouteCells));
         }
 
         private void EnqueueRememberedNeighbors(
@@ -232,11 +315,6 @@ namespace Labyrinth.Hero
                     continue;
                 }
 
-                if (!IsWithinAllowedExplorationDepth(neighbor))
-                {
-                    continue;
-                }
-
                 candidates.Add(new HeroExplorationCandidate(
                     approachCell,
                     neighbor,
@@ -301,62 +379,6 @@ namespace Labyrinth.Hero
             return weight;
         }
 
-        private bool IsWithinAllowedExplorationDepth(Vector2Int position)
-        {
-            if (maxDistanceFromEntrance <= 0 || distancesFromEntrance == null)
-            {
-                return true;
-            }
-
-            if (!distancesFromEntrance.TryGetValue(position, out var distance))
-            {
-                return false;
-            }
-
-            return distance <= GetAllowedExplorationDistance();
-        }
-
-        private bool IsWithinAllowedPatrolDepth(Vector2Int position)
-        {
-            if (maxDistanceFromEntrance <= 0 || distancesFromEntrance == null)
-            {
-                return true;
-            }
-
-            if (!distancesFromEntrance.TryGetValue(position, out var distance))
-            {
-                return false;
-            }
-
-            var patrolSlack = Mathf.Max(4, Mathf.RoundToInt(maxDistanceFromEntrance * 0.08f));
-            return distance <= Mathf.Min(maxDistanceFromEntrance, GetAllowedExplorationDistance() + patrolSlack);
-        }
-
-        private int GetAllowedExplorationDistance()
-        {
-            if (maxDistanceFromEntrance <= 0)
-            {
-                return int.MaxValue;
-            }
-
-            var level = model != null ? model.Level : 1;
-            var gearBonus = model?.Inventory != null
-                ? (model.Inventory.AttackBonus + model.Inventory.ArmorBonus) * 2
-                : 0;
-            var ratio = level <= 2
-                ? 0.32f
-                : level <= 4
-                    ? 0.45f
-                    : level <= 7
-                        ? 0.62f
-                        : level <= 10
-                            ? 0.82f
-                            : 1f;
-            var ratioDistance = Mathf.RoundToInt(maxDistanceFromEntrance * ratio);
-            var minimumDistance = 24 + level * 4 + gearBonus;
-            return Mathf.Clamp(Mathf.Max(ratioDistance, minimumDistance), 6, maxDistanceFromEntrance);
-        }
-
         private static Queue<Vector2Int> BuildPath(
             IReadOnlyDictionary<Vector2Int, Vector2Int> cameFrom,
             Vector2Int start,
@@ -378,22 +400,6 @@ namespace Labyrinth.Hero
         private static int GridDistance(Vector2Int a, Vector2Int b)
         {
             return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
-        }
-
-        private static int CalculateMaxEntranceDistance(Dictionary<Vector2Int, int> distances)
-        {
-            var maxDistance = 0;
-            if (distances == null)
-            {
-                return maxDistance;
-            }
-
-            foreach (var distance in distances.Values)
-            {
-                maxDistance = Mathf.Max(maxDistance, distance);
-            }
-
-            return maxDistance;
         }
     }
 }

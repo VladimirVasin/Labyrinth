@@ -34,6 +34,7 @@ namespace Labyrinth.Mobs
         private System.Random respawnRandom;
         private Transform root;
         private MobController centralMiniBoss;
+        private MobController bossMob;
         private int regularMobTargetCount;
         private int maxDistanceFromEntrance;
         private int respawnSerial;
@@ -47,6 +48,8 @@ namespace Labyrinth.Mobs
         private float openingRespawnGraceTimer;
 
         public bool HasCentralMiniBossAlive => centralMiniBoss != null && centralMiniBoss.Model != null && centralMiniBoss.Model.IsAlive;
+
+        private bool HasBossAlive => bossMob != null && bossMob.Model != null && bossMob.Model.IsAlive;
 
         public void Spawn(MazeGenerationResult result, MazeRenderer renderer)
         {
@@ -73,10 +76,12 @@ namespace Labyrinth.Mobs
 
             var initialCandidateCount = spawnCandidates.Count;
             var bossCandidates = CollectBossSpawnCandidates(result, spawnCandidates);
-            var bossPosition = SelectBossSpawnPosition(
-                result,
-                bossCandidates.Count > 0 ? bossCandidates : spawnCandidates,
-                random);
+            var bossPosition = result.BossCave.IsValid
+                ? result.BossCave.Center
+                : SelectBossSpawnPosition(
+                    result,
+                    bossCandidates.Count > 0 ? bossCandidates : spawnCandidates,
+                    random);
             var bossSpecies = SelectBossSpecies(random);
             var boss = MobController.Create(
                 result.Grid,
@@ -87,8 +92,11 @@ namespace Labyrinth.Mobs
                 MobRank.Boss,
                 result.LevelNumber);
             boss.transform.SetParent(root, true);
+            boss.SetWanderingPaused(true);
+            bossMob = boss;
             AddManagedMob(boss);
             spawnCandidates.Remove(bossPosition);
+            RemoveCaveSpawnCandidates(spawnCandidates, result.BossCave);
 
             var majorMobPositions = new List<Vector2Int> { bossPosition };
             var miniBossSpawned = false;
@@ -220,7 +228,7 @@ namespace Labyrinth.Mobs
 
             GameDebugLog.Info(
                 "Mobs",
-                $"Spawned regular={CountRegularMobs()}/{regularMobTargetCount} (rats={ratPositions.Count}, easyGoblins={easyGoblinPositions.Count}, goblins={easyGoblinPositions.Count + CountSpecies(spawnSpecies, MobSpecies.Goblin)}, orcs={CountSpecies(spawnSpecies, MobSpecies.Orc)}), openingRegularStats={useOpeningRegularStats}, entranceBuffer={GetEntranceMobBuffer(result)}, openingRespawnGrace={openingRespawnGraceTimer:0.0}, targetMultiplier={targetMultiplier:0.00}, miniBoss={(miniBossSpawned ? $"{miniBossSpecies} at {GameDebugLog.Position(miniBossPosition)} {BuildStatsText(centralMiniBoss)}" : "none")}, boss={bossSpecies} at {GameDebugLog.Position(bossPosition)} {BuildStatsText(boss)}, dungeonLevel={result.LevelNumber}, candidates={initialCandidateCount}, ratCandidates={ratCandidates.Count}, bossCandidates={bossCandidates.Count}, minDistance={minimumDistance}, maxEntranceDistance={maxDistanceFromEntrance}");
+                $"Spawned regular={CountRegularMobs()}/{regularMobTargetCount} (rats={ratPositions.Count}, easyGoblins={easyGoblinPositions.Count}, goblins={easyGoblinPositions.Count + CountSpecies(spawnSpecies, MobSpecies.Goblin)}, orcs={CountSpecies(spawnSpecies, MobSpecies.Orc)}), openingRegularStats={useOpeningRegularStats}, entranceBuffer={GetEntranceMobBuffer(result)}, openingRespawnGrace={openingRespawnGraceTimer:0.0}, targetMultiplier={targetMultiplier:0.00}, miniBoss={(miniBossSpawned ? $"{miniBossSpecies} at {GameDebugLog.Position(miniBossPosition)} {BuildStatsText(centralMiniBoss)}" : "none")}, boss={bossSpecies} at {GameDebugLog.Position(bossPosition)} cave={GameDebugLog.Position(result.BossCave.Center)} {BuildStatsText(boss)}, dungeonLevel={result.LevelNumber}, candidates={initialCandidateCount}, ratCandidates={ratCandidates.Count}, bossCandidates={bossCandidates.Count}, minDistance={minimumDistance}, maxEntranceDistance={maxDistanceFromEntrance}");
         }
 
         public void Clear()
@@ -242,6 +250,7 @@ namespace Labyrinth.Mobs
             respawnSummaryTimer = 0f;
             openingRespawnGraceTimer = 0f;
             centralMiniBoss = null;
+            bossMob = null;
 
             if (root == null)
             {
@@ -261,6 +270,7 @@ namespace Labyrinth.Mobs
 
             mobs.Remove(mob);
             if (mob == centralMiniBoss) { centralMiniBoss = null; }
+            if (mob == bossMob) { bossMob = null; }
             GameDebugLog.Info(
                 "Mobs",
                 $"Removed {mob.DebugName} at {GameDebugLog.Position(mob.Position)}. aliveRegular={CountRegularMobs()}/{regularMobTargetCount}");
@@ -406,62 +416,6 @@ namespace Labyrinth.Mobs
 
                 mob.SetVisible(visibleCells.Contains(mob.Position));
             }
-        }
-
-        public void CollectOccupiedPositions(HashSet<Vector2Int> occupiedPositions)
-        {
-            if (occupiedPositions == null)
-            {
-                return;
-            }
-
-            foreach (var mob in mobs)
-            {
-                if (mob != null && mob.Model != null && mob.Model.IsAlive)
-                {
-                    occupiedPositions.Add(mob.Position);
-                }
-            }
-        }
-
-        public bool TryGetEncounter(HeroController hero, out MobController encounteredMob)
-        {
-            encounteredMob = null;
-            if (hero == null || hero.Model == null)
-            {
-                return false;
-            }
-
-            if (HasCentralMiniBossAlive
-                && centralMiniBoss.Model.State == MobState.Wandering
-                && result != null && result.CentralRoom.IsValid
-                && result.CentralRoom.Contains(hero.Model.Position))
-            {
-                encounteredMob = centralMiniBoss;
-                GameDebugLog.Info(
-                    "Mobs",
-                    $"Encounter forced by central room: hero=#{hero.DisplayNumber} pos={GameDebugLog.Position(hero.Model.Position)} vs {encounteredMob.DebugName} pos={GameDebugLog.Position(encounteredMob.Position)}.");
-                return true;
-            }
-
-            foreach (var mob in mobs)
-            {
-                if (mob == null || mob.Model == null || !mob.Model.IsAlive || mob.Model.State != MobState.Wandering)
-                {
-                    continue;
-                }
-
-                if (GridDistance(hero.Model.Position, mob.Position) <= 1)
-                {
-                    encounteredMob = mob;
-                    GameDebugLog.Info(
-                        "Mobs",
-                        $"Encounter triggered: hero=#{hero.DisplayNumber} pos={GameDebugLog.Position(hero.Model.Position)} vs {mob.DebugName} pos={GameDebugLog.Position(mob.Position)}, distance={GridDistance(hero.Model.Position, mob.Position)}.");
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         private void TraceRespawnSummary(int respawnBlockedCellCount, MobThreatStage threatStage)
@@ -972,6 +926,29 @@ namespace Labyrinth.Mobs
             return result != null && result.LevelNumber <= 1
                 ? OpeningEntranceMobBuffer
                 : NormalEntranceMobBuffer;
+        }
+
+        private static bool ContainsCaveCell(CaveInfo cave, Vector2Int cell)
+        {
+            return cave.IsValid
+                && Mathf.Abs(cell.x - cave.Center.x) <= 1
+                && Mathf.Abs(cell.y - cave.Center.y) <= 1;
+        }
+
+        private static void RemoveCaveSpawnCandidates(List<Vector2Int> candidates, CaveInfo cave)
+        {
+            if (candidates == null || !cave.IsValid)
+            {
+                return;
+            }
+
+            for (var i = candidates.Count - 1; i >= 0; i--)
+            {
+                if (ContainsCaveCell(cave, candidates[i]))
+                {
+                    candidates.RemoveAt(i);
+                }
+            }
         }
 
         private static string BuildStatsText(MobController mob)

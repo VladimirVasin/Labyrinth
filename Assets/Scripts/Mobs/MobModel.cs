@@ -24,6 +24,7 @@ namespace Labyrinth.Mobs
             Species = species;
             Rank = rank;
             DungeonLevel = Mathf.Max(1, dungeonLevel);
+            Level = BuildDisplayLevel(species, rank, DungeonLevel, useOpeningSpawnStats);
             Position = startPosition;
             var stats = BuildStats(species, rank, DungeonLevel, statSeed, useOpeningSpawnStats);
             MaxHitPoints = stats.MaxHitPoints;
@@ -38,6 +39,8 @@ namespace Labyrinth.Mobs
         public MobRank Rank { get; }
 
         public int DungeonLevel { get; }
+
+        public int Level { get; }
 
         public bool IsMiniBoss => Rank == MobRank.MiniBoss;
 
@@ -122,6 +125,65 @@ namespace Labyrinth.Mobs
             }
 
             return ApplyDungeonLevelMultiplier(stats, dungeonLevel);
+        }
+
+        private static int BuildDisplayLevel(MobSpecies species, MobRank rank, int dungeonLevel, bool useOpeningSpawnStats)
+        {
+            var baseLevel = BuildBaseDisplayLevel(species, rank, useOpeningSpawnStats && dungeonLevel <= 1);
+            return baseLevel + Mathf.Max(0, dungeonLevel - 1) * 6;
+        }
+
+        private static int BuildBaseDisplayLevel(MobSpecies species, MobRank rank, bool useOpeningSpawnStats)
+        {
+            switch (rank)
+            {
+                case MobRank.Boss:
+                    switch (species)
+                    {
+                        case MobSpecies.Rat:
+                            return 16;
+                        case MobSpecies.Goblin:
+                            return 20;
+                        case MobSpecies.Orc:
+                        default:
+                            return 26;
+                    }
+                case MobRank.MiniBoss:
+                    switch (species)
+                    {
+                        case MobSpecies.Rat:
+                            return 7;
+                        case MobSpecies.Goblin:
+                            return 10;
+                        case MobSpecies.Orc:
+                        default:
+                            return 14;
+                    }
+                default:
+                    if (useOpeningSpawnStats)
+                    {
+                        switch (species)
+                        {
+                            case MobSpecies.Orc:
+                                return 3;
+                            case MobSpecies.Goblin:
+                            case MobSpecies.Rat:
+                            default:
+                                return 1;
+                        }
+                    }
+
+                    switch (species)
+                    {
+                        case MobSpecies.Rat:
+                            return 2;
+                        case MobSpecies.Goblin:
+                            return 4;
+                        case MobSpecies.Orc:
+                        default:
+                            return 8;
+                    }
+            }
         }
 
         private static MobStatRange BuildMiniBossStats(MobSpecies species)

@@ -15,6 +15,8 @@ namespace Labyrinth.Maze
         public Vector2Int Center { get; }
 
         public Vector2Int EntrancePosition { get; }
+
+        public bool IsValid => Center != default || EntrancePosition != default;
     }
 
     public readonly struct CentralRoomInfo
@@ -285,7 +287,8 @@ namespace Labyrinth.Maze
             IReadOnlyList<OreDepositModel> oreDeposits,
             DungeonStairsModel downStairs = null,
             DungeonStairsModel upStairs = null,
-            int levelNumber = 1)
+            int levelNumber = 1,
+            CaveInfo bossCave = default)
         {
             Grid = grid;
             Settings = settings;
@@ -303,6 +306,7 @@ namespace Labyrinth.Maze
 
             Chests = chests == null ? new List<ChestModel>() : new List<ChestModel>(chests);
             Caves = caves == null ? new List<CaveInfo>() : new List<CaveInfo>(caves);
+            BossCave = bossCave;
             OreDeposits = oreDeposits == null ? new List<OreDepositModel>() : new List<OreDepositModel>(oreDeposits);
             DownStairs = downStairs;
             UpStairs = upStairs;
@@ -329,6 +333,8 @@ namespace Labyrinth.Maze
         public IReadOnlyList<ChestModel> Chests { get; }
 
         public IReadOnlyList<CaveInfo> Caves { get; }
+
+        public CaveInfo BossCave { get; }
 
         public IReadOnlyList<OreDepositModel> OreDeposits { get; }
 

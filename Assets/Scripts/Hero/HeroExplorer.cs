@@ -30,8 +30,6 @@ namespace Labyrinth.Hero
         private readonly HeroDeathTokenManager deathTokenManager;
         private readonly HeroModel model;
         private readonly Vector2Int entrancePosition;
-        private readonly Dictionary<Vector2Int, int> distancesFromEntrance;
-        private readonly int maxDistanceFromEntrance;
         private readonly int heroNumber;
         private readonly Action<HeroModel, int> entranceKnowledgeSync;
         private readonly Action<HeroModel, int, DungeonStairsModel> downStairsOpened;
@@ -70,14 +68,13 @@ namespace Labyrinth.Hero
             this.deathTokenManager = deathTokenManager;
             this.model = model;
             this.entrancePosition = entrancePosition;
-            distancesFromEntrance = MazeValidation.GetReachableDistances(grid, entrancePosition, true);
-            maxDistanceFromEntrance = CalculateMaxEntranceDistance(distancesFromEntrance);
             this.heroNumber = heroNumber;
             this.entranceKnowledgeSync = entranceKnowledgeSync;
             this.downStairsOpened = downStairsOpened;
             this.nearbyMobInteractionCellProvider = nearbyMobInteractionCellProvider;
             this.priorityDungeonTargetProvider = priorityDungeonTargetProvider;
             this.explorationCoordinator = explorationCoordinator;
+            RecordCurrentVisit();
         }
 
         public void ReleaseExplorationTarget(string reason)
@@ -87,6 +84,7 @@ namespace Labyrinth.Hero
 
         public void Step()
         {
+            RecordCurrentVisit();
             if (model.State == HeroState.OpeningDoor)
             {
                 model.SetState(HeroState.Exploring);
@@ -249,6 +247,7 @@ namespace Labyrinth.Hero
 
             var from = model.Position;
             model.SetPosition(entrancePosition);
+            RecordCurrentVisit();
             model.Memory.Remember(entrancePosition);
             RestoreAtCastle();
             GameDebugLog.Info(
@@ -386,6 +385,7 @@ namespace Labyrinth.Hero
         private void MoveAndRemember(Vector2Int position)
         {
             model.MoveTo(position);
+            RecordCurrentVisit();
             explorationCoordinator?.CompleteTarget(heroNumber, position);
             if (model.Memory.Remember(position))
             {
@@ -411,6 +411,7 @@ namespace Labyrinth.Hero
         private void MoveAlongRememberedPath(Vector2Int position)
         {
             model.MoveTo(position);
+            RecordCurrentVisit();
             model.Memory.Remember(position);
             TryOpenChestInCurrentCave();
             if (TryCollectKey())
@@ -752,152 +753,6 @@ namespace Labyrinth.Hero
                 $"{HeroLogName} found reachable {stairs.DisplayName} after frontier exhaustion, pathSteps={doorPath.Count}, from={GameDebugLog.Position(model.Position)}.");
             StepReturnToStairs();
             return true;
-        }
-
-        private void HandleNoFrontierFallback()
-        {
-            if (HasDescentKey()
-                && (TryBeginReturnToKnownStairs() || TryBeginReturnToReachableLockedStairs()))
-            {
-                return;
-            }
-
-            if (HasCentralRoomKey()
-                && (TryBeginReturnToKnownDoor() || TryBeginReturnToReachableClosedDoor()))
-            {
-                return;
-            }
-
-            if (model.Position != entrancePosition)
-            {
-                ReleaseExplorationTarget("no frontier");
-                BeginReturnToCastle();
-                return;
-            }
-
-            if (TryBuildPathToFarthestRememberedCell(out var newPatrolPath) && newPatrolPath.Count > 0)
-            {
-                patrolPath = newPatrolPath;
-                ReleaseExplorationTarget("patrol fallback");
-                GameDebugLog.Info(
-                    "Hero",
-                    $"{HeroLogName} has no frontier at entrance; patrolling farthest remembered cell, pathSteps={patrolPath.Count}, memory={model.Memory.RememberedCount}.");
-                MoveAlongRememberedPath(patrolPath.Dequeue());
-                return;
-            }
-
-            GameDebugLog.Info(
-                "Hero",
-                $"{HeroLogName} has no frontier and no patrol target: state={model.State}, memory={model.Memory.RememberedCount}, knownDoors={model.Memory.KnownClosedDoorCount}.");
-            SetExplorationState();
-        }
-
-        private bool TryContinuePatrolFallback()
-        {
-            while (patrolPath.Count > 0)
-            {
-                var next = patrolPath.Dequeue();
-                if (next == model.Position)
-                {
-                    continue;
-                }
-
-                if (!grid.InBounds(next)
-                    || !grid.Get(next).IsWalkable
-                    || !model.Memory.IsRemembered(next)
-                    || GridDistance(model.Position, next) != 1)
-                {
-                    GameDebugLog.Warning(
-                        "Hero",
-                        $"{HeroLogName} canceled no-frontier patrol: next={GameDebugLog.Position(next)}, from={GameDebugLog.Position(model.Position)}, remaining={patrolPath.Count}, memory={model.Memory.RememberedCount}.");
-                    patrolPath.Clear();
-                    return false;
-                }
-
-                MoveAlongRememberedPath(next);
-                if (patrolPath.Count == 0)
-                {
-                    GameDebugLog.Info(
-                        "Hero",
-                        $"{HeroLogName} completed no-frontier patrol at {GameDebugLog.Position(model.Position)}, memory={model.Memory.RememberedCount}.");
-                }
-
-                return true;
-            }
-
-            return false;
-        }
-
-        private bool TryBeginPriorityDungeonTargetFallback()
-        {
-            if (priorityDungeonTargetProvider == null
-                || !priorityDungeonTargetProvider.Invoke(model, out var target, out var label)
-                || !TryBuildRememberedPath(model.Position, target, out var path)
-                || path.Count == 0)
-            {
-                priorityTargetPath.Clear();
-                return false;
-            }
-
-            priorityTargetPath = path;
-            priorityTargetCell = target;
-            priorityTargetLabel = string.IsNullOrWhiteSpace(label) ? "priority dungeon target" : label;
-            ReleaseExplorationTarget("priority dungeon target");
-            patrolPath.Clear();
-            GameDebugLog.Info(
-                "Hero",
-                $"{HeroLogName} targets {priorityTargetLabel} after frontier exhaustion: target={GameDebugLog.Position(priorityTargetCell)}, pathSteps={priorityTargetPath.Count}, from={GameDebugLog.Position(model.Position)}, memory={model.Memory.RememberedCount}.");
-            return TryContinuePriorityDungeonTarget();
-        }
-
-        private bool TryContinuePriorityDungeonTarget()
-        {
-            if (priorityTargetPath.Count == 0)
-            {
-                return false;
-            }
-
-            if (priorityDungeonTargetProvider == null
-                || !priorityDungeonTargetProvider.Invoke(model, out var target, out var label)
-                || target != priorityTargetCell)
-            {
-                priorityTargetPath.Clear();
-                return false;
-            }
-
-            priorityTargetLabel = string.IsNullOrWhiteSpace(label) ? priorityTargetLabel : label;
-            while (priorityTargetPath.Count > 0)
-            {
-                var next = priorityTargetPath.Dequeue();
-                if (next == model.Position)
-                {
-                    continue;
-                }
-
-                if (!grid.InBounds(next)
-                    || !grid.Get(next).IsWalkable
-                    || !model.Memory.IsRemembered(next)
-                    || GridDistance(model.Position, next) != 1)
-                {
-                    GameDebugLog.Warning(
-                        "Hero",
-                        $"{HeroLogName} canceled priority dungeon target: label={priorityTargetLabel}, target={GameDebugLog.Position(priorityTargetCell)}, next={GameDebugLog.Position(next)}, from={GameDebugLog.Position(model.Position)}, remaining={priorityTargetPath.Count}, memory={model.Memory.RememberedCount}.");
-                    priorityTargetPath.Clear();
-                    return false;
-                }
-
-                MoveAlongRememberedPath(next);
-                if (priorityTargetPath.Count == 0)
-                {
-                    GameDebugLog.Info(
-                        "Hero",
-                        $"{HeroLogName} reached priority dungeon target approach: label={priorityTargetLabel}, target={GameDebugLog.Position(priorityTargetCell)}, position={GameDebugLog.Position(model.Position)}, memory={model.Memory.RememberedCount}.");
-                }
-
-                return true;
-            }
-
-            return false;
         }
 
         private void LogExplorationProgress(Vector2Int position, int gainedLevels)

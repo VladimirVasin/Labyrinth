@@ -16,10 +16,13 @@ namespace Labyrinth.Core
         private const int GenerationAttemptsPerSlot = 8;
 
         private readonly List<HeroGuildQuestModel> quests = new List<HeroGuildQuestModel>();
+        private readonly HashSet<MobSpecies> discoveredQuestSpecies = new HashSet<MobSpecies>();
+        private readonly HashSet<MobSpecies> visibleSpeciesScratch = new HashSet<MobSpecies>();
         private ResourceWallet resources;
         private BaseDevelopment baseDevelopment;
         private MazeRenderer mazeRenderer;
         private Func<MazeGenerationResult> currentMazeProvider;
+        private Func<MobManager> mobManagerProvider;
         private BuildingView guildView;
         private System.Random random;
         private int nextQuestId = 1;
@@ -31,17 +34,21 @@ namespace Labyrinth.Core
             ResourceWallet resourceWallet,
             BaseDevelopment development,
             MazeRenderer renderer,
-            Func<MazeGenerationResult> getCurrentMaze)
+            Func<MazeGenerationResult> getCurrentMaze,
+            Func<MobManager> getMobManager = null)
         {
             resources = resourceWallet;
             baseDevelopment = development;
             mazeRenderer = renderer;
             currentMazeProvider = getCurrentMaze;
+            mobManagerProvider = getMobManager;
         }
 
         public void Clear()
         {
             quests.Clear();
+            discoveredQuestSpecies.Clear();
+            visibleSpeciesScratch.Clear();
             guildView = null;
             random = null;
             nextQuestId = 1;
@@ -151,6 +158,15 @@ namespace Labyrinth.Core
                 return false;
             }
 
+            if (!CanHeroTakeQuest(selectedHero, quest))
+            {
+                GameAudioController.PlayUi(GameSfx.HudBlocked);
+                GameDebugLog.Info(
+                    "HeroGuild",
+                    $"Quest assignment blocked: quest={quest.Id}, hero=#{selectedHero.Model.DisplayNumber}, target={quest.TargetSpecies}, reason=hero-not-ready.");
+                return false;
+            }
+
             AssignQuestToHero(quest, selectedHero, "manual");
             return true;
         }
@@ -167,6 +183,7 @@ namespace Labyrinth.Core
                 return;
             }
 
+            RememberDiscoveredSpecies(defeatedMob.Model.Species, "defeated");
             var heroNumber = victoriousHero.Model.DisplayNumber;
             for (var i = 0; i < quests.Count; i++)
             {
@@ -200,7 +217,8 @@ namespace Labyrinth.Core
             }
 
             ResolveAssignedQuests(heroes);
-            GenerateAvailableQuests();
+            RefreshDiscoveredSpecies(heroes);
+            GenerateAvailableQuests(heroes);
             AssignAvailableQuests(heroes);
             UpdateGuildEffect();
         }
@@ -231,7 +249,7 @@ namespace Labyrinth.Core
             }
         }
 
-        private void GenerateAvailableQuests()
+        private void GenerateAvailableQuests(IReadOnlyList<HeroController> heroes)
         {
             if (!autoGenerateQuests || resources == null)
             {
@@ -239,16 +257,22 @@ namespace Labyrinth.Core
             }
 
             EnsureRandom();
-            while (CountAvailableQuests() < AvailablePoolLimit && TryGenerateAvailableQuest())
+            while (CountAvailableQuests() < AvailablePoolLimit && TryGenerateAvailableQuest(heroes))
             {
             }
         }
 
-        private bool TryGenerateAvailableQuest()
+        private bool TryGenerateAvailableQuest(IReadOnlyList<HeroController> heroes)
         {
+            var allowedSpecies = BuildAllowedQuestSpecies(heroes);
+            if (allowedSpecies.Count == 0)
+            {
+                return false;
+            }
+
             for (var attempt = 0; attempt < GenerationAttemptsPerSlot; attempt++)
             {
-                var quest = CreateQuest(nextQuestId);
+                var quest = CreateQuest(nextQuestId, RollSpecies(GetDungeonLevel(), allowedSpecies));
                 if (!resources.TrySpendGold(quest.RewardGold))
                 {
                     continue;
@@ -281,10 +305,10 @@ namespace Labyrinth.Core
                     continue;
                 }
 
-                var quest = FindFirstAvailableQuest();
+                var quest = FindFirstAvailableQuest(hero);
                 if (quest == null)
                 {
-                    return;
+                    continue;
                 }
 
                 AssignQuestToHero(quest, hero, "auto");
@@ -377,35 +401,235 @@ namespace Labyrinth.Core
             random = new System.Random(seed ^ 0x2f4b6d1);
         }
 
-        private HeroGuildQuestModel CreateQuest(int questId)
+        private HeroGuildQuestModel CreateQuest(int questId, MobSpecies species)
         {
-            var result = currentMazeProvider != null ? currentMazeProvider.Invoke() : null;
-            var level = Mathf.Max(1, result?.LevelNumber ?? 1);
-            var species = RollSpecies(level);
+            var level = GetDungeonLevel();
             var count = GetBaseTargetCount(species) + Mathf.Max(0, level - 1) + random.Next(0, 2);
             var reward = count * GetRewardPerKill(species) + level * 4 + random.Next(0, 5);
             return new HeroGuildQuestModel(questId, species, count, reward);
         }
 
-        private MobSpecies RollSpecies(int dungeonLevel)
+        private MobSpecies RollSpecies(int dungeonLevel, IReadOnlyList<MobSpecies> allowedSpecies)
         {
-            var roll = random.Next(100);
+            var totalWeight = 0;
+            for (var i = 0; i < allowedSpecies.Count; i++)
+            {
+                totalWeight += GetQuestSpeciesWeight(allowedSpecies[i], dungeonLevel);
+            }
+
+            var roll = random.Next(Mathf.Max(1, totalWeight));
+            for (var i = 0; i < allowedSpecies.Count; i++)
+            {
+                roll -= GetQuestSpeciesWeight(allowedSpecies[i], dungeonLevel);
+                if (roll < 0)
+                {
+                    return allowedSpecies[i];
+                }
+            }
+
+            return allowedSpecies[0];
+        }
+
+        private static int GetQuestSpeciesWeight(MobSpecies species, int dungeonLevel)
+        {
             if (dungeonLevel <= 1)
             {
-                if (roll < 52)
+                switch (species)
                 {
-                    return MobSpecies.Rat;
+                    case MobSpecies.Rat:
+                        return 52;
+                    case MobSpecies.Goblin:
+                        return 34;
+                    case MobSpecies.Orc:
+                    default:
+                        return 14;
                 }
-
-                return roll < 86 ? MobSpecies.Goblin : MobSpecies.Orc;
             }
 
-            if (roll < 30)
+            switch (species)
             {
-                return MobSpecies.Rat;
+                case MobSpecies.Rat:
+                    return 30;
+                case MobSpecies.Goblin:
+                    return 40;
+                case MobSpecies.Orc:
+                default:
+                    return 30;
+            }
+        }
+
+        private List<MobSpecies> BuildAllowedQuestSpecies(IReadOnlyList<HeroController> heroes)
+        {
+            var allowed = new List<MobSpecies> { MobSpecies.Rat };
+            if (IsQuestSpeciesUnlocked(MobSpecies.Goblin, heroes))
+            {
+                allowed.Add(MobSpecies.Goblin);
             }
 
-            return roll < 70 ? MobSpecies.Goblin : MobSpecies.Orc;
+            if (IsQuestSpeciesUnlocked(MobSpecies.Orc, heroes) && HasAnyHeroReadyForSpecies(heroes, MobSpecies.Orc))
+            {
+                allowed.Add(MobSpecies.Orc);
+            }
+
+            return allowed;
+        }
+
+        private bool IsQuestSpeciesUnlocked(MobSpecies species, IReadOnlyList<HeroController> heroes)
+        {
+            switch (species)
+            {
+                case MobSpecies.Rat:
+                    return true;
+                case MobSpecies.Goblin:
+                    return discoveredQuestSpecies.Contains(MobSpecies.Goblin)
+                        || GetDungeonLevel() > 1
+                        || GetBestHeroLevel(heroes) >= 2
+                        || GetBestRememberedCellCount(heroes) >= 80;
+                case MobSpecies.Orc:
+                default:
+                    return discoveredQuestSpecies.Contains(MobSpecies.Orc)
+                        || GetDungeonLevel() > 1
+                        || IsCentralExitOpen(currentMazeProvider != null ? currentMazeProvider.Invoke() : null);
+            }
+        }
+
+        private void RefreshDiscoveredSpecies(IReadOnlyList<HeroController> heroes)
+        {
+            var mobManager = mobManagerProvider != null ? mobManagerProvider.Invoke() : null;
+            if (mobManager == null)
+            {
+                return;
+            }
+
+            visibleSpeciesScratch.Clear();
+            mobManager.CollectVisibleRegularSpecies(heroes, visibleSpeciesScratch);
+            foreach (var species in visibleSpeciesScratch)
+            {
+                RememberDiscoveredSpecies(species, "visible");
+            }
+        }
+
+        private void RememberDiscoveredSpecies(MobSpecies species, string reason)
+        {
+            if (!discoveredQuestSpecies.Add(species))
+            {
+                return;
+            }
+
+            GameDebugLog.Info(
+                "HeroGuild",
+                $"Quest target discovered: target={species}, reason={reason}.");
+        }
+
+        private static bool HasAnyHeroReadyForSpecies(IReadOnlyList<HeroController> heroes, MobSpecies species)
+        {
+            if (heroes == null)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < heroes.Count; i++)
+            {
+                if (CanHeroTakeSpecies(heroes[i], species))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool CanHeroTakeQuest(HeroController hero, HeroGuildQuestModel quest)
+        {
+            return quest != null && CanHeroTakeSpecies(hero, quest.TargetSpecies);
+        }
+
+        private static bool CanHeroTakeSpecies(HeroController hero, MobSpecies species)
+        {
+            if (hero == null || hero.Model == null || !hero.Model.IsAlive)
+            {
+                return false;
+            }
+
+            if (species != MobSpecies.Orc)
+            {
+                return true;
+            }
+
+            var model = hero.Model;
+            return model.Level >= 4
+                || model.AttackPoints >= 13
+                || model.AttackPoints + model.ArmorPoints >= 15;
+        }
+
+        private int GetDungeonLevel()
+        {
+            var result = currentMazeProvider != null ? currentMazeProvider.Invoke() : null;
+            return Mathf.Max(1, result?.LevelNumber ?? 1);
+        }
+
+        private static int GetBestHeroLevel(IReadOnlyList<HeroController> heroes)
+        {
+            var best = 0;
+            if (heroes == null)
+            {
+                return best;
+            }
+
+            for (var i = 0; i < heroes.Count; i++)
+            {
+                var hero = heroes[i];
+                if (hero?.Model != null && hero.Model.IsAlive)
+                {
+                    best = Mathf.Max(best, hero.Model.Level);
+                }
+            }
+
+            return best;
+        }
+
+        private static int GetBestRememberedCellCount(IReadOnlyList<HeroController> heroes)
+        {
+            var best = 0;
+            if (heroes == null)
+            {
+                return best;
+            }
+
+            for (var i = 0; i < heroes.Count; i++)
+            {
+                var hero = heroes[i];
+                if (hero?.Model?.Memory != null && hero.Model.IsAlive)
+                {
+                    best = Mathf.Max(best, hero.Model.Memory.RememberedCount);
+                }
+            }
+
+            return best;
+        }
+
+        private static bool IsCentralExitOpen(MazeGenerationResult result)
+        {
+            if (result == null || !result.CentralRoom.IsValid)
+            {
+                return false;
+            }
+
+            if (result.CentralDoors != null)
+            {
+                for (var i = 0; i < result.CentralDoors.Count; i++)
+                {
+                    var door = result.CentralDoors[i];
+                    if (door != null && door.Position == result.CentralRoom.ExitPosition)
+                    {
+                        return door.IsOpen;
+                    }
+                }
+            }
+
+            return result.Grid != null
+                && result.Grid.InBounds(result.CentralRoom.ExitPosition)
+                && result.Grid.Get(result.CentralRoom.ExitPosition).IsWalkable;
         }
 
         private static int GetBaseTargetCount(MobSpecies species)
@@ -450,11 +674,11 @@ namespace Labyrinth.Core
             return available;
         }
 
-        private HeroGuildQuestModel FindFirstAvailableQuest()
+        private HeroGuildQuestModel FindFirstAvailableQuest(HeroController hero)
         {
             for (var i = 0; i < quests.Count; i++)
             {
-                if (quests[i].State == HeroGuildQuestState.Available)
+                if (quests[i].State == HeroGuildQuestState.Available && CanHeroTakeQuest(hero, quests[i]))
                 {
                     return quests[i];
                 }

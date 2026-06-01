@@ -23,6 +23,7 @@ namespace Labyrinth.UI
         private Action buildHeroesGuildRequested;
         private Action createHeroRequested;
         private Action mineSelectionRequested;
+        private Action outpostSelectionRequested;
         private Action<BuildingUpgradeType> upgradeRequested;
         private Func<string> farmStatusProvider;
         private Func<string> lumberjackCampStatusProvider;
@@ -37,6 +38,7 @@ namespace Labyrinth.UI
         private Func<string> antiquaryStatusProvider;
         private Func<string> heroesGuildStatusProvider;
         private Func<string> mineStatusProvider;
+        private Func<string> outpostStatusProvider;
         private Func<string> heroHouseStatusProvider;
         private Func<BuildingCost> farmCostProvider;
         private Func<BuildingCost> lumberjackCampCostProvider;
@@ -64,6 +66,7 @@ namespace Labyrinth.UI
         private Func<bool> canBuildAntiquaryProvider;
         private Func<bool> canBuildHeroesGuildProvider;
         private Func<bool> canStartMineSelectionProvider;
+        private Func<bool> canStartOutpostSelectionProvider;
         private Func<bool> canCreateHeroProvider;
         private Func<BuildingUpgradeType, string> upgradeStatusProvider;
         private Func<BuildingUpgradeType, bool> canUpgradeProvider;
@@ -166,6 +169,9 @@ namespace Labyrinth.UI
             Func<string> onMineStatusRequested,
             Func<bool> onCanStartMineSelectionRequested,
             Action onMineSelectionRequested,
+            Func<string> onOutpostStatusRequested,
+            Func<bool> onCanStartOutpostSelectionRequested,
+            Action onOutpostSelectionRequested,
             Func<BuildingType, bool> onBuildingUnlockedRequested,
             Func<BuildingType, bool> onPendingBuildingRequested,
             Func<BuildingUpgradeType, string> onUpgradeStatusRequested,
@@ -229,6 +235,9 @@ namespace Labyrinth.UI
             mineStatusProvider = onMineStatusRequested;
             canStartMineSelectionProvider = onCanStartMineSelectionRequested;
             mineSelectionRequested = onMineSelectionRequested;
+            outpostStatusProvider = onOutpostStatusRequested;
+            canStartOutpostSelectionProvider = onCanStartOutpostSelectionRequested;
+            outpostSelectionRequested = onOutpostSelectionRequested;
             buildingUnlockedProvider = onBuildingUnlockedRequested;
             pendingBuildingProvider = onPendingBuildingRequested;
             upgradeStatusProvider = onUpgradeStatusRequested;
@@ -520,6 +529,19 @@ namespace Labyrinth.UI
                 "Выбрать пещеру",
                 mineSelectionRequested,
                 $"Маршрут: {MineConstructionController.RouteWoodCost} дер./клетка, шахта {MineConstructionController.MineWoodCost} дер.");
+            y += 112f;
+
+            DrawActionCard(
+                new Rect(rect.x, y, rect.width, 104f),
+                "⌂",
+                "Аванпост",
+                "Промежуточная база в пещере",
+                GetOutpostStatus(),
+                new BuildingCost(0, MineConstructionController.RouteWoodCost),
+                CanStartOutpostSelection(),
+                "Выбрать пещеру",
+                outpostSelectionRequested,
+                $"Маршрут: {MineConstructionController.RouteWoodCost} дер./клетка, аванпост {MineConstructionController.OutpostWoodCost} дер.");
         }
 
         private void DrawUpgradesTab(Rect rect)
@@ -625,6 +647,11 @@ namespace Labyrinth.UI
         private string GetMineStatus()
         {
             return mineStatusProvider != null ? mineStatusProvider.Invoke() : "нужна Гильдия шахтёров";
+        }
+
+        private string GetOutpostStatus()
+        {
+            return outpostStatusProvider != null ? outpostStatusProvider.Invoke() : "нужна Гильдия шахтёров";
         }
 
         private bool CanBuildFarm()
@@ -746,6 +773,11 @@ namespace Labyrinth.UI
         private bool CanStartMineSelection()
         {
             return canStartMineSelectionProvider == null || canStartMineSelectionProvider.Invoke();
+        }
+
+        private bool CanStartOutpostSelection()
+        {
+            return canStartOutpostSelectionProvider == null || canStartOutpostSelectionProvider.Invoke();
         }
 
         private bool CanBuildHeroesGuild()

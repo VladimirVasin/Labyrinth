@@ -135,8 +135,25 @@ namespace Labyrinth.Core
                 downStairs = RepositionLowerLevelDownStairs(generated, anchor);
             }
 
+            var bossCave = generated.BossCave;
+            if (ContainsCaveCell(bossCave, anchor))
+            {
+                var replacement = FindReplacementBossCave(generated, anchor, downStairs?.Position ?? anchor);
+                if (replacement.IsValid)
+                {
+                    GameDebugLog.Warning("Dungeon", $"Lower level boss cave moved from up-stairs anchor cave {GameDebugLog.Position(bossCave.Center)} to {GameDebugLog.Position(replacement.Center)}.");
+                    bossCave = replacement;
+                }
+                else
+                {
+                    GameDebugLog.Warning("Dungeon", $"Lower level up stairs anchor overlaps boss cave at {GameDebugLog.Position(bossCave.Center)} and no replacement boss cave was found.");
+                }
+            }
+
             var chests = FilterChestsAtPosition(FilterChestsAtPosition(generated.Chests, anchor), downStairs?.Position ?? anchor);
             var ores = FilterOreDepositsAtPosition(FilterOreDepositsAtPosition(generated.OreDeposits, anchor), downStairs?.Position ?? anchor);
+            chests = FilterChestsInCave(chests, bossCave);
+            ores = FilterOreDepositsInCave(ores, bossCave);
             var upStairs = new DungeonStairsModel(anchor, DungeonStairsDirection.Up, generated.LevelNumber - 1, true);
             GameDebugLog.Info("Dungeon", $"Lower level up stairs anchored at {GameDebugLog.Position(anchor)}.");
             return new MazeGenerationResult(
@@ -152,7 +169,8 @@ namespace Labyrinth.Core
                 ores,
                 downStairs,
                 upStairs,
-                generated.LevelNumber);
+                generated.LevelNumber,
+                bossCave);
         }
 
         private static DungeonStairsModel RepositionLowerLevelDownStairs(MazeGenerationResult generated, Vector2Int blockedPosition)
@@ -167,6 +185,7 @@ namespace Labyrinth.Core
                     || !cell.IsStructurallyPassable
                     || generated.CentralRoom.Contains(position)
                     || !generated.CentralRoom.IsBeyondExitSide(position)
+                    || ContainsCaveCell(generated.BossCave, position)
                     || !distances.TryGetValue(position, out var distance))
                 {
                     continue;
@@ -188,6 +207,39 @@ namespace Labyrinth.Core
             generated.Grid.SetType(best, MazeCellType.LockedDownStairs);
             GameDebugLog.Warning("Dungeon", $"Lower level down stairs moved from up-stairs anchor {GameDebugLog.Position(blockedPosition)} to {GameDebugLog.Position(best)}.");
             return new DungeonStairsModel(best, DungeonStairsDirection.Down, generated.DownStairs.TargetLevel, false);
+        }
+
+        private static bool ContainsCaveCell(CaveInfo cave, Vector2Int cell)
+        {
+            return cave.IsValid
+                && Mathf.Abs(cell.x - cave.Center.x) <= 1
+                && Mathf.Abs(cell.y - cave.Center.y) <= 1;
+        }
+
+        private static CaveInfo FindReplacementBossCave(MazeGenerationResult generated, Vector2Int anchor, Vector2Int stairsPosition)
+        {
+            var distances = MazeValidation.GetReachableDistances(generated.Grid, generated.EntrancePosition, true);
+            var bestDistance = -1;
+            var best = default(CaveInfo);
+            foreach (var cave in generated.Caves)
+            {
+                if (!cave.IsValid
+                    || !generated.CentralRoom.IsBeyondExitSide(cave.Center)
+                    || ContainsCaveCell(cave, anchor)
+                    || ContainsCaveCell(cave, stairsPosition)
+                    || !distances.TryGetValue(cave.Center, out var distance))
+                {
+                    continue;
+                }
+
+                if (distance > bestDistance)
+                {
+                    bestDistance = distance;
+                    best = cave;
+                }
+            }
+
+            return best;
         }
 
         private static List<ChestModel> FilterChestsAtPosition(IReadOnlyList<ChestModel> chests, Vector2Int blockedPosition)
@@ -231,6 +283,47 @@ namespace Labyrinth.Core
             return filtered;
         }
 
+        private static List<ChestModel> FilterChestsInCave(IReadOnlyList<ChestModel> chests, CaveInfo cave)
+        {
+            var filtered = new List<ChestModel>();
+            if (chests == null)
+            {
+                return filtered;
+            }
+
+            for (var i = 0; i < chests.Count; i++)
+            {
+                if (chests[i] != null && !ContainsCaveCell(cave, chests[i].Position))
+                {
+                    filtered.Add(chests[i]);
+                }
+            }
+
+            return filtered;
+        }
+
+        private static List<OreDepositModel> FilterOreDepositsInCave(IReadOnlyList<OreDepositModel> deposits, CaveInfo cave)
+        {
+            var filtered = new List<OreDepositModel>();
+            if (deposits == null)
+            {
+                return filtered;
+            }
+
+            for (var i = 0; i < deposits.Count; i++)
+            {
+                var deposit = deposits[i];
+                if (deposit == null || deposit.Cave.Center == cave.Center || ContainsAnyCaveCell(cave, deposit.Cells))
+                {
+                    continue;
+                }
+
+                filtered.Add(deposit);
+            }
+
+            return filtered;
+        }
+
         private static bool ContainsCell(IReadOnlyList<Vector2Int> cells, Vector2Int position)
         {
             if (cells == null)
@@ -241,6 +334,24 @@ namespace Labyrinth.Core
             for (var i = 0; i < cells.Count; i++)
             {
                 if (cells[i] == position)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ContainsAnyCaveCell(CaveInfo cave, IReadOnlyList<Vector2Int> cells)
+        {
+            if (cells == null)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < cells.Count; i++)
+            {
+                if (ContainsCaveCell(cave, cells[i]))
                 {
                     return true;
                 }

@@ -137,6 +137,7 @@
     <Compile Include="Assets\Scripts\Core\MineConstructionController.Visibility.cs" />
     <Compile Include="Assets\Scripts\Core\VoxelFigurePartAnimator.cs" />
     <Compile Include="Assets\Scripts\Core\MazeSizePreset.cs" />
+    <Compile Include="Assets\Scripts\Hero\HeroExplorer.Patrol.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.MiniBossDoors.cs" />
     <Compile Include="Assets\Scripts\UI\BaseHudView.cs" />
     <Compile Include="Assets\Scripts\Maze\TerrainDecorationController.Async.cs" />
@@ -148,6 +149,7 @@
     <Compile Include="Assets\Scripts\Mobs\MobController.cs" />
     <Compile Include="Assets\Scripts\Core\GameDebugLog.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroBlessingType.cs" />
+    <Compile Include="Assets\Scripts\Maze\MazeGenerator.BossCaves.cs" />
     <Compile Include="Assets\Scripts\Maze\BuildingUpgradeVisuals.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
     <Compile Include="Assets\Scripts\Core\GoldIngotManager.cs" />

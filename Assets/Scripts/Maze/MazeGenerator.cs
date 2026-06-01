@@ -46,22 +46,23 @@ namespace Labyrinth.Maze
             grid.SetType(entrance, MazeCellType.Entrance);
             MazeBranchCarver.AddExtraConnections(grid, entrance, centralRoom, random);
             var caves = PlaceCaves(grid, entrance, centralRoom, random);
-            EnsureSecondHalfStairsCave(grid, entrance, centralRoom, caves);
+            var bossCave = EnsureSecondHalfBossCave(grid, entrance, centralRoom, caves);
+            EnsureSecondHalfStairsCave(grid, entrance, centralRoom, caves, bossCave);
             var centralRoomKey = PlaceCentralRoomKey(grid, entrance, centralRoom, caves);
-            var downStairs = PlaceDownStairs(grid, entrance, centralRoom, caves, levelNumber + 1);
+            var downStairs = PlaceDownStairs(grid, entrance, centralRoom, caves, bossCave, levelNumber + 1);
             MazeBranchCarver.AddSpaciousAreas(grid, entrance, centralRoom, random);
             MazeBranchCarver.EnsureAlternativeRoutes(grid, entrance, centralRoom, centralRoomKey, downStairs, caves, random);
             var centralDoors = CreateCentralDoors(grid, centralRoom);
-            var chests = CreateChests(caves, centralRoomKey, downStairs.Position, random);
-            var oreDeposits = CreateOreDeposits(grid, caves, entrance, centralRoomKey, downStairs.Position, random);
+            var chests = CreateChests(caves, centralRoomKey, downStairs.Position, bossCave, random);
+            var oreDeposits = CreateOreDeposits(grid, caves, entrance, centralRoomKey, downStairs.Position, bossCave, random);
             var upStairs = levelNumber > 1
                 ? new DungeonStairsModel(entrance, DungeonStairsDirection.Up, levelNumber - 1, true)
                 : null;
 
             GameDebugLog.Info(
                 "Maze",
-                $"Level {levelNumber} central room: min={GameDebugLog.Position(centralRoom.Min)}, max={GameDebugLog.Position(centralRoom.Max)}, entranceDoor={GameDebugLog.Position(centralRoom.EntrancePosition)} via {GameDebugLog.Position(centralRoom.EntranceExternalPosition)}, exitDoor={GameDebugLog.Position(centralRoom.ExitPosition)} via {GameDebugLog.Position(centralRoom.ExitExternalPosition)}, key={GameDebugLog.Position(centralRoomKey.Position)}, downStairs={GameDebugLog.Position(downStairs.Position)}, chests={chests.Count}, oreDeposits={oreDeposits.Count}");
-            return new MazeGenerationResult(grid, normalizedSettings, basePosition, entrance, centralRoom, centralDoors, centralRoomKey, chests, caves, oreDeposits, downStairs, upStairs, levelNumber);
+                $"Level {levelNumber} central room: min={GameDebugLog.Position(centralRoom.Min)}, max={GameDebugLog.Position(centralRoom.Max)}, entranceDoor={GameDebugLog.Position(centralRoom.EntrancePosition)} via {GameDebugLog.Position(centralRoom.EntranceExternalPosition)}, exitDoor={GameDebugLog.Position(centralRoom.ExitPosition)} via {GameDebugLog.Position(centralRoom.ExitExternalPosition)}, key={GameDebugLog.Position(centralRoomKey.Position)}, bossCave={GameDebugLog.Position(bossCave.Center)}, downStairs={GameDebugLog.Position(downStairs.Position)}, chests={chests.Count}, oreDeposits={oreDeposits.Count}");
+            return new MazeGenerationResult(grid, normalizedSettings, basePosition, entrance, centralRoom, centralDoors, centralRoomKey, chests, caves, oreDeposits, downStairs, upStairs, levelNumber, bossCave);
         }
 
         private static void CarveMaze(
@@ -299,13 +300,15 @@ namespace Labyrinth.Maze
             IReadOnlyList<CaveInfo> caves,
             KeyPickupModel centralRoomKey,
             Vector2Int stairsPosition,
+            CaveInfo bossCave,
             System.Random random)
         {
             var chests = new List<ChestModel>();
             foreach (var cave in caves)
             {
                 if ((centralRoomKey != null && cave.Center == centralRoomKey.Position)
-                    || cave.Center == stairsPosition)
+                    || cave.Center == stairsPosition
+                    || IsSameCave(cave, bossCave))
                 {
                     continue;
                 }
@@ -339,6 +342,7 @@ namespace Labyrinth.Maze
             Vector2Int entrance,
             KeyPickupModel centralRoomKey,
             Vector2Int stairsPosition,
+            CaveInfo bossCave,
             System.Random random)
         {
             var deposits = new List<OreDepositModel>();
@@ -348,6 +352,11 @@ namespace Labyrinth.Maze
 
             foreach (var cave in caves)
             {
+                if (IsSameCave(cave, bossCave))
+                {
+                    continue;
+                }
+
                 var cells = CollectOreCells(grid, cave, centralRoomKey, stairsPosition);
                 if (cells.Count < MinimumOreCells)
                 {
@@ -583,6 +592,7 @@ namespace Labyrinth.Maze
             Vector2Int entrance,
             CentralRoomInfo centralRoom,
             IReadOnlyList<CaveInfo> caves,
+            CaveInfo bossCave,
             int targetLevel)
         {
             var distances = MazeValidation.GetReachableDistances(grid, entrance, true);
@@ -590,7 +600,8 @@ namespace Labyrinth.Maze
             var stairsPosition = default(Vector2Int);
             foreach (var cave in caves)
             {
-                if (!centralRoom.IsBeyondExitSide(cave.Center)
+                if (IsSameCave(cave, bossCave)
+                    || !centralRoom.IsBeyondExitSide(cave.Center)
                     || !distances.TryGetValue(cave.Center, out var distance))
                 {
                     continue;
@@ -605,7 +616,7 @@ namespace Labyrinth.Maze
 
             if (bestDistance < 0)
             {
-                stairsPosition = FindFallbackSecondHalfStairsPosition(grid, entrance, centralRoom);
+                stairsPosition = FindFallbackSecondHalfStairsPosition(grid, entrance, centralRoom, bossCave);
                 GameDebugLog.Warning("Maze", $"Down stairs fallback used at {GameDebugLog.Position(stairsPosition)} because no second-half cave was available.");
             }
 
@@ -616,7 +627,8 @@ namespace Labyrinth.Maze
         private static Vector2Int FindFallbackSecondHalfStairsPosition(
             MazeGrid grid,
             Vector2Int entrance,
-            CentralRoomInfo centralRoom)
+            CentralRoomInfo centralRoom,
+            CaveInfo bossCave)
         {
             var distances = MazeValidation.GetReachableDistances(grid, entrance, true);
             var bestDistance = -1;
@@ -627,6 +639,7 @@ namespace Labyrinth.Maze
                 if (!cell.IsStructurallyPassable
                     || centralRoom.Contains(position)
                     || !centralRoom.IsBeyondExitSide(position)
+                    || ContainsCaveCell(bossCave, position)
                     || !distances.TryGetValue(position, out var distance))
                 {
                     continue;
@@ -636,69 +649,6 @@ namespace Labyrinth.Maze
                 {
                     bestDistance = distance;
                     best = position;
-                }
-            }
-
-            return best;
-        }
-
-        private static void EnsureSecondHalfStairsCave(
-            MazeGrid grid,
-            Vector2Int entrance,
-            CentralRoomInfo centralRoom,
-            List<CaveInfo> caves)
-        {
-            foreach (var cave in caves)
-            {
-                if (centralRoom.IsBeyondExitSide(cave.Center))
-                {
-                    return;
-                }
-            }
-
-            var center = FindFallbackSecondHalfCaveCenter(grid, entrance, centralRoom);
-            if (center == default)
-            {
-                return;
-            }
-
-            var radius = CaveSize / 2;
-            for (var x = center.x - radius; x <= center.x + radius; x++)
-            {
-                for (var y = center.y - radius; y <= center.y + radius; y++)
-                {
-                    grid.SetType(x, y, MazeCellType.Path);
-                }
-            }
-
-            caves.Add(new CaveInfo(center, center));
-            GameDebugLog.Warning("Maze", $"Second-half stairs cave fallback carved at {GameDebugLog.Position(center)}.");
-        }
-
-        private static Vector2Int FindFallbackSecondHalfCaveCenter(
-            MazeGrid grid,
-            Vector2Int entrance,
-            CentralRoomInfo centralRoom)
-        {
-            var distances = MazeValidation.GetReachableDistances(grid, entrance, true);
-            var bestDistance = -1;
-            var best = default(Vector2Int);
-            for (var x = centralRoom.Max.x + CaveSize; x <= grid.Width - CaveSize - 1; x++)
-            {
-                for (var y = CaveSize; y <= grid.Height - CaveSize - 1; y++)
-                {
-                    var center = new Vector2Int(x, y);
-                    if (IsCaveBlockedByCentralPassage(center, centralRoom)
-                        || !distances.TryGetValue(center, out var distance))
-                    {
-                        continue;
-                    }
-
-                    if (distance > bestDistance)
-                    {
-                        bestDistance = distance;
-                        best = center;
-                    }
                 }
             }
 

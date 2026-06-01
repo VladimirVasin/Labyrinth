@@ -121,7 +121,7 @@ namespace Labyrinth.Core
             mineConstructionController = gameObject.AddComponent<MineConstructionController>();
             mineConstructionController.Configure(resources, baseDevelopment, mazeRenderer, baseAmbience);
             heroGuildQuestController = gameObject.AddComponent<HeroGuildQuestController>();
-            heroGuildQuestController.Configure(resources, baseDevelopment, mazeRenderer, () => currentMaze);
+            heroGuildQuestController.Configure(resources, baseDevelopment, mazeRenderer, () => currentMaze, () => mobManager);
             explorationCoordinator = new HeroExplorationCoordinator();
             mobManager = gameObject.AddComponent<MobManager>();
             mobManager.SetEncounterHeroes(heroes);
@@ -429,6 +429,9 @@ namespace Labyrinth.Core
                 GetMineStatus,
                 CanStartMineSelection,
                 BeginMineSelection,
+                GetOutpostStatus,
+                CanStartOutpostSelection,
+                BeginOutpostSelection,
                 IsBuildingUnlocked,
                 HasPendingBuilding,
                 GetBuildingUpgradeStatus,

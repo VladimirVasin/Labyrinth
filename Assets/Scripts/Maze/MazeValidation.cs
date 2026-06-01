@@ -66,6 +66,11 @@ namespace Labyrinth.Maze
                 return false;
             }
 
+            if (!ValidateBossCave(result, out error))
+            {
+                return false;
+            }
+
             var distances = GetReachableDistances(grid, result.EntrancePosition, true);
             if (!AllStructurallyPassableCellsReachable(grid, distances))
             {
@@ -80,6 +85,138 @@ namespace Labyrinth.Maze
 
             error = string.Empty;
             return true;
+        }
+
+        private static bool ValidateBossCave(MazeGenerationResult result, out string error)
+        {
+            var cave = result.BossCave;
+            if (!cave.IsValid)
+            {
+                error = "Boss cave is missing.";
+                return false;
+            }
+
+            if (result.Caves == null || !ContainsCave(result.Caves, cave))
+            {
+                error = "Boss cave must be part of the generated cave list.";
+                return false;
+            }
+
+            if (!result.CentralRoom.IsValid
+                || !result.CentralRoom.IsBeyondExitSide(cave.Center)
+                || result.CentralRoom.Contains(cave.Center))
+            {
+                error = "Boss cave must be beyond the central room exit side.";
+                return false;
+            }
+
+            if (!result.Grid.InBounds(cave.Center) || !result.Grid.Get(cave.Center).IsWalkable)
+            {
+                error = "Boss cave center must be walkable.";
+                return false;
+            }
+
+            var distances = GetReachableDistances(result.Grid, result.EntrancePosition, true);
+            if (!distances.ContainsKey(cave.Center))
+            {
+                error = "Boss cave must be reachable through the generated dungeon.";
+                return false;
+            }
+
+            for (var x = cave.Center.x - 1; x <= cave.Center.x + 1; x++)
+            {
+                for (var y = cave.Center.y - 1; y <= cave.Center.y + 1; y++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (!result.Grid.InBounds(cell) || !result.Grid.Get(cell).IsWalkable)
+                    {
+                        error = "Boss cave footprint must be a walkable 3x3 cave.";
+                        return false;
+                    }
+
+                    if (IsReservedBossCaveCell(result, cell))
+                    {
+                        error = "Boss cave must not contain stairs, keys, chests, ore, or central-room cells.";
+                        return false;
+                    }
+                }
+            }
+
+            error = string.Empty;
+            return true;
+        }
+
+        private static bool IsReservedBossCaveCell(MazeGenerationResult result, Vector2Int cell)
+        {
+            if (result.CentralRoom.IsValid && result.CentralRoom.Contains(cell))
+            {
+                return true;
+            }
+
+            if (result.CentralRoomKey != null && result.CentralRoomKey.Position == cell)
+            {
+                return true;
+            }
+
+            if (result.DownStairs != null && result.DownStairs.Position == cell)
+            {
+                return true;
+            }
+
+            if (result.UpStairs != null && result.UpStairs.Position == cell)
+            {
+                return true;
+            }
+
+            if (result.Chests != null)
+            {
+                foreach (var chest in result.Chests)
+                {
+                    if (chest != null && chest.Position == cell)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            if (result.OreDeposits != null)
+            {
+                foreach (var deposit in result.OreDeposits)
+                {
+                    if (deposit == null)
+                    {
+                        continue;
+                    }
+
+                    if (deposit.Cave.Center == result.BossCave.Center)
+                    {
+                        return true;
+                    }
+
+                    foreach (var oreCell in deposit.Cells)
+                    {
+                        if (oreCell == cell)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ContainsCave(IReadOnlyList<CaveInfo> caves, CaveInfo expected)
+        {
+            foreach (var cave in caves)
+            {
+                if (cave.IsValid && cave.Center == expected.Center)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool ValidateChests(MazeGenerationResult result, out string error)

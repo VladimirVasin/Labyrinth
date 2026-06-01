@@ -1,8 +1,8 @@
 # System Owner Map
 
-Detailed navigation map for AI agents working on `Labyrinth`.
+Detailed file-owner navigation map for AI agents working on `Labyrinth`.
 
-Use this file before broad code searches and before implementation. Owner cards are starting points, not hard boundaries. If code disagrees with this map, trust code, then update this file.
+Use `AI/system-tree.md` first for broad, ambiguous, architectural, or cross-system work, then use this file before broad code searches and implementation. Owner cards are starting points, not hard boundaries. If code disagrees with this map, trust code, then update this file.
 
 ## Update Rules
 
@@ -15,6 +15,7 @@ Use this file before broad code searches and before implementation. Owner cards 
 ## Navigation Rules
 
 - For implementation, bugfix, refactor, or investigation tasks, consult the relevant owner cards here before running broad `rg` searches.
+- For broad or unclear work, consult `AI/system-tree.md` first to identify affected systems, then inspect the relevant owner cards here.
 - If a task crosses systems, inspect every relevant card and the cross-system links section.
 - If the task is unclear, start with `Game Bootstrap / Runtime Orchestration`, then follow the related cards.
 - For generated Unity project file changes, keep `Assembly-CSharp.csproj` in sync with added or removed `.cs` files.
@@ -110,7 +111,7 @@ Check when:
 ### Heroes / Exploration / Progression
 
 Responsibility:
-- Owns hero model state, movement, memory, visibility, inventory, injuries, lineage, blessings, vengeance quests, exploration target selection, entrance commute, and progression tuning.
+- Owns hero model state, movement, memory, visit-aware patrol routing, visibility, inventory, injuries, lineage, blessings, vengeance quests, exploration target selection, entrance commute, and progression tuning.
 
 Primary files:
 - `Assets/Scripts/Hero/HeroController.cs`
@@ -118,6 +119,7 @@ Primary files:
 - `Assets/Scripts/Hero/HeroModel.Injuries.cs`
 - `Assets/Scripts/Hero/HeroExplorer.cs`
 - `Assets/Scripts/Hero/HeroExplorer.Pathfinding.cs`
+- `Assets/Scripts/Hero/HeroExplorer.Patrol.cs`
 - `Assets/Scripts/Hero/HeroExplorer.NearbyInteractions.cs`
 - `Assets/Scripts/Hero/HeroExplorationCoordinator.cs`
 - `Assets/Scripts/Hero/HeroMemory.cs`
@@ -145,7 +147,7 @@ Visual files:
 - `Assets/Scripts/Hero/HeroVisibilityView.cs`
 
 Check when:
-- Changing exploration AI, common map usage, hero spawn/commute, stamina, XP, level scaling, item pickup, return behavior, combat wounds, death/rebirth, blessings, lineage, vengeance, or hero HUD stats.
+- Changing exploration AI, stale-route patrol behavior, common map usage, hero spawn/commute, stamina, XP, level scaling, item pickup, return behavior, combat wounds, death/rebirth, blessings, lineage, vengeance, or hero HUD stats.
 
 ### Combat
 
@@ -172,7 +174,7 @@ Check when:
 ### Mobs / Encounters / Respawn
 
 Responsibility:
-- Spawns mobs, chooses mob species, handles density/respawn, wandering state, encounter detection, awareness, and mob queries.
+- Spawns mobs, chooses mob species, handles density/respawn, displayed mob danger levels, wandering state, encounter detection, awareness, and mob queries.
 
 Primary files:
 - `Assets/Scripts/Mobs/MobManager.cs`
@@ -188,12 +190,12 @@ Related systems:
 - Combat, hero exploration, maze generation, visibility/fog, Heroes Guild quests.
 
 Check when:
-- Changing mob counts, spawn placement, darkness respawn, species weighting, mob wandering, encounter stalls, visibility hiding, or mob stats.
+- Changing mob counts, spawn placement, darkness respawn, species weighting, displayed mob levels/labels, mob wandering, encounter stalls, visibility hiding, or mob stats.
 
 ### Maze Generation / Dungeon Topology
 
 Responsibility:
-- Builds the procedural dungeon grid, cells, caves, branches, central room routes, stairs, keys, doors, ores, and validation.
+- Builds the procedural dungeon grid, cells, caves, dedicated boss cave, branches, central room routes, stairs, keys, doors, ores, and validation.
 
 Primary files:
 - `Assets/Scripts/Maze/MazeGenerator.cs`
@@ -215,7 +217,7 @@ Related model files:
 - `Assets/Scripts/Maze/OreDepositModel.cs`
 
 Check when:
-- Changing map shape, guaranteed routes, central room, stairs, caves, chests, ores, keys/doors, seed behavior, validation, or dungeon progression.
+- Changing map shape, guaranteed routes, central room, boss cave, stairs, caves, chests, ores, keys/doors, seed behavior, validation, or dungeon progression.
 
 ### Maze Rendering / Terrain / Voxel Visuals
 
@@ -306,10 +308,10 @@ Related systems:
 Check when:
 - Changing pickup/delivery logic, inventory slots, reward XP/gold, dropped death tokens, carried keys, objective labels/tooltips, or item visibility.
 
-### Mines / Dungeon Fortification
+### Mines / Dungeon Outposts / Dungeon Fortification
 
 Responsibility:
-- Manages mine discovery, construction, center build progress, mine workers, mine carts, ore storage/delivery, mine upgrades, cave paths, mine lighting, and dungeon fortification routes.
+- Manages mine and outpost discovery, route-first underground construction, center build progress, mine workers, mine carts, ore storage/delivery, mine upgrades, cave paths, mine/outpost lighting, and dungeon fortification routes.
 
 Primary files:
 - `Assets/Scripts/Core/MineConstructionController.cs`
@@ -332,12 +334,13 @@ Related files:
 - `Assets/Scripts/Maze/MazeRenderer.Lighting.cs`
 
 Check when:
-- Changing mine construction, mine worker routing, mine cart routing, ore production/delivery, mine upgrades, mine light origins, fortified-cell behavior, or dungeon torch placement.
+- Changing mine/outpost construction, cave selection rules, mine worker routing, mine cart routing, ore production/delivery, mine upgrades, mine/outpost light origins, fortified-cell behavior, or dungeon torch placement.
 
 ### Heroes Guild / Contracts
 
 Responsibility:
-- Generates, displays, assigns, tracks, and pays clearing contracts for heroes.
+- Generates, filters, displays, assigns, tracks, and pays clearing contracts for heroes.
+- Gates contract targets through mob discovery/progression checks and hero readiness before assignment.
 
 Primary files:
 - `Assets/Scripts/Core/HeroGuildQuestController.cs`
@@ -353,7 +356,7 @@ Related files:
 - `Assets/Scripts/Combat/CombatController.cs`
 
 Check when:
-- Changing quest generation, auto-assignment, reward reservation/payment, mob defeat progress, hero HUD quest display, or building micro-HUD services.
+- Changing quest generation, target availability, auto-assignment readiness, reward reservation/payment, mob defeat progress, hero HUD quest display, or building micro-HUD services.
 
 ### UI / HUD / Menus
 
@@ -429,7 +432,7 @@ Check when:
 - Hero exploration touches `HeroExplorer`, `HeroExplorationCoordinator`, `HeroMemory`, `MobManager`, `CombatController`, objectives, cartography, visibility, and map HUD.
 - Combat balance touches `CombatController.*`, `HeroModel`, `HeroModel.Injuries`, `MobModel`, `MobManager.SpawnSelection`, rewards, quests, and HUD display.
 - Mob density/respawn touches `MobManager`, `MobManager.SpawnSelection`, maze topology, hero visibility, combat, and Heroes Guild contracts.
-- Mine gameplay touches `MineConstructionController.*`, `MineConstructionRenderer`, `MazeRenderer.Lighting`, `ResourceWallet`, `BaseAmbienceController`, and `GameBootstrap.Mines`.
+- Mine and outpost gameplay touches `MineConstructionController.*`, `MineConstructionRenderer`, `MazeRenderer.Lighting`, `ResourceWallet`, `BaseAmbienceController`, `BaseHudView`, and `GameBootstrap.Mines`.
 - Lighting/F2 changes often need `HeroVisibilityView`, `MazeRenderer.Lighting`, `MazeRenderer.Visibility`, object managers, torches/mines, and fog/map UI checked together.
 - Carryable reward changes touch `HeroInventory`, `GoldIngotManager`, `HeroDeathTokenManager`, `HeroExplorer`, `GameBootstrap.CarryItems`, HUD text, and visibility tracking.
 - New `.cs` files must be added to `Assembly-CSharp.csproj`; removed/split files must be removed from it.

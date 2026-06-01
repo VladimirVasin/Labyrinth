@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Labyrinth.Core;
 using Labyrinth.Maze;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Labyrinth.Mobs
 {
@@ -12,15 +13,18 @@ namespace Labyrinth.Mobs
         private const float AttackDuration = 0.3f;
         private const float DefeatAnimationDuration = 0.82f;
         private const float DefeatImpactDuration = 0.18f;
+        private const float LabelDepthOffset = -0.035f;
         private static readonly Vector3 HumanoidVisualFootprintScale = new Vector3(0.82f, 0.94f, 0.82f);
         private static readonly Vector3 RatVisualFootprintScale = new Vector3(0.76f, 0.92f, 0.76f);
 
         private static int nextLaneSerial;
+        private static Material levelLabelBackgroundMaterial;
 
         private readonly List<Vector3> movePath = new List<Vector3>();
         private MazeRenderer mazeRenderer;
         private Vector3 targetPosition;
         private Transform visualRoot;
+        private Transform levelLabelRoot;
         private Transform leftLegPivot;
         private Transform rightLegPivot;
         private Transform clubArmPivot;
@@ -42,6 +46,7 @@ namespace Labyrinth.Mobs
         private Vector2Int visualGridPosition;
         private MobSpecies species;
         private MobRank rank;
+        private int level;
         private bool defeated;
         private float defeatTimer;
         private Vector3 defeatStartPosition;
@@ -57,11 +62,12 @@ namespace Labyrinth.Mobs
             MazeRenderer renderer,
             Vector2Int startPosition,
             MobSpecies species = MobSpecies.Orc,
-            MobRank rank = MobRank.Regular)
+            MobRank rank = MobRank.Regular,
+            int level = 1)
         {
             var mobObject = new GameObject(BuildObjectName(species, rank));
             var view = mobObject.AddComponent<MobView>();
-            view.Initialize(renderer, startPosition, species, rank);
+            view.Initialize(renderer, startPosition, species, rank, level);
             return view;
         }
 
@@ -81,6 +87,8 @@ namespace Labyrinth.Mobs
             {
                 collider.enabled = visible && !defeated;
             }
+
+            SetLevelLabelVisible(visible && !defeated);
         }
 
         public void MoveTo(Vector2Int gridPosition)
@@ -162,6 +170,8 @@ namespace Labyrinth.Mobs
             {
                 collider.enabled = false;
             }
+
+            SetLevelLabelVisible(false);
         }
 
         private void Update()
@@ -191,6 +201,7 @@ namespace Labyrinth.Mobs
             }
 
             AnimateMob(isMoving);
+            RefreshLevelLabelBillboard();
         }
 
         private void AnimateDefeat()
@@ -218,18 +229,21 @@ namespace Labyrinth.Mobs
             AnimateHumanoidDefeat(eased);
         }
 
-        private void Initialize(MazeRenderer renderer, Vector2Int startPosition, MobSpecies species, MobRank rank)
+        private void Initialize(MazeRenderer renderer, Vector2Int startPosition, MobSpecies species, MobRank rank, int level)
         {
             this.species = species;
             this.rank = rank;
+            this.level = Mathf.Max(1, level);
             mazeRenderer = renderer;
             laneSeed = BuildLaneSeed(startPosition, species, rank, ++nextLaneSerial);
             visualGridPosition = startPosition;
             BuildModel();
             transform.localScale = Vector3.one * renderer.ModelUnitSize * BuildScaleMultiplier(species, rank);
+            BuildLevelLabel();
             moveSpeed = MoveSpeed * renderer.CellSize * (species == MobSpecies.Rat && rank == MobRank.Regular ? 1.18f : 1f);
             MoveTo(startPosition);
             transform.position = targetPosition;
+            RefreshLevelLabelBillboard();
         }
 
         private void MoveAlongPath(float distance)
@@ -379,6 +393,107 @@ namespace Labyrinth.Mobs
                 CreatePart($"{prefix} Rat Shoulder Spikes", visualRoot, PrimitiveType.Cube, new Vector3(0f, 0.48f, 0.1f), new Vector3(0.5f, 0.08f, 0.14f), eye);
                 CreatePart($"{prefix} Rat Back Spike", visualRoot, PrimitiveType.Cube, new Vector3(0f, 0.5f, -0.18f), new Vector3(0.12f, spikeHeight, 0.12f), eye);
                 CreatePart($"{prefix} Rat Head Crown", visualRoot, PrimitiveType.Cube, new Vector3(0f, 0.58f, 0.44f), new Vector3(0.32f, 0.08f, 0.12f), eye);
+            }
+        }
+
+        private void BuildLevelLabel()
+        {
+            if (rank != MobRank.MiniBoss && rank != MobRank.Boss)
+            {
+                return;
+            }
+
+            levelLabelRoot = new GameObject("Mob Level Label").transform;
+            levelLabelRoot.SetParent(transform, false);
+
+            var background = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            background.name = "Mob Level Label Background";
+            background.transform.SetParent(levelLabelRoot, false);
+            background.transform.localPosition = Vector3.zero;
+            background.GetComponent<Renderer>().sharedMaterial = GetLevelLabelBackgroundMaterial();
+            RemoveCollider(background);
+
+            var text = $"Lvl {level}";
+            CreateLevelLabelText("Mob Level Label Shadow", text, new Vector3(0.045f, -0.045f, LabelDepthOffset), new Color(0f, 0f, 0f, 0.92f));
+            CreateLevelLabelText("Mob Level Label Text", text, new Vector3(0f, 0f, LabelDepthOffset - 0.01f), new Color(1f, 0.93f, 0.68f, 1f));
+
+            background.transform.localScale = new Vector3(Mathf.Clamp(1.55f + text.Length * 0.18f, 2.25f, 5.2f), 0.56f, 1f);
+        }
+
+        private void CreateLevelLabelText(string objectName, string text, Vector3 localPosition, Color color)
+        {
+            var textObject = new GameObject(objectName);
+            textObject.transform.SetParent(levelLabelRoot, false);
+            textObject.transform.localPosition = localPosition;
+            var textMesh = textObject.AddComponent<TextMesh>();
+            textMesh.text = text;
+            textMesh.anchor = TextAnchor.MiddleCenter;
+            textMesh.alignment = TextAlignment.Center;
+            textMesh.fontSize = 72;
+            textMesh.characterSize = 0.085f;
+            textMesh.fontStyle = FontStyle.Bold;
+            textMesh.color = color;
+
+            var meshRenderer = textObject.GetComponent<MeshRenderer>();
+            if (meshRenderer != null)
+            {
+                meshRenderer.sortingOrder = 40;
+            }
+        }
+
+        private void RefreshLevelLabelBillboard()
+        {
+            if (levelLabelRoot == null)
+            {
+                return;
+            }
+
+            levelLabelRoot.position = transform.position + Vector3.up * GetLevelLabelHeight();
+            levelLabelRoot.localScale = BuildInverseParentScale();
+
+            var camera = Camera.main;
+            if (camera != null)
+            {
+                levelLabelRoot.rotation = camera.transform.rotation;
+            }
+        }
+
+        private Vector3 BuildInverseParentScale()
+        {
+            var scale = transform.lossyScale;
+            return new Vector3(SafeInverse(scale.x), SafeInverse(scale.y), SafeInverse(scale.z));
+        }
+
+        private float GetLevelLabelHeight()
+        {
+            var unit = mazeRenderer != null ? mazeRenderer.ModelUnitSize : 1f;
+            if (rank == MobRank.Boss)
+            {
+                return unit * (species == MobSpecies.Rat ? 1.35f : 2.55f);
+            }
+
+            switch (species)
+            {
+                case MobSpecies.Rat:
+                    return unit * 0.95f;
+                case MobSpecies.Goblin:
+                    return unit * 1.55f;
+                default:
+                    return unit * 2.05f;
+            }
+        }
+
+        private void SetLevelLabelVisible(bool visible)
+        {
+            if (levelLabelRoot == null)
+            {
+                return;
+            }
+
+            levelLabelRoot.gameObject.SetActive(visible);
+            foreach (var renderer in levelLabelRoot.GetComponentsInChildren<Renderer>(true))
+            {
+                renderer.enabled = visible;
             }
         }
 
@@ -603,6 +718,59 @@ namespace Labyrinth.Mobs
         private static Material CreateMaterial(string materialName, Color color)
         {
             return VoxelVisuals.CreateLitMaterial(materialName, color);
+        }
+
+        private static Material GetLevelLabelBackgroundMaterial()
+        {
+            if (levelLabelBackgroundMaterial == null)
+            {
+                levelLabelBackgroundMaterial = CreateTransparentMaterial(
+                    "Mob Level Label Background",
+                    new Color(0.055f, 0.047f, 0.035f, 0.86f));
+            }
+
+            return levelLabelBackgroundMaterial;
+        }
+
+        private static Material CreateTransparentMaterial(string materialName, Color color)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null)
+            {
+                shader = Shader.Find("Standard");
+            }
+
+            var material = new Material(shader) { name = materialName, color = color };
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", color);
+            }
+
+            if (material.HasProperty("_Color"))
+            {
+                material.SetColor("_Color", color);
+            }
+
+            material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+            material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+            material.SetInt("_ZWrite", 0);
+            material.renderQueue = (int)RenderQueue.Transparent;
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            return material;
+        }
+
+        private static float SafeInverse(float value)
+        {
+            return Mathf.Abs(value) > 0.0001f ? 1f / value : 1f;
+        }
+
+        private static void RemoveCollider(GameObject target)
+        {
+            var collider = target.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Destroy(collider);
+            }
         }
 
         private static string BuildSpeciesMaterialPrefix(MobSpecies mobSpecies)

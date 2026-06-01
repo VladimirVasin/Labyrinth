@@ -13,6 +13,19 @@ namespace Labyrinth.Core
             Completed
         }
 
+        private enum MineZoneKind
+        {
+            Mine,
+            Outpost
+        }
+
+        private enum MineSelectionMode
+        {
+            None,
+            Mine,
+            Outpost
+        }
+
         private enum MineWorkerState
         {
             WalkingToCastle,
@@ -36,12 +49,24 @@ namespace Labyrinth.Core
                 Cave = cave;
                 Route = route;
                 OreType = oreType;
+                Kind = MineZoneKind.Mine;
+                State = MineZoneState.BuildingRoute;
+            }
+
+            public MineZone(CaveInfo cave, List<Vector2Int> route, MineZoneKind kind)
+            {
+                Cave = cave;
+                Route = route;
+                Kind = kind;
+                OreType = OreDepositType.Iron;
                 State = MineZoneState.BuildingRoute;
             }
 
             public CaveInfo Cave { get; }
 
             public List<Vector2Int> Route { get; }
+
+            public MineZoneKind Kind { get; }
 
             public OreDepositType OreType { get; }
 

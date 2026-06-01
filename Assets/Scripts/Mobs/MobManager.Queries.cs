@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Labyrinth.Hero;
 using UnityEngine;
 
@@ -33,6 +34,42 @@ namespace Labyrinth.Mobs
             }
 
             return false;
+        }
+
+        public void CollectVisibleRegularSpecies(IReadOnlyList<HeroController> heroes, ISet<MobSpecies> species)
+        {
+            if (heroes == null || species == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < mobs.Count; i++)
+            {
+                var mob = mobs[i];
+                if (mob == null
+                    || mob.Model == null
+                    || !mob.Model.IsAlive
+                    || mob.Model.Rank != MobRank.Regular)
+                {
+                    continue;
+                }
+
+                for (var heroIndex = 0; heroIndex < heroes.Count; heroIndex++)
+                {
+                    var hero = heroes[heroIndex];
+                    if (hero == null
+                        || hero.Model == null
+                        || !hero.Model.IsAlive
+                        || hero.Model.Visibility == null
+                        || !hero.Model.Visibility.IsVisible(mob.Position))
+                    {
+                        continue;
+                    }
+
+                    species.Add(mob.Model.Species);
+                    break;
+                }
+            }
         }
 
         public bool TryGetCentralMiniBossTarget(HeroModel hero, out Vector2Int target, out string label)

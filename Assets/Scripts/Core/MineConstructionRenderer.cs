@@ -13,6 +13,7 @@ namespace Labyrinth.Core
         private readonly MazeRenderer mazeRenderer;
         private readonly Material selectionMaterial;
         private readonly Material hoverValidMaterial;
+        private readonly Material outpostSelectionMaterial;
         private readonly Material hoverInvalidMaterial;
         private readonly Material zoneMaterial;
         private readonly Material plankMaterial;
@@ -35,6 +36,7 @@ namespace Labyrinth.Core
             root.SetParent(parent, false);
             selectionMaterial = CreateMaterial("Mine Cave Selection", new Color(0.16f, 0.78f, 1f, 0.42f));
             hoverValidMaterial = CreateMaterial("Mine Cave Hover Valid", new Color(0.26f, 1f, 0.42f, 0.66f));
+            outpostSelectionMaterial = CreateMaterial("Outpost Cave Selection", new Color(0.32f, 0.92f, 0.58f, 0.46f));
             hoverInvalidMaterial = CreateMaterial("Mine Cave Hover Invalid", new Color(1f, 0.25f, 0.14f, 0.66f));
             zoneMaterial = CreateMaterial("Mine Build Zone", new Color(0.92f, 0.68f, 0.2f, 0.72f));
             plankMaterial = CreateMaterial("Mine Route Planks", new Color(0.46f, 0.27f, 0.11f));
@@ -69,7 +71,7 @@ namespace Labyrinth.Core
             return EnsureCellRoot(cell);
         }
 
-        public void RenderCaveSelection(IEnumerable<CaveInfo> caves)
+        public void RenderCaveSelection(IEnumerable<CaveInfo> caves, bool outpostMode = false)
         {
             ClearSelection();
             if (caves == null)
@@ -79,7 +81,7 @@ namespace Labyrinth.Core
 
             foreach (var cave in caves)
             {
-                var marker = CreateCaveMarker("Selectable Mine Cave", cave.Center, selectionMaterial, 0.09f);
+                var marker = CreateCaveMarker(outpostMode ? "Selectable Outpost Cave" : "Selectable Mine Cave", cave.Center, outpostMode ? outpostSelectionMaterial : selectionMaterial, 0.09f);
                 selectionMarkers.Add(marker);
             }
         }
@@ -154,6 +156,45 @@ namespace Labyrinth.Core
                 center + new Vector3(unit * -0.82f, unit * 0.78f, unit * -0.72f),
                 Vector3.one * unit * 0.14f,
                 accent);
+            AddCaveCollider(caveRootObject, cave.Center);
+            return caveRootObject;
+        }
+
+        public GameObject RenderOutpostZone(CaveInfo cave)
+        {
+            var caveRootObject = EnsureCellRoot(cave.Center);
+            var caveRoot = caveRootObject.transform;
+            ClearChildren(caveRoot);
+            var center = mazeRenderer.GridToWorld(cave.Center);
+            var unit = mazeRenderer.CellSize;
+            CreatePart(
+                "Outpost Construction Zone",
+                PrimitiveType.Cube,
+                caveRoot,
+                center + new Vector3(0f, unit * 0.08f, 0f),
+                new Vector3(unit * 2.45f, unit * 0.05f, unit * 2.45f),
+                zoneMaterial);
+            CreatePart(
+                "Outpost Zone Post",
+                PrimitiveType.Cube,
+                caveRoot,
+                center + new Vector3(unit * -0.78f, unit * 0.48f, unit * -0.78f),
+                new Vector3(unit * 0.12f, unit * 0.86f, unit * 0.12f),
+                beamMaterial);
+            CreatePart(
+                "Outpost Zone Board",
+                PrimitiveType.Cube,
+                caveRoot,
+                center + new Vector3(unit * -0.72f, unit * 0.82f, unit * -0.78f),
+                new Vector3(unit * 0.78f, unit * 0.32f, unit * 0.08f),
+                plankMaterial);
+            CreatePart(
+                "Outpost Zone Lamp Preview",
+                PrimitiveType.Sphere,
+                caveRoot,
+                center + new Vector3(unit * -0.46f, unit * 0.88f, unit * -0.7f),
+                Vector3.one * unit * 0.1f,
+                lampMaterial);
             AddCaveCollider(caveRootObject, cave.Center);
             return caveRootObject;
         }
@@ -303,6 +344,73 @@ namespace Labyrinth.Core
             }
 
             AddCaveCollider(caveRootObject, cave.Center);
+        }
+
+        public void RenderOutpostBuildProgress(CaveInfo cave, float progress)
+        {
+            var caveRootObject = EnsureCellRoot(cave.Center);
+            var caveRoot = caveRootObject.transform;
+            ClearChildren(caveRoot);
+            var center = mazeRenderer.GridToWorld(cave.Center);
+            var unit = mazeRenderer.CellSize;
+            var normalized = Mathf.Clamp01(progress);
+
+            CreatePart("Outpost Foundation", PrimitiveType.Cube, caveRoot, center + new Vector3(0f, unit * 0.08f, 0f), new Vector3(unit * 1.72f, unit * 0.08f, unit * 1.42f), zoneMaterial);
+            if (normalized >= 0.16f)
+            {
+                CreatePart("Outpost Supply Crates", PrimitiveType.Cube, caveRoot, center + new Vector3(unit * -0.48f, unit * 0.22f, unit * 0.42f), new Vector3(unit * 0.36f, unit * 0.26f, unit * 0.34f), plankMaterial);
+            }
+
+            if (normalized >= 0.32f)
+            {
+                CreatePart("Outpost Left Post", PrimitiveType.Cube, caveRoot, center + new Vector3(unit * -0.56f, unit * 0.54f, unit * -0.24f), new Vector3(unit * 0.12f, unit * 0.92f, unit * 0.12f), beamMaterial);
+            }
+
+            if (normalized >= 0.48f)
+            {
+                CreatePart("Outpost Right Post", PrimitiveType.Cube, caveRoot, center + new Vector3(unit * 0.56f, unit * 0.54f, unit * -0.24f), new Vector3(unit * 0.12f, unit * 0.92f, unit * 0.12f), beamMaterial);
+            }
+
+            if (normalized >= 0.64f)
+            {
+                CreatePart("Outpost Back Wall", PrimitiveType.Cube, caveRoot, center + new Vector3(0f, unit * 0.54f, unit * -0.42f), new Vector3(unit * 1.28f, unit * 0.72f, unit * 0.12f), stoneMaterial);
+            }
+
+            if (normalized >= 0.78f)
+            {
+                CreatePart("Outpost Roof Beam", PrimitiveType.Cube, caveRoot, center + new Vector3(0f, unit * 1.04f, unit * -0.24f), new Vector3(unit * 1.45f, unit * 0.14f, unit * 0.2f), beamMaterial);
+            }
+
+            if (normalized >= 0.92f)
+            {
+                CreatePart("Outpost Build Lamp", PrimitiveType.Sphere, caveRoot, center + new Vector3(unit * 0.42f, unit * 0.96f, unit * -0.38f), Vector3.one * unit * 0.11f, lampMaterial);
+                CreatePointLight("Outpost Build Light", caveRoot, center + new Vector3(unit * 0.42f, unit * 0.98f, unit * -0.38f));
+            }
+
+            AddCaveCollider(caveRootObject, cave.Center);
+        }
+
+        public GameObject RenderOutpost(CaveInfo cave, int level)
+        {
+            var caveRootObject = EnsureCellRoot(cave.Center);
+            var caveRoot = caveRootObject.transform;
+            ClearChildren(caveRoot);
+            var center = mazeRenderer.GridToWorld(cave.Center);
+            var unit = mazeRenderer.CellSize;
+
+            CreatePart("Outpost Stone Base", PrimitiveType.Cube, caveRoot, center + new Vector3(0f, unit * 0.12f, 0f), new Vector3(unit * 1.5f, unit * 0.12f, unit * 1.25f), stoneMaterial);
+            CreatePart("Outpost Rear Wall", PrimitiveType.Cube, caveRoot, center + new Vector3(0f, unit * 0.62f, unit * -0.42f), new Vector3(unit * 1.36f, unit * 0.9f, unit * 0.16f), stoneMaterial);
+            CreatePart("Outpost Left Brace", PrimitiveType.Cube, caveRoot, center + new Vector3(unit * -0.62f, unit * 0.7f, unit * -0.18f), new Vector3(unit * 0.13f, unit * 1.05f, unit * 0.14f), beamMaterial);
+            CreatePart("Outpost Right Brace", PrimitiveType.Cube, caveRoot, center + new Vector3(unit * 0.62f, unit * 0.7f, unit * -0.18f), new Vector3(unit * 0.13f, unit * 1.05f, unit * 0.14f), beamMaterial);
+            CreatePart("Outpost Roof", PrimitiveType.Cube, caveRoot, center + new Vector3(0f, unit * 1.22f, unit * -0.18f), new Vector3(unit * 1.62f, unit * 0.16f, unit * 0.72f), beamMaterial);
+            CreatePart("Outpost Supply Chest", PrimitiveType.Cube, caveRoot, center + new Vector3(unit * -0.34f, unit * 0.32f, unit * 0.34f), new Vector3(unit * 0.44f, unit * 0.28f, unit * 0.34f), plankMaterial);
+            CreatePart("Outpost Banner Pole", PrimitiveType.Cube, caveRoot, center + new Vector3(unit * 0.52f, unit * 1.04f, unit * 0.34f), new Vector3(unit * 0.07f, unit * 0.96f, unit * 0.07f), metalMaterial);
+            CreatePart("Outpost Banner", PrimitiveType.Cube, caveRoot, center + new Vector3(unit * 0.33f, unit * 1.28f, unit * 0.34f), new Vector3(unit * 0.38f, unit * 0.22f, unit * 0.035f), zoneMaterial);
+            CreatePart("Outpost Lamp", PrimitiveType.Sphere, caveRoot, center + new Vector3(unit * 0.36f, unit * 0.98f, unit * -0.38f), Vector3.one * unit * 0.13f, lampMaterial);
+            CreatePointLight("Outpost Light", caveRoot, center + new Vector3(unit * 0.36f, unit * 1.0f, unit * -0.38f));
+            CreateWorldLabel(caveRoot, center, unit, "Аванпост", new Color(0.84f, 1f, 0.76f, 1f));
+            AddCaveCollider(caveRootObject, cave.Center);
+            return caveRootObject;
         }
 
         public Transform CreateMineCart(Vector3 position, OreDepositType oreType)
@@ -519,14 +627,23 @@ namespace Labyrinth.Core
 
         private void CreateMineWorldLabel(Transform caveRoot, Vector3 center, float unit, OreDepositType oreType)
         {
-            var labelText = GetMineDisplayName(oreType);
-            var labelRoot = new GameObject("Mine Label").transform;
+            CreateWorldLabel(
+                caveRoot,
+                center,
+                unit,
+                GetMineDisplayName(oreType),
+                oreType == OreDepositType.Iron ? new Color(0.88f, 0.93f, 0.98f, 1f) : new Color(1f, 0.92f, 0.55f, 1f));
+        }
+
+        private void CreateWorldLabel(Transform caveRoot, Vector3 center, float unit, string labelText, Color textColor)
+        {
+            var labelRoot = new GameObject("Dungeon Building Label").transform;
             labelRoot.SetParent(caveRoot, false);
             labelRoot.position = center + Vector3.up * unit * 2.35f;
             labelRoot.gameObject.AddComponent<MineWorldLabel>();
 
             var background = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            background.name = "Mine Label Background";
+            background.name = "Dungeon Building Label Background";
             background.transform.SetParent(labelRoot, false);
             background.transform.localPosition = Vector3.zero;
             background.transform.localScale = new Vector3(Mathf.Clamp(1.55f + labelText.Length * 0.18f, 2.25f, 5.2f), 0.56f, 1f);
@@ -539,16 +656,16 @@ namespace Labyrinth.Core
 
             CreateWorldLabelText(
                 labelRoot,
-                "Mine Label Shadow",
+                "Dungeon Building Label Shadow",
                 labelText,
                 new Vector3(0.045f, -0.045f, -0.034f),
                 new Color(0f, 0f, 0f, 0.92f));
             CreateWorldLabelText(
                 labelRoot,
-                "Mine Label Text",
+                "Dungeon Building Label Text",
                 labelText,
                 new Vector3(0f, 0f, -0.045f),
-                oreType == OreDepositType.Iron ? new Color(0.88f, 0.93f, 0.98f, 1f) : new Color(1f, 0.92f, 0.55f, 1f));
+                textColor);
         }
 
         private static string GetMineDisplayName(OreDepositType oreType)

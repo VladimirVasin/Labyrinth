@@ -36,6 +36,41 @@ namespace Labyrinth.Hero
         public int StrategicWeight { get; }
     }
 
+    public readonly struct HeroPatrolCandidate
+    {
+        public HeroPatrolCandidate(
+            Vector2Int targetCell,
+            Queue<Vector2Int> path,
+            int distance,
+            int targetStaleness,
+            int targetVisitCount,
+            int routeStaleScore,
+            int staleRouteCells)
+        {
+            TargetCell = targetCell;
+            Path = path ?? new Queue<Vector2Int>();
+            Distance = distance;
+            TargetStaleness = targetStaleness;
+            TargetVisitCount = targetVisitCount;
+            RouteStaleScore = routeStaleScore;
+            StaleRouteCells = staleRouteCells;
+        }
+
+        public Vector2Int TargetCell { get; }
+
+        public Queue<Vector2Int> Path { get; }
+
+        public int Distance { get; }
+
+        public int TargetStaleness { get; }
+
+        public int TargetVisitCount { get; }
+
+        public int RouteStaleScore { get; }
+
+        public int StaleRouteCells { get; }
+    }
+
     public sealed class HeroExplorationCoordinator
     {
         private const int DistanceWeight = 10;
@@ -45,11 +80,22 @@ namespace Labyrinth.Hero
         private const int NearbyTargetPenalty = 28;
         private const int SameSectorPenalty = 18;
         private const int RetargetLogDistance = 2;
+        private const int UnvisitedCellStalenessBoost = 45;
+        private const int PatrolDistanceWeight = 7;
+        private const int PatrolTargetStalenessBonus = 4;
+        private const int PatrolRouteStaleScoreDivisor = 5;
+        private const int PatrolStaleRouteCellBonus = 18;
+        private const int PatrolVisitCountPenalty = 10;
+        private const int PatrolRecentTargetWindow = 36;
+        private const int PatrolRecentTargetPenalty = 140;
 
         private readonly Dictionary<int, Reservation> reservationsByHero = new Dictionary<int, Reservation>();
         private readonly Dictionary<Vector2Int, int> targetOwners = new Dictionary<Vector2Int, int>();
+        private readonly Dictionary<Vector2Int, VisitInfo> visitInfoByCell = new Dictionary<Vector2Int, VisitInfo>();
+        private readonly Dictionary<int, Vector2Int> lastVisitedCellByHero = new Dictionary<int, Vector2Int>();
         private Vector2Int entrancePosition;
         private int levelNumber;
+        private int visitTick;
 
         public void Reset(MazeGrid nextGrid, Vector2Int nextEntrancePosition, int nextLevelNumber)
         {
@@ -63,6 +109,9 @@ namespace Labyrinth.Hero
             levelNumber = nextLevelNumber;
             reservationsByHero.Clear();
             targetOwners.Clear();
+            visitInfoByCell.Clear();
+            lastVisitedCellByHero.Clear();
+            visitTick = 0;
         }
 
         public void Clear()
@@ -71,6 +120,41 @@ namespace Labyrinth.Hero
             levelNumber = 0;
             reservationsByHero.Clear();
             targetOwners.Clear();
+            visitInfoByCell.Clear();
+            lastVisitedCellByHero.Clear();
+            visitTick = 0;
+        }
+
+        public void RecordVisit(int heroNumber, Vector2Int position)
+        {
+            if (lastVisitedCellByHero.TryGetValue(heroNumber, out var lastPosition) && lastPosition == position)
+            {
+                return;
+            }
+
+            lastVisitedCellByHero[heroNumber] = position;
+            visitTick++;
+            visitInfoByCell.TryGetValue(position, out var previous);
+            visitInfoByCell[position] = new VisitInfo(
+                visitTick,
+                previous.VisitCount + 1,
+                heroNumber,
+                previous.LastPatrolTargetTick);
+        }
+
+        public int GetCellStaleness(Vector2Int position)
+        {
+            if (!visitInfoByCell.TryGetValue(position, out var info) || info.VisitCount <= 0)
+            {
+                return visitTick + UnvisitedCellStalenessBoost;
+            }
+
+            return Mathf.Max(0, visitTick - info.LastVisitedTick);
+        }
+
+        public int GetCellVisitCount(Vector2Int position)
+        {
+            return visitInfoByCell.TryGetValue(position, out var info) ? info.VisitCount : 0;
         }
 
         public bool TryGetReservedTarget(int heroNumber, out Vector2Int target)
@@ -144,6 +228,62 @@ namespace Labyrinth.Hero
             return true;
         }
 
+        public bool TryChoosePatrolTarget(
+            int heroNumber,
+            Vector2Int origin,
+            IReadOnlyList<HeroPatrolCandidate> candidates,
+            out HeroPatrolCandidate selected)
+        {
+            selected = default;
+            if (candidates == null || candidates.Count == 0)
+            {
+                return false;
+            }
+
+            var hasPrevious = reservationsByHero.TryGetValue(heroNumber, out var previous);
+            if (hasPrevious && TryFindCandidate(candidates, previous.TargetCell, out selected))
+            {
+                ReservePatrol(heroNumber, selected, 0, 0, previous.Sector);
+                return true;
+            }
+
+            var bestScore = int.MaxValue;
+            var bestPenalty = 0;
+            var bestSector = 0;
+            var bestIndex = -1;
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                var candidate = candidates[i];
+                var score = ScorePatrolCandidate(
+                    heroNumber,
+                    origin,
+                    candidate,
+                    hasPrevious ? previous.TargetCell : default,
+                    hasPrevious,
+                    out var reservationPenalty,
+                    out var sector);
+
+                if (score >= bestScore)
+                {
+                    continue;
+                }
+
+                bestScore = score;
+                bestPenalty = reservationPenalty;
+                bestSector = sector;
+                bestIndex = i;
+            }
+
+            if (bestIndex < 0)
+            {
+                return false;
+            }
+
+            selected = candidates[bestIndex];
+            ReservePatrol(heroNumber, selected, bestScore, bestPenalty, bestSector);
+            return true;
+        }
+
         public void CompleteTarget(int heroNumber, Vector2Int position)
         {
             if (!reservationsByHero.TryGetValue(heroNumber, out var reservation)
@@ -200,10 +340,58 @@ namespace Labyrinth.Hero
                 $"Hero #{heroNumber} assigned exploration target: target={GameDebugLog.Position(candidate.TargetCell)}, approach={GameDebugLog.Position(candidate.ApproachCell)}, distance={candidate.Distance}, unknownNeighbors={candidate.UnknownNeighborCount}, score={score}, crowdPenalty={reservationPenalty}, sector={sector}, level={levelNumber}.");
         }
 
+        private void ReservePatrol(
+            int heroNumber,
+            HeroPatrolCandidate candidate,
+            int score,
+            int reservationPenalty,
+            int sector)
+        {
+            var changed = !reservationsByHero.TryGetValue(heroNumber, out var previous)
+                || previous.TargetCell != candidate.TargetCell;
+
+            if (changed && reservationsByHero.TryGetValue(heroNumber, out previous))
+            {
+                RemoveReservation(heroNumber, previous.TargetCell);
+            }
+
+            var next = new Reservation(candidate.TargetCell, candidate.TargetCell, sector);
+            reservationsByHero[heroNumber] = next;
+            targetOwners[candidate.TargetCell] = heroNumber;
+            MarkPatrolTarget(candidate.TargetCell);
+
+            if (!changed)
+            {
+                return;
+            }
+
+            GameDebugLog.Info(
+                "Hero",
+                $"Hero #{heroNumber} assigned stale patrol target: target={GameDebugLog.Position(candidate.TargetCell)}, distance={candidate.Distance}, staleness={candidate.TargetStaleness}, visits={candidate.TargetVisitCount}, staleRoute={candidate.RouteStaleScore}, staleCells={candidate.StaleRouteCells}, score={score}, crowdPenalty={reservationPenalty}, sector={sector}, level={levelNumber}.");
+        }
+
         private static bool TryFindCandidate(
             IReadOnlyList<HeroExplorationCandidate> candidates,
             Vector2Int target,
             out HeroExplorationCandidate candidate)
+        {
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                if (candidates[i].TargetCell == target)
+                {
+                    candidate = candidates[i];
+                    return true;
+                }
+            }
+
+            candidate = default;
+            return false;
+        }
+
+        private static bool TryFindCandidate(
+            IReadOnlyList<HeroPatrolCandidate> candidates,
+            Vector2Int target,
+            out HeroPatrolCandidate candidate)
         {
             for (var i = 0; i < candidates.Count; i++)
             {
@@ -244,6 +432,35 @@ namespace Labyrinth.Hero
             return score;
         }
 
+        private int ScorePatrolCandidate(
+            int heroNumber,
+            Vector2Int origin,
+            HeroPatrolCandidate candidate,
+            Vector2Int previousTarget,
+            bool hasPrevious,
+            out int reservationPenalty,
+            out int sector)
+        {
+            sector = CalculateSector(candidate.TargetCell);
+            reservationPenalty = CalculateReservationPenalty(heroNumber, candidate.TargetCell, sector);
+
+            var score = candidate.Distance * PatrolDistanceWeight;
+            score += candidate.TargetVisitCount * PatrolVisitCountPenalty;
+            score -= candidate.TargetStaleness * PatrolTargetStalenessBonus;
+            score -= candidate.RouteStaleScore / PatrolRouteStaleScoreDivisor;
+            score -= candidate.StaleRouteCells * PatrolStaleRouteCellBonus;
+            score += reservationPenalty;
+            score += CalculateRecentPatrolPenalty(candidate.TargetCell);
+            score += StableJitter(heroNumber, origin, candidate.TargetCell);
+
+            if (hasPrevious && previousTarget == candidate.TargetCell)
+            {
+                score -= OwnTargetStabilityBonus;
+            }
+
+            return score;
+        }
+
         private int CalculateReservationPenalty(int heroNumber, Vector2Int target, int sector)
         {
             var penalty = 0;
@@ -272,6 +489,22 @@ namespace Labyrinth.Hero
             }
 
             return penalty;
+        }
+
+        private int CalculateRecentPatrolPenalty(Vector2Int target)
+        {
+            if (!visitInfoByCell.TryGetValue(target, out var info) || info.LastPatrolTargetTick <= 0)
+            {
+                return 0;
+            }
+
+            var age = visitTick - info.LastPatrolTargetTick;
+            if (age >= PatrolRecentTargetWindow)
+            {
+                return 0;
+            }
+
+            return Mathf.Max(0, PatrolRecentTargetWindow - age) * PatrolRecentTargetPenalty / PatrolRecentTargetWindow;
         }
 
         private int CalculateSector(Vector2Int target)
@@ -317,6 +550,16 @@ namespace Labyrinth.Hero
             }
         }
 
+        private void MarkPatrolTarget(Vector2Int target)
+        {
+            visitInfoByCell.TryGetValue(target, out var previous);
+            visitInfoByCell[target] = new VisitInfo(
+                previous.LastVisitedTick,
+                previous.VisitCount,
+                previous.LastVisitedByHero,
+                visitTick);
+        }
+
         private static int StableJitter(int heroNumber, Vector2Int origin, Vector2Int target)
         {
             unchecked
@@ -350,6 +593,25 @@ namespace Labyrinth.Hero
             public Vector2Int ApproachCell { get; }
 
             public int Sector { get; }
+        }
+
+        private readonly struct VisitInfo
+        {
+            public VisitInfo(int lastVisitedTick, int visitCount, int lastVisitedByHero, int lastPatrolTargetTick)
+            {
+                LastVisitedTick = lastVisitedTick;
+                VisitCount = visitCount;
+                LastVisitedByHero = lastVisitedByHero;
+                LastPatrolTargetTick = lastPatrolTargetTick;
+            }
+
+            public int LastVisitedTick { get; }
+
+            public int VisitCount { get; }
+
+            public int LastVisitedByHero { get; }
+
+            public int LastPatrolTargetTick { get; }
         }
     }
 }

@@ -230,6 +230,7 @@ namespace Labyrinth.Core
             AddBuiltTorchLightOrigins(origins, dungeonFortificationController?.TorchPositions);
             AddBuiltTorchLightOrigins(origins, mineConstructionController?.TorchPositions);
             AddBuiltTorchLightOrigins(origins, mineConstructionController?.CompletedMineLightPositions);
+            AddBuiltTorchLightOrigins(origins, mineConstructionController?.CompletedOutpostLightPositions);
             mineConstructionController?.AddActiveLightOrigins(origins);
             return origins;
         }
