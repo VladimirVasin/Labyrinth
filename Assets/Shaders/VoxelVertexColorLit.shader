@@ -6,6 +6,9 @@ Shader "Labyrinth/Voxel Vertex Color Lit"
         _BaseColor ("Base Color", Color) = (1, 1, 1, 1)
         _Color ("Color", Color) = (1, 1, 1, 1)
         _VoxelLightColor ("Voxel Light Color", Color) = (1, 1, 1, 1)
+        _AmbientScale ("Ambient Scale", Range(0, 1)) = 1
+        _MainLightScale ("Main Light Scale", Range(0, 1)) = 1
+        _AdditionalLightScale ("Additional Light Scale", Range(0, 2)) = 1
     }
 
     SubShader
@@ -28,7 +31,8 @@ Shader "Labyrinth/Voxel Vertex Color Lit"
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE
             #pragma multi_compile _ _SHADOWS_SOFT
-            #pragma multi_compile _ _ADDITIONAL_LIGHTS
+            #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
+            #pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -41,6 +45,9 @@ Shader "Labyrinth/Voxel Vertex Color Lit"
                 float4 _BaseColor;
                 float4 _Color;
                 float4 _VoxelLightColor;
+                float _AmbientScale;
+                float _MainLightScale;
+                float _AdditionalLightScale;
             CBUFFER_END
 
             struct Attributes
@@ -59,6 +66,7 @@ Shader "Labyrinth/Voxel Vertex Color Lit"
                 float3 normalWS : TEXCOORD2;
                 float3 positionOS : TEXCOORD3;
                 float4 shadowCoord : TEXCOORD4;
+                half3 vertexLighting : TEXCOORD5;
                 float4 color : COLOR;
             };
 
@@ -71,6 +79,7 @@ Shader "Labyrinth/Voxel Vertex Color Lit"
                 output.positionOS = input.positionOS.xyz;
                 output.shadowCoord = TransformWorldToShadowCoord(output.positionWS);
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+                output.vertexLighting = VertexLighting(output.positionWS, output.normalWS);
                 output.color = input.color;
                 return output;
             }
@@ -81,7 +90,8 @@ Shader "Labyrinth/Voxel Vertex Color Lit"
                 Light mainLight = GetMainLight(input.shadowCoord);
                 half mainTerm = saturate(dot(normalWS, mainLight.direction));
                 half shadow = lerp(half(0.32), half(1.0), mainLight.shadowAttenuation);
-                half3 lighting = mainLight.color * (half(0.32) + mainTerm * half(0.82)) * shadow;
+                half3 ambient = (SampleSH(normalWS) * half(0.62) + half3(0.14, 0.15, 0.17)) * half(_AmbientScale);
+                half3 lighting = ambient + mainLight.color * (half(0.22) + mainTerm * half(0.7)) * shadow * half(_MainLightScale);
 
                 #if defined(_ADDITIONAL_LIGHTS)
                     uint lightCount = GetAdditionalLightsCount();
@@ -89,8 +99,11 @@ Shader "Labyrinth/Voxel Vertex Color Lit"
                     {
                         Light light = GetAdditionalLight(i, input.positionWS);
                         half term = saturate(dot(normalWS, light.direction));
-                        lighting += light.color * light.distanceAttenuation * (half(0.16) + term * half(0.84));
+                        lighting += light.color * light.distanceAttenuation * light.shadowAttenuation * (half(0.28) + term * half(1.05)) * half(_AdditionalLightScale);
                     }
+                #endif
+                #if defined(_ADDITIONAL_LIGHTS_VERTEX)
+                    lighting += input.vertexLighting * half(_AdditionalLightScale);
                 #endif
 
                 float3 absNormal = abs(normalWS);
@@ -142,6 +155,8 @@ Shader "Labyrinth/Voxel Vertex Color Lit"
             fixed4 _BaseColor;
             fixed4 _Color;
             fixed4 _VoxelLightColor;
+            float _AmbientScale;
+            float _MainLightScale;
 
             struct AppData
             {
@@ -174,7 +189,7 @@ Shader "Labyrinth/Voxel Vertex Color Lit"
             fixed4 Frag(Varyings input) : SV_Target
             {
                 fixed3 normal = normalize(input.normal);
-                fixed light = 0.48 + saturate(dot(normal, normalize(_WorldSpaceLightPos0.xyz))) * 0.62;
+                fixed light = 0.42 * _AmbientScale + saturate(dot(normal, normalize(_WorldSpaceLightPos0.xyz))) * 0.72 * _MainLightScale;
                 float3 absNormal = abs(normal);
                 float2 worldUv = absNormal.y > absNormal.x && absNormal.y > absNormal.z
                     ? input.objectPos.xz

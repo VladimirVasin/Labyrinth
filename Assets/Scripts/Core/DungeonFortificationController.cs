@@ -32,6 +32,8 @@ namespace Labyrinth.Core
 
         public bool SelectionModeActive => selectionModeActive;
 
+        public IReadOnlyCollection<Vector2Int> TorchPositions => torchPositions;
+
         public bool IsCellFortified(Vector2Int cell)
         {
             return fortifiedCells.Contains(cell);

@@ -112,6 +112,11 @@ namespace Labyrinth.Core
             {
                 RegisterExistingBuilding(BuildingType.Antiquary, baseDevelopment.AntiquaryPosition);
             }
+
+            if (baseDevelopment.HasHeroesGuild)
+            {
+                RegisterExistingBuilding(BuildingType.HeroesGuild, baseDevelopment.HeroesGuildPosition);
+            }
         }
 
         private void RegisterExistingBuilding(BuildingType type, Vector2Int position)

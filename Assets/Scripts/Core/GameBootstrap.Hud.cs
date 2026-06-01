@@ -84,5 +84,42 @@ namespace Labyrinth.Core
             objectMicroHud.Hide();
             ClearSelectedMob();
         }
+
+        private bool TryToggleCastleHudHotkey()
+        {
+            if (UnityEngine.InputSystem.Keyboard.current == null
+                || !UnityEngine.InputSystem.Keyboard.current.cKey.wasPressedThisFrame
+                || currentMaze == null
+                || currentBase == null
+                || (state != GameState.Playing && state != GameState.BaseHudOpen))
+            {
+                return false;
+            }
+
+            if (baseHud.IsVisible)
+            {
+                baseHud.Hide();
+                if (state == GameState.BaseHudOpen)
+                {
+                    state = GameState.Playing;
+                    cameraController.SetInteractionEnabled(true);
+                }
+
+                GameDebugLog.Info("UI", "Castle HUD closed by C hotkey.");
+                return true;
+            }
+
+            var castleBuilding = currentBase.GetComponent<Labyrinth.Base.BuildingView>();
+            if (castleBuilding == null)
+            {
+                GameDebugLog.Warning("UI", "C hotkey could not open castle HUD: castle BuildingView missing.");
+                return true;
+            }
+
+            CloseOpenRuntimeHud();
+            ShowBuildingHud(castleBuilding);
+            GameDebugLog.Info("UI", "Castle HUD opened by C hotkey.");
+            return true;
+        }
     }
 }

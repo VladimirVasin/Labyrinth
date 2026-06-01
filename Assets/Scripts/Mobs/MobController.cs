@@ -27,6 +27,8 @@ namespace Labyrinth.Mobs
 
         public string DebugName => BuildDebugName(Model, DebugId);
 
+        public Func<Vector2Int, bool> ShouldHoldWanderAtPosition { get; set; }
+
         public static MobController Create(
             MazeGrid mazeGrid,
             MazeRenderer renderer,
@@ -132,6 +134,12 @@ namespace Labyrinth.Mobs
             timeUntilNextWander -= Time.deltaTime;
             if (timeUntilNextWander > 0f)
             {
+                return;
+            }
+
+            if (ShouldHoldWanderAtPosition != null && ShouldHoldWanderAtPosition.Invoke(Model.Position))
+            {
+                timeUntilNextWander = Mathf.Min(WanderInterval, 0.08f);
                 return;
             }
 

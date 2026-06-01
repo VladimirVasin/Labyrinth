@@ -124,6 +124,8 @@ namespace Labyrinth.Core
                 deathTokenManager,
                 SyncHeroKnowledgeAtEntrance,
                 HandleDownStairsOpened,
+                TryGetNearbyHeroMobInteractionCell,
+                explorationCoordinator,
                 BuildHeroStatSeed(heroNumber, lineage.Generation));
             var trainingBonus = ApplyHeroLineageTraits(hero, lineage);
             hero.SetFortifiedCellProvider(IsHeroMovementFortifiedCell);
@@ -184,6 +186,8 @@ namespace Labyrinth.Core
                 deathTokenManager,
                 SyncHeroKnowledgeAtEntrance,
                 HandleDownStairsOpened,
+                TryGetNearbyHeroMobInteractionCell,
+                explorationCoordinator,
                 BuildHeroStatSeed(heroNumber, lineage.Generation));
             var trainingBonus = ApplyHeroLineageTraits(hero, lineage);
             hero.SetFortifiedCellProvider(IsHeroMovementFortifiedCell);
@@ -261,6 +265,15 @@ namespace Labyrinth.Core
         {
             return (dungeonFortificationController != null && dungeonFortificationController.IsCellFortified(cell))
                 || (mineConstructionController != null && mineConstructionController.IsCellFortified(cell));
+        }
+
+        private bool TryGetNearbyHeroMobInteractionCell(
+            Vector2Int heroPosition,
+            Vector2Int interactionCell,
+            int radius)
+        {
+            return mobManager != null
+                && mobManager.HasInteractableMobNear(heroPosition, interactionCell, radius);
         }
 
         private string GetHeroHouseStatus()

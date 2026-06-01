@@ -107,14 +107,14 @@ namespace Labyrinth.Mobs
                 case MobThreatStage.Early:
                     return new[] { MobSpecies.Rat, MobSpecies.Goblin, MobSpecies.Orc };
                 case MobThreatStage.RatFade:
-                    return new[] { MobSpecies.Goblin, MobSpecies.Rat, MobSpecies.Orc };
+                    return new[] { MobSpecies.Rat, MobSpecies.Goblin, MobSpecies.Orc };
                 case MobThreatStage.GoblinCore:
-                    return new[] { MobSpecies.Goblin, MobSpecies.Orc, MobSpecies.Rat };
+                    return new[] { MobSpecies.Rat, MobSpecies.Goblin, MobSpecies.Orc };
                 case MobThreatStage.OrcRise:
-                    return new[] { MobSpecies.Goblin, MobSpecies.Orc };
+                    return new[] { MobSpecies.Rat, MobSpecies.Goblin, MobSpecies.Orc };
                 case MobThreatStage.OrcDominant:
                 default:
-                    return new[] { MobSpecies.Orc, MobSpecies.Goblin };
+                    return new[] { MobSpecies.Rat, MobSpecies.Goblin, MobSpecies.Orc };
             }
         }
 
@@ -123,16 +123,16 @@ namespace Labyrinth.Mobs
             switch (stage)
             {
                 case MobThreatStage.Early:
-                    return new RespawnWeights(68, 28, 4);
+                    return new RespawnWeights(78, 19, 3);
                 case MobThreatStage.RatFade:
-                    return new RespawnWeights(38, 50, 12);
+                    return new RespawnWeights(68, 25, 7);
                 case MobThreatStage.GoblinCore:
-                    return new RespawnWeights(15, 62, 23);
+                    return new RespawnWeights(58, 32, 10);
                 case MobThreatStage.OrcRise:
-                    return new RespawnWeights(0, 55, 45);
+                    return new RespawnWeights(48, 36, 16);
                 case MobThreatStage.OrcDominant:
                 default:
-                    return new RespawnWeights(0, 35, 65);
+                    return new RespawnWeights(42, 34, 24);
             }
         }
 

@@ -86,14 +86,12 @@ namespace Labyrinth.Core
             return exploredCells;
         }
 
-        private void RefreshMemoryOverlay(HashSet<Vector2Int> visibleCells = null)
+        private void RefreshMemoryOverlay()
         {
-            if (sharedHeroMemoryView == null)
+            if (sharedHeroMemoryView != null)
             {
-                return;
+                sharedHeroMemoryView.ShowMemory(null);
             }
-
-            sharedHeroMemoryView.ShowMemory(null);
         }
 
         private HashSet<Vector2Int> BuildKnownCells(HashSet<Vector2Int> visibleCells, HashSet<Vector2Int> exploredCells)

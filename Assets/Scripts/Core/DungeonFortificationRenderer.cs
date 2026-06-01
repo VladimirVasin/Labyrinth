@@ -29,7 +29,7 @@ namespace Labyrinth.Core
             queuedMaterial = CreateMaterial("Fortification Queued Cell", new Color(0.25f, 0.72f, 1f));
             plankMaterial = CreateMaterial("Fortification Planks", new Color(0.48f, 0.29f, 0.12f));
             beamMaterial = CreateMaterial("Fortification Beams", new Color(0.25f, 0.13f, 0.05f));
-            flameMaterial = VoxelVisuals.CreateEmissiveMaterial("Fortification Flame", new Color(1f, 0.48f, 0.08f), 2.15f);
+            flameMaterial = VoxelVisuals.CreateEmissiveMaterial("Fortification Flame", new Color(1f, 0.5f, 0.12f), 1.35f);
             workerBodyMaterial = CreateMaterial("Fortification Worker Body", new Color(0.42f, 0.34f, 0.22f));
             workerHeadMaterial = CreateMaterial("Fortification Worker Head", new Color(0.76f, 0.62f, 0.42f));
         }
@@ -170,11 +170,21 @@ namespace Labyrinth.Core
             lightObject.transform.position = flamePosition;
             var light = lightObject.AddComponent<Light>();
             light.type = LightType.Point;
-            light.color = new Color(1f, 0.55f, 0.18f);
-            light.range = mazeRenderer.CellSize * (lightRange + 1.15f);
-            light.intensity = 2.35f;
-            light.shadows = LightShadows.None;
-            light.bounceIntensity = 0.18f;
+            light.color = new Color(1f, 0.68f, 0.34f);
+            light.range = mazeRenderer.CellSize * 5.15f;
+            light.intensity = 4.85f;
+            light.shadows = LightShadows.Soft;
+            light.shadowStrength = 0.24f;
+            light.shadowBias = 0.045f;
+            light.shadowNormalBias = 0.28f;
+            light.bounceIntensity = 0.35f;
+            light.renderMode = LightRenderMode.ForcePixel;
+            TorchLightFlicker.Attach(light, flame.transform, BuildTorchFlickerSeed(cell));
+        }
+
+        private static int BuildTorchFlickerSeed(Vector2Int cell)
+        {
+            return cell.x * 73856093 ^ cell.y * 19349663 ^ 0x45d9f3b;
         }
 
         public Transform CreateWorker(Vector3 position)
@@ -272,6 +282,64 @@ namespace Labyrinth.Core
         private static Material CreateMaterial(string materialName, Color color)
         {
             return VoxelVisuals.CreateLitMaterial(materialName, color);
+        }
+    }
+
+    internal sealed class TorchLightFlicker : MonoBehaviour
+    {
+        private Light torchLight;
+        private Transform flame;
+        private Vector3 baseLocalPosition;
+        private Vector3 baseFlameScale;
+        private float baseIntensity;
+        private float baseRange;
+        private float seed;
+
+        public static void Attach(Light light, Transform flameTransform, int seedValue)
+        {
+            if (light == null)
+            {
+                return;
+            }
+
+            var flicker = light.gameObject.AddComponent<TorchLightFlicker>();
+            flicker.Initialize(light, flameTransform, seedValue);
+        }
+
+        private void Initialize(Light light, Transform flameTransform, int seedValue)
+        {
+            torchLight = light;
+            flame = flameTransform;
+            baseLocalPosition = transform.localPosition;
+            baseFlameScale = flame != null ? flame.localScale : Vector3.one;
+            baseIntensity = torchLight.intensity;
+            baseRange = torchLight.range;
+            seed = Mathf.Abs(seedValue % 10000) * 0.017f;
+        }
+
+        private void Update()
+        {
+            if (torchLight == null)
+            {
+                return;
+            }
+
+            var t = Time.time + seed;
+            var fast = Mathf.Sin(t * 11.7f) * 0.5f + 0.5f;
+            var slow = Mathf.Sin(t * 3.1f + Mathf.Sin(t * 0.83f)) * 0.5f + 0.5f;
+            var flicker = Mathf.Clamp01(fast * 0.58f + slow * 0.42f);
+            torchLight.intensity = baseIntensity * Mathf.Lerp(0.74f, 1.12f, flicker);
+            torchLight.range = baseRange * Mathf.Lerp(0.88f, 1.04f, slow);
+            torchLight.color = Color.Lerp(new Color(1f, 0.48f, 0.2f), new Color(1f, 0.72f, 0.32f), flicker);
+            transform.localPosition = baseLocalPosition + new Vector3(
+                Mathf.Sin(t * 7.3f) * 0.018f,
+                Mathf.Sin(t * 9.1f) * 0.012f,
+                Mathf.Cos(t * 6.4f) * 0.018f);
+
+            if (flame != null)
+            {
+                flame.localScale = baseFlameScale * Mathf.Lerp(0.86f, 1.08f, flicker);
+            }
         }
     }
 }

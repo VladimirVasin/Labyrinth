@@ -16,6 +16,7 @@ namespace Labyrinth.UI
         private GUIStyle titleStyle;
         private GUIStyle subtitleStyle;
         private GUIStyle hintStyle;
+        private readonly GuiHudTransition expandedTransition = new GuiHudTransition();
         private bool expanded;
 
         public bool Visible { get; set; }
@@ -37,6 +38,15 @@ namespace Labyrinth.UI
         public void ToggleExpanded()
         {
             expanded = !expanded;
+            if (expanded)
+            {
+                expandedTransition.Show();
+            }
+            else
+            {
+                expandedTransition.Hide();
+            }
+
             GameAudioController.PlayUi(expanded ? GameSfx.HudOpen : GameSfx.HudClose, 0.72f);
         }
 
@@ -48,6 +58,7 @@ namespace Labyrinth.UI
             }
 
             expanded = false;
+            expandedTransition.Hide();
         }
 
         public bool ContainsScreenPoint(Vector2 screenPosition)
@@ -83,6 +94,7 @@ namespace Labyrinth.UI
             if (commonMapUnlockedProvider == null || !commonMapUnlockedProvider.Invoke())
             {
                 expanded = false;
+                expandedTransition.Hide();
                 return;
             }
 
@@ -97,11 +109,17 @@ namespace Labyrinth.UI
             DrawMapPanel(smallRect, result, false);
             HandleSmallMapClick(smallRect);
 
-            if (expanded)
+            if (expanded || expandedTransition.IsDrawing)
             {
-                var largeRect = BuildLargeRect(result.Grid);
+                var previousColor = expandedTransition.ApplyGuiAlpha();
+                var largeRect = expandedTransition.AnimateRect(BuildLargeRect(result.Grid));
                 DrawMapPanel(largeRect, result, true);
-                HandleExpandedClicks(largeRect);
+                if (expanded)
+                {
+                    HandleExpandedClicks(largeRect);
+                }
+
+                GUI.color = previousColor;
             }
         }
 
@@ -229,6 +247,7 @@ namespace Labyrinth.UI
             }
 
             expanded = true;
+            expandedTransition.Show();
             GameAudioController.PlayUi(GameSfx.HudOpen, 0.72f);
             current.Use();
         }
@@ -288,7 +307,7 @@ namespace Labyrinth.UI
         private static void FillRect(Rect rect, Color color)
         {
             var previousColor = GUI.color;
-            GUI.color = color;
+            GUI.color = new Color(color.r, color.g, color.b, color.a * previousColor.a);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previousColor;
         }

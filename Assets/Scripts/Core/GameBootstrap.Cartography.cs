@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Labyrinth.Combat;
 using Labyrinth.Hero;
 using Labyrinth.Maze;
 using UnityEngine;
@@ -9,24 +10,64 @@ namespace Labyrinth.Core
     {
         private void SyncHeroKnowledgeAtEntrance(HeroModel heroModel, int heroNumber)
         {
-            TryContributeHeroHouseFundAtEntrance(heroModel, heroNumber);
-
-            if (heroModel == null || cartographerMemory == null || !baseDevelopment.HasCartographerHouse)
+            if (heroModel == null)
             {
                 return;
             }
 
-            ForgetOpenedDoors(cartographerMemory);
-            ForgetOpenedDoors(heroModel.Memory);
-            var mercyAdded = ApplyCartographerMercy(heroModel);
-            var uploaded = cartographerMemory.MergeFrom(heroModel.Memory);
-            ForgetOpenedDoors(cartographerMemory);
-            var downloaded = heroModel.Memory.MergeFrom(cartographerMemory);
-            sharedHeroMemoryView?.ShowMemory(cartographerMemory);
+            if (cartographerMemory != null && baseDevelopment != null && baseDevelopment.HasCartographerHouse)
+            {
+                ForgetOpenedDoors(cartographerMemory);
+                ForgetOpenedDoors(heroModel.Memory);
+                var mercyAdded = ApplyCartographerMercy(heroModel);
+                var paidWalkableCells = CountNewCommonWalkableCells(heroModel.Memory);
+                var uploaded = cartographerMemory.MergeFrom(heroModel.Memory);
+                var mapGoldReward = heroModel.RewardCommonMapContribution(paidWalkableCells);
+                ForgetOpenedDoors(cartographerMemory);
+                var downloaded = heroModel.Memory.MergeFrom(cartographerMemory);
+                sharedHeroMemoryView?.ShowMemory(cartographerMemory);
+                ShowCartographerPayment(heroModel, mapGoldReward);
 
-            GameDebugLog.Info(
-                "Cartographer",
-                $"Hero #{heroNumber} synced map at entrance: mercyAdded={mercyAdded}, uploaded={uploaded}, downloaded={downloaded}, commonCells={cartographerMemory.KnownCellCount}, commonWalls={cartographerMemory.RememberedWallCount}, commonClosedDoors={cartographerMemory.KnownClosedDoorCount}.");
+                GameDebugLog.Info(
+                    "Cartographer",
+                    $"Hero #{heroNumber} synced map at entrance: mercyAdded={mercyAdded}, uploaded={uploaded}, paidWalkable={paidWalkableCells}, mapGoldReward={mapGoldReward}, heroGold={heroModel.Gold}, downloaded={downloaded}, commonCells={cartographerMemory.KnownCellCount}, commonWalls={cartographerMemory.RememberedWallCount}, commonClosedDoors={cartographerMemory.KnownClosedDoorCount}.");
+            }
+
+            TryContributeHeroHouseFundAtEntrance(heroModel, heroNumber);
+        }
+
+        private int CountNewCommonWalkableCells(HeroMemory source)
+        {
+            if (source == null || cartographerMemory == null)
+            {
+                return 0;
+            }
+
+            var count = 0;
+            foreach (var position in source.RememberedCells)
+            {
+                if (!cartographerMemory.IsRemembered(position))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private void ShowCartographerPayment(HeroModel heroModel, int reward)
+        {
+            if (heroModel == null || reward <= 0 || mazeRenderer == null)
+            {
+                return;
+            }
+
+            DamageNumberView.CreateText(
+                mazeRenderer,
+                heroModel.Position,
+                $"+{reward} зол. карты",
+                new Color(1f, 0.84f, 0.26f),
+                2.35f);
         }
 
         private int ApplyCartographerMercy(HeroModel heroModel)

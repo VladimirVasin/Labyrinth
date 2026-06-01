@@ -334,11 +334,14 @@ namespace Labyrinth.Core
             currentDungeonLevel = target.LevelNumber;
             currentBase = null;
             cartographerMemory = GetCartographerMemoryForLevel(currentDungeonLevel, target.Grid);
+            explorationCoordinator.Reset(target.Grid, GetExplorationCoordinatorEntrance(target), target.LevelNumber);
 
             mazeTerrain.Clear();
             terrainDecorations.Clear();
             mazeRenderer.Clear();
             fogOfWarView.Clear();
+            heroesGuildView = null;
+            heroGuildQuestController.SetGuildView(null);
             mobManager.Clear();
             goldIngotManager.Clear();
             taxCollectorController.Clear();
@@ -421,9 +424,24 @@ namespace Labyrinth.Core
                     continue;
                 }
 
-                hero.TransferToLevel(currentMaze, start, mazeRenderer, goldIngotManager, deathTokenManager, SyncHeroKnowledgeAtEntrance, HandleDownStairsOpened);
+                hero.TransferToLevel(currentMaze, start, mazeRenderer, goldIngotManager, deathTokenManager, SyncHeroKnowledgeAtEntrance, HandleDownStairsOpened, TryGetNearbyHeroMobInteractionCell, explorationCoordinator);
                 hero.SetFortifiedCellProvider(IsHeroMovementFortifiedCell);
             }
+        }
+
+        private static Vector2Int GetExplorationCoordinatorEntrance(MazeGenerationResult target)
+        {
+            if (target == null)
+            {
+                return Vector2Int.zero;
+            }
+
+            if (target.LevelNumber > 1 && target.UpStairs != null)
+            {
+                return target.UpStairs.Position;
+            }
+
+            return target.EntrancePosition;
         }
 
         private void RestoreBaseBuildingsForLevelOne()
@@ -514,6 +532,13 @@ namespace Labyrinth.Core
             {
                 AntiquaryRenderer.Render(mazeRenderer, baseDevelopment.AntiquaryPosition);
                 RegisterExistingBuilding(BuildingType.Antiquary, baseDevelopment.AntiquaryPosition);
+            }
+
+            if (baseDevelopment.HasHeroesGuild)
+            {
+                heroesGuildView = HeroesGuildRenderer.Render(mazeRenderer, baseDevelopment.HeroesGuildPosition);
+                heroGuildQuestController.SetGuildView(heroesGuildView);
+                RegisterExistingBuilding(BuildingType.HeroesGuild, baseDevelopment.HeroesGuildPosition);
             }
 
             RefreshAllBuildingUpgradeVisuals();

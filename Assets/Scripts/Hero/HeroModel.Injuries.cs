@@ -5,8 +5,8 @@ namespace Labyrinth.Hero
 {
     public sealed partial class HeroModel
     {
-        private const int SevereInjuryMinimumWounds = 3;
-        private const int ScarMinimumWounds = 5;
+        private const int SevereInjuryMinimumWounds = 2;
+        private const int ScarMinimumWounds = 3;
 
         public HeroSevereInjuryType SevereInjury { get; private set; }
 
@@ -74,9 +74,20 @@ namespace Labyrinth.Hero
             var elite = attacker != null && (attacker.IsMiniBoss || attacker.IsBoss);
             var dark = attacker != null && attacker.SpawnedFromDarkness;
             var highDamage = damage >= Mathf.Max(5, Mathf.CeilToInt(MaxHitPoints * 0.42f));
-            if (!HasSevereInjury && (CombatWounds >= SevereInjuryMinimumWounds || highDamage || elite))
+            var lowHealth = HitPoints <= Mathf.Max(2, Mathf.CeilToInt(MaxHitPoints * 0.35f));
+            var criticalHealth = HitPoints <= Mathf.Max(1, Mathf.CeilToInt(MaxHitPoints * 0.18f));
+            if (!HasSevereInjury && (CombatWounds >= SevereInjuryMinimumWounds || highDamage || elite || lowHealth))
             {
-                var chance = Mathf.Clamp(18 + CombatWounds * 9 + damage * 4 + (elite ? 20 : 0) + (dark ? 12 : 0), 0, 85);
+                var chance = Mathf.Clamp(
+                    12
+                    + CombatWounds * 10
+                    + damage * 4
+                    + (elite ? 20 : 0)
+                    + (dark ? 12 : 0)
+                    + (lowHealth ? 18 : 0)
+                    + (criticalHealth ? 14 : 0),
+                    0,
+                    85);
                 if (RollPercent(chance, random))
                 {
                     SevereInjury = HeroInjuryCatalog.ChooseSevereInjury(attacker, damage, MaxHitPoints);
@@ -85,12 +96,23 @@ namespace Labyrinth.Hero
                 }
             }
 
-            if (!HasSevereInjury || HasPersonalScar || (!highDamage && !elite && CombatWounds < ScarMinimumWounds))
+            if (!HasSevereInjury
+                || HasPersonalScar
+                || (!highDamage && !elite && !criticalHealth && !(lowHealth && damage >= 2) && CombatWounds < ScarMinimumWounds))
             {
                 return false;
             }
 
-            var scarChance = Mathf.Clamp(8 + CombatWounds * 7 + damage * 3 + (elite ? 10 : 0) + (dark ? 12 : 0), 0, 70);
+            var scarChance = Mathf.Clamp(
+                6
+                + CombatWounds * 8
+                + damage * 3
+                + (elite ? 10 : 0)
+                + (dark ? 12 : 0)
+                + (lowHealth ? 10 : 0)
+                + (criticalHealth ? 18 : 0),
+                0,
+                70);
             if (!RollPercent(scarChance, random))
             {
                 return false;

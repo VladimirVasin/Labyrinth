@@ -11,6 +11,7 @@ namespace Labyrinth.UI
         private GUIStyle subtitleStyle;
         private GUIStyle badgeStyle;
         private GUIStyle closeButtonStyle;
+        private readonly GuiHudTransition transition = new GuiHudTransition();
 
         public bool IsVisible => visible;
 
@@ -28,6 +29,7 @@ namespace Labyrinth.UI
             }
 
             visible = true;
+            transition.Show();
         }
 
         public void Hide()
@@ -38,18 +40,20 @@ namespace Labyrinth.UI
             }
 
             visible = false;
+            transition.Hide();
         }
 
         private void OnGUI()
         {
-            if (!visible)
+            if (!transition.IsDrawing)
             {
                 return;
             }
 
             EnsureStyles();
 
-            var rect = CalculatePanelRect();
+            var previousColor = transition.ApplyGuiAlpha();
+            var rect = transition.AnimateRect(CalculatePanelRect());
 
             FillRect(rect, new Color(0.12f, 0.08f, 0.07f, 0.95f));
             FillRect(new Rect(rect.x, rect.y, rect.width, 4f), new Color(1f, 0.72f, 0.22f, 0.95f));
@@ -62,6 +66,8 @@ namespace Labyrinth.UI
             {
                 Hide();
             }
+
+            GUI.color = previousColor;
         }
 
         private static Rect CalculatePanelRect()
@@ -143,7 +149,7 @@ namespace Labyrinth.UI
         private static void FillRect(Rect rect, Color color)
         {
             var previousColor = GUI.color;
-            GUI.color = color;
+            GUI.color = new Color(color.r, color.g, color.b, color.a * previousColor.a);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previousColor;
         }

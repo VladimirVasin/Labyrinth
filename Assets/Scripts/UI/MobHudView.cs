@@ -19,32 +19,40 @@ namespace Labyrinth.UI
         private GUIStyle combatLabelStyle;
         private GUIStyle closeButtonStyle;
         private Texture2D circleTexture;
+        private readonly GuiHudTransition transition = new GuiHudTransition();
+        private bool visible;
 
-        public bool IsVisible => selectedMob != null;
+        public bool IsVisible => visible;
 
         public bool ContainsScreenPoint(Vector2 screenPosition)
         {
-            return selectedMob != null && CalculatePanelRect().Contains(ToGuiPoint(screenPosition));
+            return visible && selectedMob != null && CalculatePanelRect().Contains(ToGuiPoint(screenPosition));
         }
 
         public void Show(MobController mob)
         {
-            if (selectedMob == null || selectedMob != mob)
+            if (!visible || selectedMob == null || selectedMob != mob)
             {
                 GameAudioController.PlayUi(GameSfx.HudOpen);
             }
 
             selectedMob = mob;
+            visible = selectedMob != null;
+            if (visible)
+            {
+                transition.Show();
+            }
         }
 
         public void Hide()
         {
-            if (selectedMob != null)
+            if (visible && selectedMob != null)
             {
                 GameAudioController.PlayUi(GameSfx.HudClose);
             }
 
-            selectedMob = null;
+            visible = false;
+            transition.Hide();
         }
 
         private void OnGUI()
@@ -52,12 +60,20 @@ namespace Labyrinth.UI
             if (selectedMob == null || selectedMob.Model == null)
             {
                 selectedMob = null;
+                visible = false;
+                return;
+            }
+
+            if (!transition.IsDrawing)
+            {
+                selectedMob = null;
                 return;
             }
 
             EnsureStyles();
 
-            var rect = CalculatePanelRect();
+            var previousColor = transition.ApplyGuiAlpha();
+            var rect = transition.AnimateRect(CalculatePanelRect());
 
             DrawPanel(rect, selectedMob.Model.Rank);
 
@@ -91,6 +107,8 @@ namespace Labyrinth.UI
             {
                 Hide();
             }
+
+            GUI.color = previousColor;
         }
 
         private static string BuildTitle(MobModel model)
@@ -259,7 +277,7 @@ namespace Labyrinth.UI
             FillRect(rect, new Color(color.r, color.g, color.b, 0.18f));
             DrawOutline(rect, new Color(color.r, color.g, color.b, 0.55f));
             var previousColor = GUI.color;
-            GUI.color = color;
+            GUI.color = new Color(color.r, color.g, color.b, color.a * previousColor.a);
             GUI.Label(rect, text, statusBadgeStyle);
             GUI.color = previousColor;
         }
@@ -281,7 +299,7 @@ namespace Labyrinth.UI
             FillRect(rect, new Color(1f, 1f, 1f, 0.055f));
             DrawOutline(rect, new Color(1f, 1f, 1f, 0.1f));
             var previousColor = GUI.color;
-            GUI.color = valueColor;
+            GUI.color = new Color(valueColor.r, valueColor.g, valueColor.b, valueColor.a * previousColor.a);
             GUI.Label(new Rect(rect.x + 10f, rect.y + 8f, rect.width - 20f, 24f), value, combatValueStyle);
             GUI.color = previousColor;
             GUI.Label(new Rect(rect.x + 10f, rect.y + 31f, rect.width - 20f, 18f), label, combatLabelStyle);
@@ -305,7 +323,7 @@ namespace Labyrinth.UI
         private static void FillRect(Rect rect, Color color)
         {
             var previousColor = GUI.color;
-            GUI.color = color;
+            GUI.color = new Color(color.r, color.g, color.b, color.a * previousColor.a);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previousColor;
         }
@@ -400,7 +418,7 @@ namespace Labyrinth.UI
         private void DrawCircle(Rect rect, Color color)
         {
             var previousColor = GUI.color;
-            GUI.color = color;
+            GUI.color = new Color(color.r, color.g, color.b, color.a * previousColor.a);
             GUI.DrawTexture(rect, circleTexture);
             GUI.color = previousColor;
         }

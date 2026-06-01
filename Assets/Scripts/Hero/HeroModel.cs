@@ -15,7 +15,7 @@ namespace Labyrinth.Hero
         public const int FirstLevelExperienceCost = 15;
         public const int ExperienceCostGrowthPerLevel = 5;
         public const int ExperiencePerNewCell = 1;
-        public const int GoldPerNewCell = 1;
+        public const int GoldPerCommonMapCell = 1;
         public const int PilgrimLightSightBonus = 2;
         public const int StrongBonesHitPointBonus = 4;
         public const int TrueHandAttackBonus = 5;
@@ -253,10 +253,6 @@ namespace Labyrinth.Hero
                     return target.IsMiniBoss ? Mathf.CeilToInt(currentAttack * 0.1f) : 0;
                 case HeroVengeanceKind.LastMonster:
                     return target.IsBoss ? Mathf.CeilToInt(currentAttack * 0.15f) : 0;
-                case HeroVengeanceKind.BlackCell:
-                    return target.SpawnedFromDarkness ? 2 : 0;
-                case HeroVengeanceKind.LowerStone:
-                    return DungeonLevel == VengeanceQuest.TargetDungeonLevel ? 1 : 0;
                 default:
                     return 0;
             }
@@ -552,12 +548,20 @@ namespace Labyrinth.Hero
 
         public int RewardNewCellExploration(out HeroVengeanceProgressResult vengeanceProgress)
         {
-            AddGold(GoldPerNewCell);
             var gainedLevels = AddExperience(ExperiencePerNewCell);
-            vengeanceProgress = ApplyVengeanceCompletionReward(VengeanceQuest != null
-                ? VengeanceQuest.RegisterNewCellExplored(DungeonLevel)
-                : HeroVengeanceProgressResult.None);
-            return gainedLevels + vengeanceProgress.GainedLevels;
+            vengeanceProgress = HeroVengeanceProgressResult.None;
+            return gainedLevels;
+        }
+
+        public int RewardCommonMapContribution(int newWalkableCells)
+        {
+            var reward = Mathf.Max(0, newWalkableCells) * GoldPerCommonMapCell;
+            if (reward > 0)
+            {
+                AddGold(reward);
+            }
+
+            return reward;
         }
 
         public bool TrySpendStamina(int amount)
@@ -665,7 +669,7 @@ namespace Labyrinth.Hero
                 return 0;
             }
 
-            return VengeanceQuest.Kind == HeroVengeanceKind.GreenGrin || VengeanceQuest.Kind == HeroVengeanceKind.BlackCell
+            return VengeanceQuest.Kind == HeroVengeanceKind.GreenGrin
                 ? 1
                 : 0;
         }

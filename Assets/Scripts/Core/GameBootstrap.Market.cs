@@ -82,11 +82,22 @@ namespace Labyrinth.Core
                 return GetMarketServiceEntries();
             }
 
+            if (buildingType == BuildingType.HeroesGuild)
+            {
+                return GetHeroesGuildServiceEntries();
+            }
+
             return BuildingServiceCatalog.Get(buildingType, buildingLevel);
         }
 
         private void HandleBuildingMicroHudServiceAction(BuildingType buildingType, int serviceIndex)
         {
+            if (buildingType == BuildingType.HeroesGuild)
+            {
+                TryAssignHeroesGuildQuest(serviceIndex);
+                return;
+            }
+
             if (buildingType != BuildingType.Market)
             {
                 return;

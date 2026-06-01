@@ -40,6 +40,8 @@ namespace Labyrinth.Core
         private TaxCollectorController taxCollectorController;
         private DungeonFortificationController dungeonFortificationController;
         private MineConstructionController mineConstructionController;
+        private HeroGuildQuestController heroGuildQuestController;
+        private HeroExplorationCoordinator explorationCoordinator;
         private MobManager mobManager;
         private CombatController combatController;
         private MainMenuUI mainMenu;
@@ -63,6 +65,7 @@ namespace Labyrinth.Core
         private HeroMemory cartographerMemory;
         private HeroMemoryView sharedHeroMemoryView;
         private HeroVisibilityView selectedHeroVisibilityView;
+        private BuildingView heroesGuildView;
         private HeroVisibilityDisplayMode visibilityDisplayMode = HeroVisibilityDisplayMode.Lighting;
         private readonly List<HeroController> heroes = new List<HeroController>();
         private readonly List<HeroController> fallenHeroes = new List<HeroController>();
@@ -81,6 +84,7 @@ namespace Labyrinth.Core
 
         private void Awake()
         {
+            Application.runInBackground = true;
             resources = ResourceWallet.CreateDefault();
             baseDevelopment = new BaseDevelopment();
             generator = new MazeGenerator();
@@ -106,21 +110,31 @@ namespace Labyrinth.Core
             deathTokenManager.TokenDelivered += HandleHeroDeathTokenDelivered;
             deathTokenManager.TokenDeliveredByHero += HandleHeroCarryObjectiveDelivered;
             taxCollectorController = gameObject.AddComponent<TaxCollectorController>();
-            taxCollectorController.Configure(resources, baseDevelopment, mazeRenderer);
+            taxCollectorController.Configure(resources, baseDevelopment, mazeRenderer, terrainDecorations);
             dungeonFortificationController = gameObject.AddComponent<DungeonFortificationController>();
             dungeonFortificationController.Configure(resources, mazeRenderer);
             mineConstructionController = gameObject.AddComponent<MineConstructionController>();
             mineConstructionController.Configure(resources, baseDevelopment, mazeRenderer, baseAmbience);
+            heroGuildQuestController = gameObject.AddComponent<HeroGuildQuestController>();
+            heroGuildQuestController.Configure(resources, baseDevelopment, mazeRenderer, () => currentMaze);
+            explorationCoordinator = new HeroExplorationCoordinator();
             mobManager = gameObject.AddComponent<MobManager>();
+            mobManager.SetEncounterHeroes(heroes);
             combatController = gameObject.AddComponent<CombatController>();
             combatController.MobDefeated += HandleMobDefeated;
             mainMenu = gameObject.AddComponent<MainMenuUI>();
             baseHud = gameObject.AddComponent<BaseHudView>();
             heroHud = gameObject.AddComponent<HeroHudView>();
-            heroHud.Configure(() => heroes, () => selectedHero, SelectHero);
+            heroHud.Configure(() => heroes, () => selectedHero, SelectHero, GetHeroGuildQuestHudInfo);
             mobHud = gameObject.AddComponent<MobHudView>();
             buildingMicroHud = gameObject.AddComponent<BuildingMicroHudView>();
-            buildingMicroHud.Configure(GetBuildingMicroHudLevel, GetBuildingMicroHudServices, HandleBuildingMicroHudServiceAction, ShowHeroHouseLineage);
+            buildingMicroHud.Configure(
+                GetBuildingMicroHudLevel,
+                GetBuildingMicroHudServices,
+                HandleBuildingMicroHudServiceAction,
+                ShowHeroHouseLineage,
+                GetBuildingQuestGenerationToggle,
+                SetBuildingQuestGenerationToggle);
             heroLineageHud = gameObject.AddComponent<HeroLineageHudView>();
             heroLineageHud.Configure(GetActiveHeroByNumber);
             objectMicroHud = gameObject.AddComponent<ObjectMicroHudView>();
@@ -177,9 +191,14 @@ namespace Labyrinth.Core
                 return;
             }
 
-            if (state == GameState.Playing && currentMaze == null)
+            if (IsRuntimeSimulationState() && currentMaze == null)
             {
                 RecoverFromMissingMazeState();
+                return;
+            }
+
+            if (TryToggleCastleHudHotkey())
+            {
                 return;
             }
 
@@ -204,7 +223,7 @@ namespace Labyrinth.Core
             UpdateMineConstructionHover();
             UpdateDungeonFortificationHover();
 
-            if (state != GameState.Playing)
+            if (!IsRuntimeSimulationState())
             {
                 return;
             }
@@ -215,6 +234,8 @@ namespace Labyrinth.Core
                 dungeonFortificationController.UpdateFortification();
                 mineConstructionController.UpdateConstruction();
             }
+
+            heroGuildQuestController.UpdateQuests(heroes);
             if (!victoryAchieved)
             {
                 if (mobManager.TryBeginRespawnCheck())
@@ -285,6 +306,19 @@ namespace Labyrinth.Core
             }
 
             ShowBuildingHud(buildingView);
+        }
+
+        private void LateUpdate()
+        {
+            if (IsRuntimeSimulationState())
+            {
+                TryStartHeroEncounter();
+            }
+        }
+
+        private bool IsRuntimeSimulationState()
+        {
+            return state == GameState.Playing || state == GameState.BaseHudOpen;
         }
 
         private bool IsObjectHudTargetVisible(ObjectMicroHudTarget target)
@@ -372,6 +406,10 @@ namespace Labyrinth.Core
                 GetAntiquaryStatus,
                 CanBuildAntiquary,
                 GetAntiquaryCost,
+                BuildHeroesGuildFromBase,
+                GetHeroesGuildStatus,
+                CanBuildHeroesGuild,
+                GetHeroesGuildCost,
                 GetHeroHouseStatus,
                 CreateHeroFromBase,
                 CanCreateHero,
@@ -450,6 +488,7 @@ namespace Labyrinth.Core
             taxCollectorController.Clear();
             dungeonFortificationController.Clear();
             mineConstructionController.Clear();
+            heroGuildQuestController.Clear();
             cameraController.SetInteractionEnabled(false);
             mazeTerrain.Clear();
             terrainDecorations.Clear();
@@ -463,6 +502,7 @@ namespace Labyrinth.Core
             DestroyHeroVisibilityView();
             currentMaze = null;
             currentBase = null;
+            heroesGuildView = null;
             cartographerMemory = null;
             levelOneCartographerMemory = null;
             levelTwoCartographerMemory = null;
@@ -494,6 +534,7 @@ namespace Labyrinth.Core
         {
             var defeatedBoss = defeatedMob != null && defeatedMob.Model != null && defeatedMob.Model.IsBoss;
             var defeatedMiniBoss = defeatedMob != null && defeatedMob.Model != null && defeatedMob.Model.IsMiniBoss;
+            heroGuildQuestController.NotifyMobDefeated(victoriousHero, defeatedMob);
             mobManager.Remove(defeatedMob);
             RefreshHeroHouseEffect(victoriousHero != null ? victoriousHero.DisplayNumber : 0);
             if (defeatedMiniBoss)
@@ -758,7 +799,7 @@ namespace Labyrinth.Core
 
         private static void EnsureLight()
         {
-            var light = FindAnyObjectByType<Light>();
+            var light = FindSceneDirectionalLight();
             if (light == null)
             {
                 var lightObject = new GameObject("Directional Light");
@@ -766,7 +807,7 @@ namespace Labyrinth.Core
             }
 
             light.type = LightType.Directional;
-            light.intensity = 2.18f;
+            light.intensity = 1.35f;
             light.shadows = LightShadows.Soft;
             light.shadowStrength = 0.66f;
             light.shadowBias = 0.035f;
@@ -775,6 +816,29 @@ namespace Labyrinth.Core
             light.transform.rotation = Quaternion.Euler(46f, -38f, 0f);
             QualitySettings.shadows = ShadowQuality.All;
             QualitySettings.shadowDistance = 90f;
+        }
+
+        private static Light FindSceneDirectionalLight()
+        {
+            var lights = Object.FindObjectsByType<Light>();
+            for (var i = 0; i < lights.Length; i++)
+            {
+                if (lights[i] != null && lights[i].type == LightType.Directional)
+                {
+                    return lights[i];
+                }
+            }
+
+            return null;
+        }
+
+        private static void SetSceneDirectionalIntensity(float intensity)
+        {
+            var light = FindSceneDirectionalLight();
+            if (light != null)
+            {
+                light.intensity = Mathf.Max(0f, intensity);
+            }
         }
 
         private static void LogMazeSummary(MazeGenerationResult result)

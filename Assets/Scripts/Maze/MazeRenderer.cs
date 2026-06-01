@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using Labyrinth.Base;
 using Labyrinth.Core;
-using Labyrinth.Hero;
 using UnityEngine;
 
 namespace Labyrinth.Maze
@@ -11,8 +10,8 @@ namespace Labyrinth.Maze
         private const float ModelUnit = 1.35f;
         private const float BuildingScale = 2f;
         private const float BuildingUnit = ModelUnit * BuildingScale;
-        private const float VisualWallHeightMultiplier = 0.9f;
-        private const float VisualWallWidthRatio = 0.78f;
+        private const float VisualWallHeightMultiplier = 0.64f;
+        private const float VisualWallWidthRatio = 1f;
         private const float VisualFloorWidthRatio = 1f;
 
         [SerializeField]
@@ -51,9 +50,15 @@ namespace Labyrinth.Maze
         private Material chestDarkWoodMaterial;
         private Material chestMetalMaterial;
         private Material lightingFogMaterial;
+        private Material dungeonSeamMaterial;
         private GameObject lightingFogCover;
+        private GameObject dungeonSeamUnderlay;
         private readonly Dictionary<Vector2Int, List<Renderer>> cellRenderers = new Dictionary<Vector2Int, List<Renderer>>();
+        private readonly Dictionary<Vector2Int, List<Renderer>> externalCellRenderers = new Dictionary<Vector2Int, List<Renderer>>();
         private readonly Dictionary<Vector2Int, bool> cellVisibilityStates = new Dictionary<Vector2Int, bool>();
+        private HashSet<Vector2Int> currentExternalVisibleCells;
+        private MazeGrid currentExternalVisibilityGrid;
+        private bool externalVisibilityMaskActive;
 
         public float CellSize => cellSize;
 
@@ -73,10 +78,11 @@ namespace Labyrinth.Maze
             root = new GameObject("MazeRoot").transform;
             root.SetParent(transform, false);
 
+            CreateDungeonSeamUnderlay(result.Grid);
             CreateLightingFogCover(result.Grid);
             foreach (var cell in result.Grid.Cells())
             {
-                RenderCell(cell);
+                RenderCell(cell, result.Grid);
             }
 
             RenderCentralDoors(result);
@@ -376,10 +382,14 @@ namespace Labyrinth.Maze
 
         public void Clear()
         {
-            ClearHeroLightTints();
             cellRenderers.Clear();
+            externalCellRenderers.Clear();
             cellVisibilityStates.Clear();
+            currentExternalVisibleCells = null;
+            currentExternalVisibilityGrid = null;
+            externalVisibilityMaskActive = false;
             lightingFogCover = null;
+            dungeonSeamUnderlay = null;
             if (root == null)
             {
                 return;
@@ -389,57 +399,9 @@ namespace Labyrinth.Maze
             root = null;
         }
 
-        public void ShowAllCells()
+        private void RenderCell(MazeCell cell, MazeGrid grid)
         {
-            ClearHeroLightTints();
-            foreach (var pair in cellRenderers)
-            {
-                SetCellRenderersVisible(pair.Key, pair.Value, true);
-            }
-
-            SetLightingFogVisible(false);
-        }
-
-        public void TrackExternalCellRenderer(Vector2Int cellPosition, GameObject target)
-        {
-            TrackCellRenderer(cellPosition, target);
-        }
-
-        public void ApplyCellVisibility(HeroVisibility visibility, MazeGrid grid)
-        {
-            if (visibility == null || grid == null)
-            {
-                ShowAllCells();
-                return;
-            }
-
-            foreach (var pair in cellRenderers)
-            {
-                SetCellRenderersVisible(pair.Key, pair.Value, ShouldShowInLightingMode(grid, pair.Key, visibility.IsVisible(pair.Key)));
-            }
-
-            SetLightingFogVisible(true);
-        }
-
-        public void ApplyCellVisibility(HashSet<Vector2Int> visibleCells, MazeGrid grid)
-        {
-            if (visibleCells == null || grid == null)
-            {
-                ShowAllCells();
-                return;
-            }
-
-            foreach (var pair in cellRenderers)
-            {
-                SetCellRenderersVisible(pair.Key, pair.Value, ShouldShowInLightingMode(grid, pair.Key, visibleCells.Contains(pair.Key)));
-            }
-
-            SetLightingFogVisible(true);
-        }
-
-        private void RenderCell(MazeCell cell)
-        {
-            if (RenderVoxelCell(cell))
+            if (RenderVoxelCell(cell, grid))
             {
                 return;
             }
@@ -502,7 +464,7 @@ namespace Labyrinth.Maze
                     centralDoorMaterial,
                     doorRoot.transform,
                     true);
-                TrackCellRenderer(door.Position, slab);
+                TrackExternalCellRenderer(door.Position, slab);
 
                 for (var i = -1; i <= 1; i++)
                 {
@@ -513,7 +475,7 @@ namespace Labyrinth.Maze
                         centralDoorMetalMaterial,
                         doorRoot.transform,
                         false);
-                    TrackCellRenderer(door.Position, bar);
+                    TrackExternalCellRenderer(door.Position, bar);
                 }
 
                 door.AttachVisual(doorRoot);
@@ -552,7 +514,7 @@ namespace Labyrinth.Maze
                 chestWoodMaterial,
                 chestRoot.transform,
                 false);
-            TrackCellRenderer(chest.Position, body);
+            TrackExternalCellRenderer(chest.Position, body);
 
             var lidPivot = new GameObject("Chest Lid Pivot").transform;
             lidPivot.SetParent(chestRoot.transform, false);
@@ -565,7 +527,7 @@ namespace Labyrinth.Maze
                 chestDarkWoodMaterial,
                 lidPivot,
                 false);
-            TrackCellRenderer(chest.Position, lid);
+            TrackExternalCellRenderer(chest.Position, lid);
 
             CreateChestBand(chestRoot.transform, chest.Position, position, -0.22f);
             CreateChestBand(chestRoot.transform, chest.Position, position, 0.22f);
@@ -577,7 +539,7 @@ namespace Labyrinth.Maze
                 keyGoldMaterial,
                 chestRoot.transform,
                 false);
-            TrackCellRenderer(chest.Position, lockPlate);
+            TrackExternalCellRenderer(chest.Position, lockPlate);
 
             var view = chestRoot.AddComponent<ChestView>();
             view.Initialize(lidPivot, ModelUnit);
@@ -617,7 +579,7 @@ namespace Labyrinth.Maze
                 chestMetalMaterial,
                 parent,
                 false);
-            TrackCellRenderer(cellPosition, band);
+            TrackExternalCellRenderer(cellPosition, band);
         }
 
         private void RenderEntranceMarker(Vector2Int entrancePosition)
@@ -832,6 +794,7 @@ namespace Labyrinth.Maze
             chestDarkWoodMaterial = CreateMaterial("Chest Dark Wood", new Color(0.24f, 0.11f, 0.04f));
             chestMetalMaterial = CreateMaterial("Chest Metal", new Color(0.12f, 0.12f, 0.12f));
             lightingFogMaterial = CreateUnlitMaterial("Maze Lighting Fog", new Color(0.005f, 0.006f, 0.008f));
+            dungeonSeamMaterial = CreateUnlitMaterial("Dungeon Seam Underlay", new Color(0f, 0f, 0f, 1f));
             EnsureVoxelMaterials();
         }
 
@@ -881,106 +844,5 @@ namespace Labyrinth.Maze
             }
         }
 
-        private void TrackCellRenderer(Vector2Int cellPosition, GameObject target)
-        {
-            if (!cellRenderers.TryGetValue(cellPosition, out var renderers))
-            {
-                renderers = new List<Renderer>();
-                cellRenderers[cellPosition] = renderers;
-            }
-
-            var trackedRenderers = target.GetComponentsInChildren<Renderer>();
-            renderers.AddRange(trackedRenderers);
-            if (cellVisibilityStates.TryGetValue(cellPosition, out var visible))
-            {
-                SetRenderersEnabled(trackedRenderers, visible);
-            }
-        }
-
-        private void TrackCellRenderer(Vector2Int cellPosition, Renderer renderer)
-        {
-            if (renderer == null)
-            {
-                return;
-            }
-
-            if (!cellRenderers.TryGetValue(cellPosition, out var renderers))
-            {
-                renderers = new List<Renderer>(1);
-                cellRenderers[cellPosition] = renderers;
-            }
-
-            renderers.Add(renderer);
-            if (cellVisibilityStates.TryGetValue(cellPosition, out var visible))
-            {
-                renderer.enabled = visible;
-            }
-        }
-
-        private static bool ShouldShowInLightingMode(MazeGrid grid, Vector2Int position, bool isVisible)
-        {
-            if (!grid.InBounds(position) || isVisible)
-            {
-                return true;
-            }
-
-            return IsOuterWall(grid, position);
-        }
-
-        private static bool IsOuterWall(MazeGrid grid, Vector2Int position)
-        {
-            var isEdge = position.x == 0
-                || position.y == 0
-                || position.x == grid.Width - 1
-                || position.y == grid.Height - 1;
-            return isEdge && grid.Get(position).Type == MazeCellType.Wall;
-        }
-
-        private void CreateLightingFogCover(MazeGrid grid)
-        {
-            if (grid == null)
-            {
-                return;
-            }
-
-            lightingFogCover = CreateCube(
-                "Maze Lighting Fog Cover",
-                new Vector3((grid.Width - 1) * cellSize * 0.5f, Scale(-0.035f), (grid.Height - 1) * cellSize * 0.5f),
-                new Vector3(grid.Width * cellSize, Scale(0.012f), grid.Height * cellSize),
-                lightingFogMaterial,
-                root,
-                false);
-            lightingFogCover.SetActive(false);
-        }
-
-        private void SetLightingFogVisible(bool visible)
-        {
-            if (lightingFogCover != null)
-            {
-                lightingFogCover.SetActive(visible);
-            }
-        }
-
-        private void SetCellRenderersVisible(Vector2Int cellPosition, List<Renderer> renderers, bool visible)
-        {
-            if (cellVisibilityStates.TryGetValue(cellPosition, out var current) && current == visible)
-            {
-                return;
-            }
-
-            SetRenderersEnabled(renderers, visible);
-            cellVisibilityStates[cellPosition] = visible;
-        }
-
-        private static void SetRenderersEnabled(IEnumerable<Renderer> renderers, bool enabled)
-        {
-            foreach (var renderer in renderers)
-            {
-                if (renderer != null)
-                {
-                    renderer.enabled = enabled;
-                }
-            }
-        }
     }
 }

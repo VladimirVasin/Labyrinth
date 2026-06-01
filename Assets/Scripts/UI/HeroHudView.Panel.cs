@@ -1,3 +1,4 @@
+using Labyrinth.Core;
 using Labyrinth.Hero;
 using UnityEngine;
 
@@ -7,7 +8,7 @@ namespace Labyrinth.UI
     {
         private void DrawHeroPanel(HeroController hero, int heroNumber)
         {
-            var rect = CalculatePanelRect();
+            var rect = panelTransition.AnimateRect(CalculatePanelRect());
 
             DrawPanel(rect);
             var title = BuildHeroTitle(hero, heroNumber);
@@ -81,6 +82,17 @@ namespace Labyrinth.UI
             CaptureHover(characterRect, "Характер", BuildCharacterTraitTooltip(hero.Model), ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
             y += 78f;
 
+            var guildQuest = GetHeroGuildQuestInfo(hero);
+            if (guildQuest.HasQuest)
+            {
+                DrawSection(new Rect(contentX, y, contentWidth, 18f), "Квест гильдии");
+                y += 20f;
+                var questRect = new Rect(contentX, y, contentWidth, 52f);
+                DrawGuildQuestSummary(questRect, guildQuest);
+                CaptureHover(questRect, "Квест гильдии", guildQuest.Tooltip, ref hoveredTitle, ref hoveredInfo, ref hoveredRect);
+                y += 60f;
+            }
+
             DrawSection(new Rect(contentX, y, contentWidth, 18f), "Боевые параметры");
             y += 20f;
             var combatRect = new Rect(contentX, y, contentWidth, 42f);
@@ -132,6 +144,37 @@ namespace Labyrinth.UI
             {
                 Hide();
             }
+        }
+
+        private void DrawGuildQuestSummary(Rect rect, HeroGuildQuestHudInfo quest)
+        {
+            FillRect(rect, new Color(0.87f, 0.72f, 0.34f, 0.075f));
+            DrawOutline(rect, new Color(0.87f, 0.72f, 0.34f, 0.22f));
+
+            var innerX = rect.x + 10f;
+            var innerWidth = rect.width - 20f;
+            DrawFittedLabel(new Rect(innerX, rect.y + 4f, innerWidth, 18f), $"Зачистка: {quest.Target}", slotLabelStyle, 10, false);
+            FillRect(new Rect(innerX, rect.y + 24f, innerWidth, 1f), new Color(0.87f, 0.72f, 0.34f, 0.18f));
+
+            var gap = 8f;
+            var cellWidth = (innerWidth - gap * 2f) / 3f;
+            var rowY = rect.y + 28f;
+            DrawQuestSummaryCell(new Rect(innerX, rowY, cellWidth, 19f), "Прогресс", quest.Progress, new Color(0.66f, 1f, 0.42f));
+            DrawQuestSummaryCell(new Rect(innerX + cellWidth + gap, rowY, cellWidth, 19f), "Награда", quest.Reward, new Color(1f, 0.84f, 0.26f));
+            DrawQuestSummaryCell(new Rect(innerX + (cellWidth + gap) * 2f, rowY, cellWidth, 19f), "Статус", quest.State, new Color(0.52f, 0.82f, 1f));
+        }
+
+        private void DrawQuestSummaryCell(Rect rect, string label, string value, Color valueColor)
+        {
+            FillRect(rect, new Color(0f, 0f, 0f, 0.12f));
+            DrawOutline(rect, new Color(1f, 1f, 1f, 0.08f));
+
+            var labelWidth = Mathf.Min(58f, rect.width * 0.56f);
+            DrawFittedLabel(new Rect(rect.x + 5f, rect.y, labelWidth, rect.height), $"{label}:", chipLabelStyle, 10, false);
+            var previousColor = GUI.color;
+            GUI.color = new Color(valueColor.r, valueColor.g, valueColor.b, valueColor.a * previousColor.a);
+            DrawFittedLabel(new Rect(rect.x + labelWidth + 7f, rect.y, rect.width - labelWidth - 12f, rect.height), value, slotItemStyle, 10, false);
+            GUI.color = previousColor;
         }
     }
 }

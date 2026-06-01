@@ -43,7 +43,7 @@ namespace Labyrinth.Core
             GameAudioController.Play(GameSfx.Build, mazeRenderer.GridToWorld(infirmaryPosition));
             GameDebugLog.Info(
                 "Base",
-                $"Infirmary built at {GameDebugLog.Position(infirmaryPosition)}. buildCost={cost.Format()}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, healFoodPerHp={BaseDevelopment.InfirmaryFoodPerHitPoint}.");
+                $"Infirmary built at {GameDebugLog.Position(infirmaryPosition)}. buildCost={cost.Format()}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, healFoodPerHp={BaseDevelopment.InfirmaryFoodPerHitPoint}, healGoldPerHp={BaseDevelopment.InfirmaryGoldPerHitPoint}.");
         }
 
         private bool CanBuildInfirmary()
@@ -56,8 +56,8 @@ namespace Labyrinth.Core
         private string GetInfirmaryStatus()
         {
             var status = baseDevelopment.HasInfirmary
-                ? $"построен ({baseDevelopment.InfirmaryPosition.x}, {baseDevelopment.InfirmaryPosition.y}), лечение 1 HP за {BaseDevelopment.InfirmaryFoodPerHitPoint} пищи, 1 рана за {BaseDevelopment.InfirmaryFoodPerHitPoint * 2}"
-                : $"не построен, постройка {GetInfirmaryCost().Format()}, лечение 1 HP за {BaseDevelopment.InfirmaryFoodPerHitPoint} пищи, 1 рана за {BaseDevelopment.InfirmaryFoodPerHitPoint * 2}";
+                ? $"построен ({baseDevelopment.InfirmaryPosition.x}, {baseDevelopment.InfirmaryPosition.y}), лечение 1 HP за {BaseDevelopment.InfirmaryFoodPerHitPoint} пищи + {BaseDevelopment.InfirmaryGoldPerHitPoint} зол., 1 рана за {BaseDevelopment.InfirmaryFoodPerHitPoint * 2}"
+                : $"не построен, постройка {GetInfirmaryCost().Format()}, лечение 1 HP за {BaseDevelopment.InfirmaryFoodPerHitPoint} пищи + {BaseDevelopment.InfirmaryGoldPerHitPoint} зол., 1 рана за {BaseDevelopment.InfirmaryFoodPerHitPoint * 2}";
             if (baseDevelopment.LastBuildMessage.Contains("лазарет"))
             {
                 status += $", {baseDevelopment.LastBuildMessage}";

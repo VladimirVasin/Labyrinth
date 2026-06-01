@@ -19,8 +19,8 @@ namespace Labyrinth.Core
         public const int ForgeWoodCost = 25;
         public const int InfirmaryGoldCost = 45;
         public const int InfirmaryWoodCost = 15;
-        public const int CartographerHouseGoldCost = 50;
-        public const int CartographerHouseWoodCost = 15;
+        public const int CartographerHouseGoldCost = 40;
+        public const int CartographerHouseWoodCost = 10;
         public const int ChapelGoldCost = 55;
         public const int ChapelWoodCost = 20;
         public const int MinersGuildGoldCost = 60;
@@ -29,6 +29,8 @@ namespace Labyrinth.Core
         public const int MarketWoodCost = 20;
         public const int AntiquaryGoldCost = 80;
         public const int AntiquaryWoodCost = 25;
+        public const int HeroesGuildGoldCost = 40;
+        public const int HeroesGuildWoodCost = 15;
         public const int HeroGoldCost = 25;
         public const int HeroFoodCost = 10;
         public const int ReturnStoneGoldCost = 100;
@@ -38,6 +40,7 @@ namespace Labyrinth.Core
         public const int HealthPotionBaseMaxCount = 3;
         public const int HealthPotionUpgradedMaxCount = 4;
         public const int InfirmaryFoodPerHitPoint = 5;
+        public const int InfirmaryGoldPerHitPoint = 5;
         public const int InfirmaryFoodPerSevereInjury = 35;
         public const int RationFoodCost = 10;
         public const int RationGoldCost = 10;
@@ -72,6 +75,7 @@ namespace Labyrinth.Core
         public const int MinersGuildFootprintRadiusCells = 2;
         public const int MarketFootprintRadiusCells = 2;
         public const int AntiquaryFootprintRadiusCells = 2;
+        public const int HeroesGuildFootprintRadiusCells = 2;
         public const int BuildingVisibilityPaddingCells = 1;
 
         private const int MinimumBuildingGapCells = 1;
@@ -90,6 +94,7 @@ namespace Labyrinth.Core
         private Vector2Int? minersGuildPosition;
         private Vector2Int? marketPosition;
         private Vector2Int? antiquaryPosition;
+        private Vector2Int? heroesGuildPosition;
         private Func<Vector2Int, int, bool> buildingPlacementBlocker;
         private int castleLevel = 1;
         private int farmLevel = 1;
@@ -148,7 +153,8 @@ namespace Labyrinth.Core
             + (HasChapel ? 1 : 0)
             + (HasMinersGuild ? 1 : 0)
             + (HasMarket ? 1 : 0)
-            + (HasAntiquary ? 1 : 0);
+            + (HasAntiquary ? 1 : 0)
+            + (HasHeroesGuild ? 1 : 0);
 
         public int RequiredPeasantHutCount => ActivePlayerBuildingCount / 2;
 
@@ -169,6 +175,8 @@ namespace Labyrinth.Core
         public bool HasMarket => marketPosition.HasValue;
 
         public bool HasAntiquary => antiquaryPosition.HasValue;
+
+        public bool HasHeroesGuild => heroesGuildPosition.HasValue;
 
         public int FoodPerTimeUnit => FarmCount;
 
@@ -200,6 +208,8 @@ namespace Labyrinth.Core
 
         public Vector2Int AntiquaryPosition => antiquaryPosition ?? Vector2Int.zero;
 
+        public Vector2Int HeroesGuildPosition => heroesGuildPosition ?? Vector2Int.zero;
+
         public string LastBuildMessage { get; private set; } = string.Empty;
 
         public void ConfigurePlacementBlocker(Func<Vector2Int, int, bool> blocker)
@@ -226,6 +236,8 @@ namespace Labyrinth.Core
         public static BuildingCost MarketCost => new BuildingCost(MarketGoldCost, MarketWoodCost);
 
         public static BuildingCost AntiquaryCost => new BuildingCost(AntiquaryGoldCost, AntiquaryWoodCost);
+
+        public static BuildingCost HeroesGuildCost => new BuildingCost(HeroesGuildGoldCost, HeroesGuildWoodCost);
 
         public static BuildingCost HeroCost => new BuildingCost(HeroGoldCost, 0, HeroFoodCost);
 
@@ -257,7 +269,7 @@ namespace Labyrinth.Core
                         : new BuildingCost(120, 45, 0, 45);
                 case BuildingUpgradeType.Tavern:
                     return nextLevel == 2
-                        ? new BuildingCost(65, 25, 0, 18)
+                        ? new BuildingCost(65, 25, 0, 20)
                         : new BuildingCost(110, 40, 0, 40);
                 case BuildingUpgradeType.Forge:
                     return nextLevel == 2
@@ -509,6 +521,25 @@ namespace Labyrinth.Core
             return true;
         }
 
+        public bool TryBuildHeroesGuild(MazeGenerationResult result, out Vector2Int guild)
+        {
+            guild = Vector2Int.zero;
+            if (HasHeroesGuild)
+            {
+                LastBuildMessage = "гильдия героев уже построена";
+                return false;
+            }
+
+            if (!TryBuild(result, HeroesGuildFootprintRadiusCells, 947, out guild))
+            {
+                return false;
+            }
+
+            heroesGuildPosition = guild;
+            LastBuildMessage = $"гильдия героев построена ({guild.x}, {guild.y})";
+            return true;
+        }
+
         public void Reset()
         {
             farmPositions.Clear();
@@ -524,6 +555,7 @@ namespace Labyrinth.Core
             minersGuildPosition = null;
             marketPosition = null;
             antiquaryPosition = null;
+            heroesGuildPosition = null;
             castleLevel = 1;
             farmLevel = 1;
             lumberjackCampLevel = 1;
@@ -877,6 +909,12 @@ namespace Labyrinth.Core
                 return false;
             }
 
+            if (heroesGuildPosition.HasValue
+                && IsTooClose(heroesGuildPosition.Value, HeroesGuildFootprintRadiusCells, position, footprintRadius))
+            {
+                return false;
+            }
+
             return true;
         }
 
@@ -899,6 +937,7 @@ namespace Labyrinth.Core
                     ^ (HasMinersGuild ? 67867967 : 0)
                     ^ (HasMarket ? 86028121 : 0)
                     ^ (HasAntiquary ? 98602363 : 0)
+                    ^ (HasHeroesGuild ? 104395303 : 0)
                     ^ (result.BasePosition.y * 1274126177);
             }
         }

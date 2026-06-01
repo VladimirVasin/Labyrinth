@@ -262,12 +262,13 @@ namespace Labyrinth.Core
             switch (profile)
             {
                 case TextureProfile.Stone:
-                    shade += IsTileMortar(x, y, 12, 8) ? -0.34f : 0.04f;
-                    shade += IsCrack(x, y, seed, 13) ? -0.28f : 0f;
-                    return Modulation(shade, 0.98f, 0.99f, 1.02f);
+                    shade += (ValueNoise(x / 8, y / 8, seed + 311) - 0.5f) * 0.34f;
+                    shade += (ValueNoise((x + y) / 7, (x - y) / 7, seed + 733) - 0.5f) * 0.18f;
+                    shade += IsCrack(x, y, seed, 13) ? -0.24f : 0f;
+                    return Modulation(shade, 0.97f, 0.99f, 1.03f);
                 case TextureProfile.Moss:
-                    shade += IsTileMortar(x, y, 12, 8) ? -0.22f : 0.02f;
-                    shade += IsCrack(x, y, seed, 13) ? -0.2f : 0f;
+                    shade += (ValueNoise(x / 8, y / 8, seed + 419) - 0.5f) * 0.3f;
+                    shade += IsCrack(x, y, seed, 13) ? -0.18f : 0f;
                     return Modulation(shade, 0.86f, 1.08f, 0.86f);
                 case TextureProfile.Wood:
                     shade += Mathf.Sin((y + seed % 13) * 0.62f) * 0.18f;
@@ -363,7 +364,7 @@ namespace Labyrinth.Core
 
         private static Color Modulation(float shade, float r, float g, float b)
         {
-            shade = Mathf.Clamp(shade, 0.84f, 1.14f);
+            shade = Mathf.Clamp(shade, 0.78f, 1.2f);
             return new Color(Mathf.Clamp01(shade * r), Mathf.Clamp01(shade * g), Mathf.Clamp01(shade * b), 1f);
         }
 

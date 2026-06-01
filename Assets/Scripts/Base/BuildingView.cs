@@ -18,7 +18,8 @@ namespace Labyrinth.Base
         Chapel,
         MinersGuild,
         Market,
-        Antiquary
+        Antiquary,
+        HeroesGuild
     }
 
     public sealed class BuildingView : MonoBehaviour
@@ -31,6 +32,7 @@ namespace Labyrinth.Base
         private TextMesh labelText;
         private TextMesh labelShadow;
         private GameObject selectionRoot;
+        private BoxCollider clickCollider;
 
         public BuildingType Type { get; private set; }
 
@@ -60,6 +62,7 @@ namespace Labyrinth.Base
             FootprintRadius = footprintRadius;
             RefreshWorldLabel();
             RefreshSelectionOutline();
+            RefreshClickCollider();
         }
 
         public void SetEffectText(string effectText)
@@ -169,6 +172,7 @@ namespace Labyrinth.Base
                 case BuildingType.MinersGuild:
                 case BuildingType.Market:
                 case BuildingType.Antiquary:
+                case BuildingType.HeroesGuild:
                 case BuildingType.HeroHouse:
                 case BuildingType.Tavern:
                     return 4.25f;
@@ -203,6 +207,8 @@ namespace Labyrinth.Base
                     return "Рынок";
                 case BuildingType.Antiquary:
                     return "Антиквариат";
+                case BuildingType.HeroesGuild:
+                    return "Гильдия";
                 case BuildingType.PeasantHut:
                     return "Лачуга";
                 default:
@@ -244,6 +250,25 @@ namespace Labyrinth.Base
                 "Selection West",
                 new Vector3(-halfExtent, y, 0f),
                 new Vector3(thickness, 0.035f, length));
+        }
+
+        private void RefreshClickCollider()
+        {
+            if (clickCollider == null)
+            {
+                clickCollider = gameObject.GetComponent<BoxCollider>();
+                if (clickCollider == null)
+                {
+                    clickCollider = gameObject.AddComponent<BoxCollider>();
+                }
+            }
+
+            var cellSize = EstimateCellSize();
+            var halfExtent = FootprintRadius * cellSize + cellSize * 0.82f;
+            var height = Mathf.Max(cellSize * 1.6f, GetLabelHeight() * 0.9f);
+            clickCollider.center = new Vector3(0f, height * 0.5f, 0f);
+            clickCollider.size = new Vector3(halfExtent * 2f, height, halfExtent * 2f);
+            clickCollider.isTrigger = false;
         }
 
         private void CreateOutlineSegment(string objectName, Vector3 localPosition, Vector3 localScale)

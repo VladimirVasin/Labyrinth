@@ -43,7 +43,7 @@ namespace Labyrinth.Hero
                 for (var y = origin.y - normalizedSightRange; y <= origin.y + normalizedSightRange; y++)
                 {
                     var target = new Vector2Int(x, y);
-                    if (!grid.InBounds(target) || ChebyshevDistance(origin, target) > normalizedSightRange)
+                    if (!grid.InBounds(target) || IsOutsideSoftCircle(origin, target, normalizedSightRange))
                     {
                         continue;
                     }
@@ -128,9 +128,12 @@ namespace Labyrinth.Hero
             return grid.InBounds(position) && grid.Get(position).Type == MazeCellType.Wall;
         }
 
-        private static int ChebyshevDistance(Vector2Int a, Vector2Int b)
+        private static bool IsOutsideSoftCircle(Vector2Int origin, Vector2Int target, int sightRange)
         {
-            return Mathf.Max(Mathf.Abs(a.x - b.x), Mathf.Abs(a.y - b.y));
+            var radius = sightRange + 0.35f;
+            var dx = target.x - origin.x;
+            var dy = target.y - origin.y;
+            return dx * dx + dy * dy > radius * radius;
         }
     }
 }

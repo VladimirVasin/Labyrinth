@@ -12,32 +12,40 @@ namespace Labyrinth.UI
         private GUIStyle valueStyle;
         private GUIStyle effectStyle;
         private GUIStyle closeButtonStyle;
+        private readonly GuiHudTransition transition = new GuiHudTransition();
+        private bool visible;
 
-        public bool IsVisible => selectedObject != null;
+        public bool IsVisible => visible;
 
         public void Show(ObjectMicroHudTarget target)
         {
-            if (selectedObject == null || selectedObject != target)
+            if (!visible || selectedObject == null || selectedObject != target)
             {
                 GameAudioController.PlayUi(GameSfx.HudOpen);
             }
 
             selectedObject = target;
+            visible = selectedObject != null;
+            if (visible)
+            {
+                transition.Show();
+            }
         }
 
         public void Hide()
         {
-            if (selectedObject != null)
+            if (visible && selectedObject != null)
             {
                 GameAudioController.PlayUi(GameSfx.HudClose);
             }
 
-            selectedObject = null;
+            visible = false;
+            transition.Hide();
         }
 
         public bool ContainsScreenPoint(Vector2 screenPosition)
         {
-            return selectedObject != null && CalculatePanelRect().Contains(ToGuiPoint(screenPosition));
+            return visible && selectedObject != null && CalculatePanelRect().Contains(ToGuiPoint(screenPosition));
         }
 
         private void OnGUI()
@@ -47,8 +55,15 @@ namespace Labyrinth.UI
                 return;
             }
 
+            if (!transition.IsDrawing)
+            {
+                selectedObject = null;
+                return;
+            }
+
             EnsureStyles();
-            var rect = CalculatePanelRect();
+            var previousColor = transition.ApplyGuiAlpha();
+            var rect = transition.AnimateRect(CalculatePanelRect());
             DrawPanel(rect, selectedObject.AccentColor);
 
             var contentX = rect.x + 14f;
@@ -82,6 +97,8 @@ namespace Labyrinth.UI
             {
                 Hide();
             }
+
+            GUI.color = previousColor;
         }
 
         private Rect CalculatePanelRect()
@@ -142,7 +159,7 @@ namespace Labyrinth.UI
         private static void FillRect(Rect rect, Color color)
         {
             var previousColor = GUI.color;
-            GUI.color = color;
+            GUI.color = new Color(color.r, color.g, color.b, color.a * previousColor.a);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previousColor;
         }

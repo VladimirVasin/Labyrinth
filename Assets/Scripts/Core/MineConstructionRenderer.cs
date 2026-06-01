@@ -42,7 +42,7 @@ namespace Labyrinth.Core
             beamMaterial = CreateMaterial("Mine Route Beams", new Color(0.22f, 0.12f, 0.05f));
             stoneMaterial = CreateMaterial("Mine Stone", new Color(0.28f, 0.29f, 0.31f));
             metalMaterial = CreateMaterial("Mine Metal", new Color(0.62f, 0.64f, 0.66f));
-            lampMaterial = VoxelVisuals.CreateEmissiveMaterial("Mine Lamp", new Color(1f, 0.62f, 0.14f), 2f);
+            lampMaterial = VoxelVisuals.CreateEmissiveMaterial("Mine Lamp", new Color(1f, 0.5f, 0.12f), 1.35f);
             workerBodyMaterial = CreateMaterial("Mine Worker Body", new Color(0.34f, 0.25f, 0.17f));
             workerHeadMaterial = CreateMaterial("Mine Worker Head", new Color(0.76f, 0.62f, 0.42f));
         }
@@ -303,11 +303,21 @@ namespace Labyrinth.Core
             lightObject.transform.position = flamePosition;
             var light = lightObject.AddComponent<Light>();
             light.type = LightType.Point;
-            light.color = new Color(1f, 0.55f, 0.18f);
-            light.range = mazeRenderer.CellSize * (lightRange + 1.15f);
-            light.intensity = 2.3f;
-            light.shadows = LightShadows.None;
-            light.bounceIntensity = 0.18f;
+            light.color = new Color(1f, 0.68f, 0.34f);
+            light.range = mazeRenderer.CellSize * 5.15f;
+            light.intensity = 4.85f;
+            light.shadows = LightShadows.Soft;
+            light.shadowStrength = 0.24f;
+            light.shadowBias = 0.045f;
+            light.shadowNormalBias = 0.28f;
+            light.bounceIntensity = 0.35f;
+            light.renderMode = LightRenderMode.ForcePixel;
+            TorchLightFlicker.Attach(light, flame.transform, BuildTorchFlickerSeed(cell));
+        }
+
+        private static int BuildTorchFlickerSeed(Vector2Int cell)
+        {
+            return cell.x * 73856093 ^ cell.y * 19349663 ^ 0x27d4eb2d;
         }
 
         public Transform CreateWorker(Vector3 position, bool carryingWood)

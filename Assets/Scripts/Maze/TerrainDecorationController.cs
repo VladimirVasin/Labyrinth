@@ -741,7 +741,9 @@ namespace Labyrinth.Maze
                 || (baseDevelopment.HasCartographerHouse && ChebyshevDistance(cell, baseDevelopment.CartographerHousePosition) <= BaseDevelopment.CartographerHouseFootprintRadiusCells + padding)
                 || (baseDevelopment.HasChapel && ChebyshevDistance(cell, baseDevelopment.ChapelPosition) <= BaseDevelopment.ChapelFootprintRadiusCells + padding)
                 || (baseDevelopment.HasMinersGuild && ChebyshevDistance(cell, baseDevelopment.MinersGuildPosition) <= BaseDevelopment.MinersGuildFootprintRadiusCells + padding)
-                || (baseDevelopment.HasMarket && ChebyshevDistance(cell, baseDevelopment.MarketPosition) <= BaseDevelopment.MarketFootprintRadiusCells + padding);
+                || (baseDevelopment.HasMarket && ChebyshevDistance(cell, baseDevelopment.MarketPosition) <= BaseDevelopment.MarketFootprintRadiusCells + padding)
+                || (baseDevelopment.HasAntiquary && ChebyshevDistance(cell, baseDevelopment.AntiquaryPosition) <= BaseDevelopment.AntiquaryFootprintRadiusCells + padding)
+                || (baseDevelopment.HasHeroesGuild && ChebyshevDistance(cell, baseDevelopment.HeroesGuildPosition) <= BaseDevelopment.HeroesGuildFootprintRadiusCells + padding);
         }
 
         private bool IsOnEntranceRoad(Vector2Int cell, int padding)

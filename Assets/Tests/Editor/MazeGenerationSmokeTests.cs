@@ -17,6 +17,7 @@ namespace Labyrinth.Tests
         [TestCase(41, 41, 27182818)]
         [TestCase(101, 25, 634146016)]
         [TestCase(101, 51, 1700000001)]
+        [TestCase(101, 25, 705257437)]
         public void CustomMapsKeepEarlyAlternativeRoutes(int width, int height, int seed)
         {
             AssertValidMaze(width, height, seed);

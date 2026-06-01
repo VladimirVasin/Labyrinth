@@ -169,6 +169,15 @@ namespace Labyrinth.Core
 
         private static float CalculateSemanticPatternLight(string objectName, Vector3 normal, int x, int y, int z)
         {
+            if (Contains(objectName, "Voxels")
+                && !Contains(objectName, "Wall")
+                && !Contains(objectName, "Path")
+                && !Contains(objectName, "Entrance")
+                && !Contains(objectName, "Floor"))
+            {
+                return Hash(objectName, x / 3, y / 3, z / 3) % 6 == 0 ? 1.025f : 1f;
+            }
+
             if (Contains(objectName, "Roof") || Contains(objectName, "Straw") || Contains(objectName, "Thatch"))
             {
                 var row = normal == Vector3.up ? z : y;
@@ -209,13 +218,8 @@ namespace Labyrinth.Core
                 || Contains(objectName, "Stairs")
                 || Contains(objectName, "Castle"))
             {
-                var mortar = y % 3 == 0 || x % 4 == 0 || z % 4 == 0;
-                if (mortar)
-                {
-                    return 0.9f;
-                }
-
-                return (Hash(objectName, x / 2, y / 2, z / 2) % 5 == 0) ? 1.1f : 1.03f;
+                var patch = Hash(objectName, x / 2, y / 2, z / 2) % 7;
+                return patch == 0 ? 1.06f : patch == 1 ? 0.98f : 1.02f;
             }
 
             if (Contains(objectName, "Metal")

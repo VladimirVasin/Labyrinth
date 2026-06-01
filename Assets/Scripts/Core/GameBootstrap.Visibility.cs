@@ -85,19 +85,18 @@ namespace Labyrinth.Core
             if (visibilityDisplayMode == HeroVisibilityDisplayMode.Lighting)
             {
                 var visibleHeroes = BuildVisibilityHeroes();
-                selectedHeroVisibilityView.ShowLighting(visibleHeroes, currentMaze.Grid);
                 var visibleCells = BuildLightingVisibleCells(visibleHeroes);
-                var exploredCells = BuildDisplayedExploredCells();
-                mazeRenderer.ApplyCellVisibility(BuildKnownCells(visibleCells, exploredCells), currentMaze.Grid);
-                mazeRenderer.ApplyHeroLightTints(visibleHeroes, currentMaze.Grid, visibleCells);
-                fogOfWarView.Show(currentMaze.Grid, exploredCells, visibleCells);
-                RefreshMemoryOverlay(visibleCells);
+                selectedHeroVisibilityView.ShowLighting(visibleHeroes, currentMaze.Grid, visibleCells);
+                mazeRenderer.ShowAllCells();
+                mazeRenderer.ApplyDungeonLightMask(visibleHeroes, currentMaze.Grid, visibleCells, BuildBuiltTorchLightOrigins());
+                fogOfWarView.Hide();
+                RefreshMemoryOverlay();
                 mobManager.ApplyVisibility(visibleCells);
                 return;
             }
 
-            selectedHeroVisibilityView.ShowSchematic(BuildSchematicVisibleCells(BuildVisibilityHeroes()), currentMaze.Grid);
-            mazeRenderer.ClearHeroLightTints();
+            var schematicVisibleCells = BuildSchematicVisibleCells(BuildVisibilityHeroes());
+            selectedHeroVisibilityView.ShowSchematic(schematicVisibleCells, currentMaze.Grid);
             mazeRenderer.ShowAllCells();
             fogOfWarView.Hide();
             RefreshMemoryOverlay();
@@ -215,9 +214,35 @@ namespace Labyrinth.Core
                 AddBuildingVisibility(visibleCells, baseDevelopment.AntiquaryPosition, BaseDevelopment.AntiquaryFootprintRadiusCells + BaseDevelopment.BuildingVisibilityPaddingCells);
             }
 
+            if (baseDevelopment.HasHeroesGuild)
+            {
+                AddBuildingVisibility(visibleCells, baseDevelopment.HeroesGuildPosition, BaseDevelopment.HeroesGuildFootprintRadiusCells + BaseDevelopment.BuildingVisibilityPaddingCells);
+            }
+
             dungeonFortificationController?.AddTorchLitCells(visibleCells);
             mineConstructionController?.AddTorchLitCells(visibleCells);
             return visibleCells;
+        }
+
+        private List<Vector2Int> BuildBuiltTorchLightOrigins()
+        {
+            var origins = new List<Vector2Int>();
+            AddBuiltTorchLightOrigins(origins, dungeonFortificationController?.TorchPositions);
+            AddBuiltTorchLightOrigins(origins, mineConstructionController?.TorchPositions);
+            return origins;
+        }
+
+        private static void AddBuiltTorchLightOrigins(List<Vector2Int> origins, IReadOnlyCollection<Vector2Int> torchPositions)
+        {
+            if (origins == null || torchPositions == null)
+            {
+                return;
+            }
+
+            foreach (var position in torchPositions)
+            {
+                origins.Add(position);
+            }
         }
 
         private HashSet<Vector2Int> BuildRespawnBlockedCells(IReadOnlyList<HeroController> heroesWithVisibility)
@@ -308,13 +333,15 @@ namespace Labyrinth.Core
 
             if (displayMode == HeroVisibilityDisplayMode.Lighting)
             {
-                RenderSettings.ambientLight = new Color(0.08f, 0.09f, 0.115f);
-                mainCamera.clearFlags = CameraClearFlags.SolidColor;
-                mainCamera.backgroundColor = new Color(0.005f, 0.006f, 0.008f);
+                SetSceneDirectionalIntensity(1.35f);
+                RenderSettings.ambientLight = normalAmbientLight;
+                mainCamera.clearFlags = normalCameraClearFlags;
+                mainCamera.backgroundColor = normalCameraBackgroundColor;
                 mazeTerrain.SetVisualVisible(true);
                 return;
             }
 
+            SetSceneDirectionalIntensity(1.35f);
             RenderSettings.ambientLight = normalAmbientLight;
             mainCamera.clearFlags = normalCameraClearFlags;
             mainCamera.backgroundColor = normalCameraBackgroundColor;

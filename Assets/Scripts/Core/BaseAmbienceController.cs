@@ -808,6 +808,8 @@ namespace Labyrinth.Core
                     return BaseDevelopment.MarketFootprintRadiusCells;
                 case BuildingType.Antiquary:
                     return BaseDevelopment.AntiquaryFootprintRadiusCells;
+                case BuildingType.HeroesGuild:
+                    return BaseDevelopment.HeroesGuildFootprintRadiusCells;
                 case BuildingType.Castle:
                 default:
                     return BaseDevelopment.CastleFootprintRadiusCells;

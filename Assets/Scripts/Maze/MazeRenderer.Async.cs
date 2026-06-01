@@ -26,7 +26,8 @@ namespace Labyrinth.Maze
             root = new GameObject("MazeRoot").transform;
             root.SetParent(transform, false);
 
-            reportProgress?.Invoke(0.02f, "Подготовка тумана");
+            reportProgress?.Invoke(0.02f, "Подготовка темноты");
+            CreateDungeonSeamUnderlay(result.Grid);
             CreateLightingFogCover(result.Grid);
             yield return null;
 
@@ -36,7 +37,7 @@ namespace Labyrinth.Maze
             var nextFrameAt = Time.realtimeSinceStartup + AsyncRenderFrameBudgetSeconds;
             foreach (var cell in result.Grid.Cells())
             {
-                RenderCell(cell);
+                RenderCell(cell, result.Grid);
                 renderedCells++;
                 if (renderedCells % frameBudget != 0
                     && renderedCells < totalCells

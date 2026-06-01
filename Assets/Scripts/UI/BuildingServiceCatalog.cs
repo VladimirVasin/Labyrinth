@@ -85,8 +85,8 @@ namespace Labyrinth.UI
         {
             new BuildingServiceEntry(
                 "Лечение",
-                $"{BaseDevelopment.InfirmaryFoodPerHitPoint} пищи / HP, {BaseDevelopment.InfirmaryFoodPerHitPoint * 2} / рана",
-                "У входа восстанавливает раненым рыцарям недостающее здоровье и лечит боевые раны за пищу из казны.")
+                $"{BaseDevelopment.InfirmaryFoodPerHitPoint} пищи + {BaseDevelopment.InfirmaryGoldPerHitPoint} зол. / HP, {BaseDevelopment.InfirmaryFoodPerHitPoint * 2} / рана",
+                "У входа восстанавливает раненым рыцарям здоровье за пищу из казны и личное золото героя в общую казну; раны лечит за пищу.")
         };
 
         private static readonly BuildingServiceEntry[] CartographerEntries =
@@ -121,6 +121,14 @@ namespace Labyrinth.UI
                 "Рыцарь покупает у входа, если свободен слот артефакта. Одноразово переносит его ко входу при возвращении из подземелья.")
         };
 
+        private static readonly BuildingServiceEntry[] HeroesGuildEntries =
+        {
+            new BuildingServiceEntry(
+                "Контракты зачистки",
+                "из казны",
+                "Гильдия сама создает оплаченные контракты, если включена галочка создания и в казне хватает золота. Свободные рыцари берут их автоматически.")
+        };
+
         public static BuildingServiceEntry[] Get(BuildingType type, int buildingLevel = 1)
         {
             var level = ClampLevel(buildingLevel);
@@ -148,6 +156,8 @@ namespace Labyrinth.UI
                     return MarketEntries;
                 case BuildingType.Antiquary:
                     return AntiquaryEntries;
+                case BuildingType.HeroesGuild:
+                    return HeroesGuildEntries;
                 default:
                     return System.Array.Empty<BuildingServiceEntry>();
             }

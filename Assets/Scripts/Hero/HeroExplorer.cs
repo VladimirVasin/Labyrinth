@@ -10,6 +10,10 @@ namespace Labyrinth.Hero
     public sealed partial class HeroExplorer
     {
         private delegate bool EquipmentEquipHandler(out string previousItem);
+        public delegate bool NearbyMobInteractionCellProvider(
+            Vector2Int heroPosition,
+            Vector2Int interactionCell,
+            int radius);
 
         private const int StaminaPerNewCell = 1;
         private const int DuplicateEquipmentGoldCompensation = 5;
@@ -25,6 +29,8 @@ namespace Labyrinth.Hero
         private readonly int heroNumber;
         private readonly Action<HeroModel, int> entranceKnowledgeSync;
         private readonly Action<HeroModel, int, DungeonStairsModel> downStairsOpened;
+        private readonly NearbyMobInteractionCellProvider nearbyMobInteractionCellProvider;
+        private readonly HeroExplorationCoordinator explorationCoordinator;
         private readonly HashSet<Vector2Int> doorPathWarningPositions = new HashSet<Vector2Int>();
         private Queue<Vector2Int> returnPath = new Queue<Vector2Int>();
         private Queue<Vector2Int> doorPath = new Queue<Vector2Int>();
@@ -41,7 +47,9 @@ namespace Labyrinth.Hero
             GoldIngotManager goldIngotManager,
             HeroDeathTokenManager deathTokenManager,
             Action<HeroModel, int> entranceKnowledgeSync,
-            Action<HeroModel, int, DungeonStairsModel> downStairsOpened)
+            Action<HeroModel, int, DungeonStairsModel> downStairsOpened,
+            NearbyMobInteractionCellProvider nearbyMobInteractionCellProvider,
+            HeroExplorationCoordinator explorationCoordinator)
         {
             this.result = result;
             grid = result.Grid;
@@ -53,6 +61,13 @@ namespace Labyrinth.Hero
             this.heroNumber = heroNumber;
             this.entranceKnowledgeSync = entranceKnowledgeSync;
             this.downStairsOpened = downStairsOpened;
+            this.nearbyMobInteractionCellProvider = nearbyMobInteractionCellProvider;
+            this.explorationCoordinator = explorationCoordinator;
+        }
+
+        public void ReleaseExplorationTarget(string reason)
+        {
+            explorationCoordinator?.Release(heroNumber, reason);
         }
 
         public void Step()
@@ -65,12 +80,24 @@ namespace Labyrinth.Hero
 
             if (model.State == HeroState.ReturningToDoor)
             {
+                if (TryPursueNearbyInteraction())
+                {
+                    doorPath.Clear();
+                    return;
+                }
+
                 StepReturnToDoor();
                 return;
             }
 
             if (model.State == HeroState.ReturningToCastle)
             {
+                if (model.Position != entrancePosition && TryPursueNearbyInteraction())
+                {
+                    returnPath.Clear();
+                    return;
+                }
+
                 StepReturnToCastle();
                 return;
             }
@@ -108,6 +135,12 @@ namespace Labyrinth.Hero
 
             if (TryOpenAdjacentKnownStairs())
             {
+                return;
+            }
+
+            if (TryPursueNearbyInteraction())
+            {
+                ReleaseExplorationTarget("nearby interaction");
                 return;
             }
 
@@ -191,6 +224,7 @@ namespace Labyrinth.Hero
 
         private void BeginReturnToCastle()
         {
+            ReleaseExplorationTarget("return to entrance");
             if (model.Position == entrancePosition)
             {
                 RestoreAtCastle();
@@ -313,6 +347,7 @@ namespace Labyrinth.Hero
         private void MoveAndRemember(Vector2Int position)
         {
             model.MoveTo(position);
+            explorationCoordinator?.CompleteTarget(heroNumber, position);
             if (model.Memory.Remember(position))
             {
                 var gainedLevels = model.RewardNewCellExploration(out var vengeanceProgress);
@@ -581,6 +616,7 @@ namespace Labyrinth.Hero
                     continue;
                 }
 
+                ReleaseExplorationTarget("return to known door");
                 doorPathWarningPositions.Remove(door.Position);
                 targetDoor = door;
                 model.SetState(HeroState.ReturningToDoor);
@@ -608,6 +644,7 @@ namespace Labyrinth.Hero
                 return false;
             }
 
+            ReleaseExplorationTarget("return to known stairs");
             doorPathWarningPositions.Remove(stairs.Position);
             targetDoor = null;
             targetStairs = stairs;
@@ -633,6 +670,7 @@ namespace Labyrinth.Hero
                     continue;
                 }
 
+                ReleaseExplorationTarget("reachable door fallback");
                 model.Memory.RememberClosedDoor(door.Position);
                 doorPathWarningPositions.Remove(door.Position);
                 targetDoor = door;
@@ -655,6 +693,7 @@ namespace Labyrinth.Hero
                 return false;
             }
 
+            ReleaseExplorationTarget("reachable stairs fallback");
             model.Memory.RememberClosedDoor(stairs.Position);
             doorPathWarningPositions.Remove(stairs.Position);
             targetDoor = null;
@@ -683,12 +722,14 @@ namespace Labyrinth.Hero
 
             if (model.Position != entrancePosition)
             {
+                ReleaseExplorationTarget("no frontier");
                 BeginReturnToCastle();
                 return;
             }
 
             if (TryBuildPathToFarthestRememberedCell(out var patrolPath) && patrolPath.Count > 0)
             {
+                ReleaseExplorationTarget("patrol fallback");
                 GameDebugLog.Info(
                     "Hero",
                     $"{HeroLogName} has no frontier at entrance; patrolling farthest remembered cell, pathSteps={patrolPath.Count}, memory={model.Memory.RememberedCount}.");
@@ -784,6 +825,7 @@ namespace Labyrinth.Hero
             }
 
             model.Memory.ForgetClosedDoor(door.Position);
+            model.Inventory.TryRemoveItem(HeroInventory.CentralRoomKeyItemName);
             doorPath.Clear();
             targetDoor = null;
             model.SetState(HeroState.OpeningDoor);

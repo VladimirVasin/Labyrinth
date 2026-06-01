@@ -20,35 +20,44 @@ namespace Labyrinth.UI
         private GUIStyle servicePriceStyle;
         private GUIStyle tooltipTitleStyle;
         private GUIStyle tooltipBodyStyle;
+        private GUIStyle toggleStyle;
         private Texture2D circleTexture;
+        private readonly GuiHudTransition transition = new GuiHudTransition();
+        private bool visible;
         private bool servicesVisible;
         private Func<BuildingType, int> buildingLevelProvider;
         private Func<BuildingType, int, BuildingServiceEntry[]> buildingServicesProvider;
         private Action<BuildingType, int> buildingServiceActionHandler;
         private Action<BuildingView> heroLineageRequestHandler;
+        private Func<BuildingType, bool> questGenerationToggleProvider;
+        private Action<BuildingType, bool> questGenerationToggleHandler;
 
-        public bool IsVisible => selectedBuilding != null;
+        public bool IsVisible => visible;
 
         public void Configure(
             Func<BuildingType, int> getBuildingLevel,
             Func<BuildingType, int, BuildingServiceEntry[]> getBuildingServices = null,
             Action<BuildingType, int> onBuildingServiceAction = null,
-            Action<BuildingView> onHeroLineageRequested = null)
+            Action<BuildingView> onHeroLineageRequested = null,
+            Func<BuildingType, bool> getQuestGenerationToggle = null,
+            Action<BuildingType, bool> onQuestGenerationToggleChanged = null)
         {
             buildingLevelProvider = getBuildingLevel;
             buildingServicesProvider = getBuildingServices;
             buildingServiceActionHandler = onBuildingServiceAction;
             heroLineageRequestHandler = onHeroLineageRequested;
+            questGenerationToggleProvider = getQuestGenerationToggle;
+            questGenerationToggleHandler = onQuestGenerationToggleChanged;
         }
 
         public bool ContainsScreenPoint(Vector2 screenPosition)
         {
-            return selectedBuilding != null && CalculatePanelRect().Contains(ToGuiPoint(screenPosition));
+            return visible && selectedBuilding != null && CalculatePanelRect().Contains(ToGuiPoint(screenPosition));
         }
 
         public void Show(BuildingView building)
         {
-            if (selectedBuilding == null || selectedBuilding != building)
+            if (!visible || selectedBuilding == null || selectedBuilding != building)
             {
                 GameAudioController.PlayUi(GameSfx.HudOpen);
                 servicesVisible = false;
@@ -64,17 +73,24 @@ namespace Labyrinth.UI
             {
                 selectedBuilding.SetSelected(true);
             }
+
+            visible = selectedBuilding != null;
+            if (visible)
+            {
+                transition.Show();
+            }
         }
 
         public void Hide()
         {
-            if (selectedBuilding != null)
+            if (visible && selectedBuilding != null)
             {
                 GameAudioController.PlayUi(GameSfx.HudClose);
                 selectedBuilding.SetSelected(false);
             }
 
-            selectedBuilding = null;
+            visible = false;
+            transition.Hide();
             servicesVisible = false;
         }
 
@@ -85,9 +101,16 @@ namespace Labyrinth.UI
                 return;
             }
 
+            if (!transition.IsDrawing)
+            {
+                selectedBuilding = null;
+                return;
+            }
+
             EnsureStyles();
 
-            var rect = CalculatePanelRect();
+            var previousColor = transition.ApplyGuiAlpha();
+            var rect = transition.AnimateRect(CalculatePanelRect());
             var buildingLevel = GetBuildingLevel(selectedBuilding.Type);
             var services = GetSelectedBuildingServices();
 
@@ -116,6 +139,12 @@ namespace Labyrinth.UI
                 y += 40f;
             }
 
+            if (selectedBuilding.Type == BuildingType.HeroesGuild)
+            {
+                DrawQuestGenerationToggle(new Rect(contentX, y, contentWidth, 30f));
+                y += 40f;
+            }
+
             if (services.Length > 0)
             {
                 var buttonText = servicesVisible ? "Скрыть услуги" : "Показать услуги";
@@ -136,6 +165,8 @@ namespace Labyrinth.UI
             {
                 Hide();
             }
+
+            GUI.color = previousColor;
         }
 
         private static string FormatType(BuildingType type)
@@ -170,6 +201,8 @@ namespace Labyrinth.UI
                     return "Рынок";
                 case BuildingType.Antiquary:
                     return "Антиквариат";
+                case BuildingType.HeroesGuild:
+                    return "Гильдия героев";
                 default:
                     return "Здание";
             }
@@ -187,9 +220,10 @@ namespace Labyrinth.UI
             var serviceCount = GetSelectedBuildingServices().Length;
             var width = Mathf.Min(420f, Screen.width - 80f);
             var heroHouseExtraHeight = selectedBuilding != null && selectedBuilding.Type == BuildingType.HeroHouse ? 40f : 0f;
+            var heroesGuildExtraHeight = selectedBuilding != null && selectedBuilding.Type == BuildingType.HeroesGuild ? 40f : 0f;
             var wantedHeight = servicesVisible && serviceCount > 0
-                ? 360f + heroHouseExtraHeight + serviceCount * 30f
-                : 314f + heroHouseExtraHeight;
+                ? 360f + heroHouseExtraHeight + heroesGuildExtraHeight + serviceCount * 30f
+                : 314f + heroHouseExtraHeight + heroesGuildExtraHeight;
             var height = Mathf.Min(wantedHeight, Screen.height - 96f);
             return new Rect(Screen.width - width - 18f, Screen.height - height - 18f, width, height);
         }
@@ -250,6 +284,22 @@ namespace Labyrinth.UI
             DrawOutline(rect, new Color(1f, 1f, 1f, 0.08f));
             GUI.Label(new Rect(rect.x + 10f, rect.y + 5f, rect.width - 20f, 16f), "Эффект", labelStyle);
             GUI.Label(new Rect(rect.x + 10f, rect.y + 24f, rect.width - 20f, rect.height - 28f), effectText, effectStyle);
+        }
+
+        private void DrawQuestGenerationToggle(Rect rect)
+        {
+            FillRect(rect, new Color(1f, 1f, 1f, 0.045f));
+            DrawOutline(rect, new Color(1f, 1f, 1f, 0.08f));
+            var enabled = questGenerationToggleProvider == null
+                || questGenerationToggleProvider.Invoke(BuildingType.HeroesGuild);
+            var next = GUI.Toggle(new Rect(rect.x + 10f, rect.y + 4f, rect.width - 20f, rect.height - 8f), enabled, "Создавать квесты", toggleStyle);
+            if (next == enabled)
+            {
+                return;
+            }
+
+            GameAudioController.PlayUi(GameSfx.HudClick);
+            questGenerationToggleHandler?.Invoke(BuildingType.HeroesGuild, next);
         }
 
         private void DrawServiceList(Rect rect, Rect panelRect, BuildingServiceEntry[] services)
@@ -421,6 +471,14 @@ namespace Labyrinth.UI
                     DrawCircle(new Rect(rect.x + 15f, rect.y + 18f, 14f, 14f), new Color(0.38f, 0.72f, 1f));
                     FillRect(new Rect(rect.x + 20f, rect.y + 7f, 4f, 28f), new Color(0.92f, 0.66f, 0.22f));
                     return;
+                case BuildingType.HeroesGuild:
+                    FillRect(new Rect(rect.x + 9f, rect.y + 20f, 26f, 17f), new Color(0.46f, 0.43f, 0.38f));
+                    FillRect(new Rect(rect.x + 7f, rect.y + 11f, 30f, 10f), new Color(0.18f, 0.2f, 0.28f));
+                    FillRect(new Rect(rect.x + 14f, rect.y + 9f, 5f, 26f), new Color(0.72f, 0.75f, 0.78f));
+                    FillRect(new Rect(rect.x + 25f, rect.y + 9f, 5f, 26f), new Color(0.72f, 0.75f, 0.78f));
+                    FillRect(new Rect(rect.x + 15f, rect.y + 10f, 16f, 5f), new Color(0.94f, 0.7f, 0.22f));
+                    FillRect(new Rect(rect.x + 18f, rect.y + 19f, 9f, 11f), new Color(0.1f, 0.22f, 0.62f));
+                    return;
                 default:
                     FillRect(new Rect(rect.x + 9f, rect.y + 19f, 26f, 18f), new Color(0.54f, 0.38f, 0.22f));
                     FillRect(new Rect(rect.x + 7f, rect.y + 11f, 30f, 10f), new Color(0.36f, 0.16f, 0.1f));
@@ -439,7 +497,7 @@ namespace Labyrinth.UI
         private static void FillRect(Rect rect, Color color)
         {
             var previousColor = GUI.color;
-            GUI.color = color;
+            GUI.color = new Color(color.r, color.g, color.b, color.a * previousColor.a);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previousColor;
         }
@@ -524,13 +582,21 @@ namespace Labyrinth.UI
                 fontSize = 12
             };
             tooltipBodyStyle.normal.textColor = new Color(0.86f, 0.86f, 0.8f);
+            toggleStyle = new GUIStyle(GUI.skin.toggle)
+            {
+                alignment = TextAnchor.MiddleLeft,
+                fontSize = 13,
+                fontStyle = FontStyle.Bold
+            };
+            toggleStyle.normal.textColor = new Color(0.94f, 0.9f, 0.78f);
+            toggleStyle.onNormal.textColor = new Color(1f, 0.88f, 0.48f);
             circleTexture = CreateCircleTexture();
         }
 
         private void DrawCircle(Rect rect, Color color)
         {
             var previousColor = GUI.color;
-            GUI.color = color;
+            GUI.color = new Color(color.r, color.g, color.b, color.a * previousColor.a);
             GUI.DrawTexture(rect, circleTexture);
             GUI.color = previousColor;
         }

@@ -17,15 +17,15 @@ namespace Labyrinth.Mobs
         private const int OpeningEntranceMobBuffer = 8;
         private const int MinimumMobDistanceFloor = 4;
         private const int MinimumMobDistanceDivisor = 12;
-        private const float RespawnCheckInterval = 1.75f;
-        private const float RespawnChancePerCheck = 0.72f;
+        private const float RespawnCheckInterval = 1.35f;
+        private const float RespawnChancePerCheck = 0.88f;
         private const int RespawnDarkPaddingCells = 1;
         private const int RespawnMaxCandidateChecks = 180;
         private const float RespawnSummaryInterval = 12f;
         private const float OpeningRespawnGraceSeconds = 24f;
         private const float OpeningMobWanderDelaySeconds = 5.25f;
-        private const float OpeningRegularTargetMultiplier = 1.12f;
-        private const float RegularTargetMultiplier = 1.45f;
+        private const float OpeningRegularTargetMultiplier = 1.35f;
+        private const float RegularTargetMultiplier = 1.75f;
 
         private readonly List<MobController> mobs = new List<MobController>();
         private MazeGenerationResult result;
@@ -87,7 +87,7 @@ namespace Labyrinth.Mobs
                 MobRank.Boss,
                 result.LevelNumber);
             boss.transform.SetParent(root, true);
-            mobs.Add(boss);
+            AddManagedMob(boss);
             spawnCandidates.Remove(bossPosition);
 
             var majorMobPositions = new List<Vector2Int> { bossPosition };
@@ -107,7 +107,7 @@ namespace Labyrinth.Mobs
                     result.LevelNumber);
                 miniBoss.transform.SetParent(root, true);
                 miniBoss.SetWanderingPaused(true);
-                mobs.Add(miniBoss);
+                AddManagedMob(miniBoss);
                 centralMiniBoss = miniBoss;
                 spawnCandidates.Remove(miniBossPosition);
                 majorMobPositions.Add(miniBossPosition);
@@ -183,7 +183,7 @@ namespace Labyrinth.Mobs
                     useOpeningRegularStats,
                     useOpeningRegularStats ? OpeningMobWanderDelaySeconds : 0f);
                 mob.transform.SetParent(root, true);
-                mobs.Add(mob);
+                AddManagedMob(mob);
             }
 
             for (var i = 0; i < easyGoblinPositions.Count; i++)
@@ -199,7 +199,7 @@ namespace Labyrinth.Mobs
                     useOpeningRegularStats,
                     useOpeningRegularStats ? OpeningMobWanderDelaySeconds : 0f);
                 mob.transform.SetParent(root, true);
-                mobs.Add(mob);
+                AddManagedMob(mob);
             }
 
             for (var i = 0; i < spawnPositions.Count; i++)
@@ -215,7 +215,7 @@ namespace Labyrinth.Mobs
                     useOpeningRegularStats,
                     useOpeningRegularStats ? OpeningMobWanderDelaySeconds : 0f);
                 mob.transform.SetParent(root, true);
-                mobs.Add(mob);
+                AddManagedMob(mob);
             }
 
             GameDebugLog.Info(
@@ -359,7 +359,7 @@ namespace Labyrinth.Mobs
             mob.transform.SetParent(root, true);
             mob.MarkSpawnedFromDarkness();
             mob.SetVisible(!hideUnlitMobs || respawnBlockedCells.Contains(position));
-            mobs.Add(mob);
+            AddManagedMob(mob);
             respawnSuccessesSinceSummary++;
             GameDebugLog.Info(
                 "Mobs",

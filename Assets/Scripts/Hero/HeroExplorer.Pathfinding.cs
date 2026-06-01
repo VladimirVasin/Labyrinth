@@ -9,13 +9,44 @@ namespace Labyrinth.Hero
     {
         private bool TryFindUnrememberedNeighbor(Vector2Int position, out Vector2Int next)
         {
+            if (explorationCoordinator != null
+                && explorationCoordinator.TryGetReservedTarget(heroNumber, out var reservedTarget)
+                && GridDistance(position, reservedTarget) == 1
+                && grid.InBounds(reservedTarget)
+                && grid.Get(reservedTarget).IsWalkable
+                && !model.Memory.IsRemembered(reservedTarget))
+            {
+                next = reservedTarget;
+                return true;
+            }
+
+            var candidates = new List<HeroExplorationCandidate>();
             foreach (var neighbor in grid.WalkableNeighbors(position))
             {
                 if (!model.Memory.IsRemembered(neighbor))
                 {
-                    next = neighbor;
-                    return true;
+                    candidates.Add(new HeroExplorationCandidate(
+                        position,
+                        neighbor,
+                        new Queue<Vector2Int>(new[] { neighbor }),
+                        1,
+                        CountUnknownWalkableNeighbors(position) + CountUnknownWalkableNeighbors(neighbor),
+                        CalculateStrategicWeight(neighbor)));
                 }
+            }
+
+            if (candidates.Count > 0
+                && explorationCoordinator != null
+                && explorationCoordinator.TryChooseTarget(heroNumber, position, candidates, out var selected))
+            {
+                next = selected.TargetCell;
+                return true;
+            }
+
+            if (candidates.Count > 0)
+            {
+                next = candidates[0].TargetCell;
+                return true;
             }
 
             next = default;
@@ -24,10 +55,23 @@ namespace Labyrinth.Hero
 
         private bool TryBuildPathToNearestFrontier(out Queue<Vector2Int> path)
         {
-            return TryBuildRememberedPathToGoal(
-                model.Position,
-                current => current != model.Position && HasUnrememberedNeighbor(current),
-                out path);
+            path = new Queue<Vector2Int>();
+            var candidates = BuildFrontierCandidates();
+            if (candidates.Count == 0)
+            {
+                explorationCoordinator?.Release(heroNumber, "frontier exhausted");
+                return false;
+            }
+
+            if (explorationCoordinator != null
+                && explorationCoordinator.TryChooseTarget(heroNumber, model.Position, candidates, out var selected))
+            {
+                path = new Queue<Vector2Int>(selected.Path);
+                return path.Count > 0;
+            }
+
+            path = new Queue<Vector2Int>(candidates[0].Path);
+            return path.Count > 0;
         }
 
         private bool TryBuildRememberedPath(Vector2Int start, Vector2Int target, out Queue<Vector2Int> path)
@@ -144,6 +188,111 @@ namespace Labyrinth.Hero
             }
 
             return false;
+        }
+
+        private List<HeroExplorationCandidate> BuildFrontierCandidates()
+        {
+            var candidates = new List<HeroExplorationCandidate>();
+            var queue = new Queue<Vector2Int>();
+            var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
+
+            queue.Enqueue(model.Position);
+            cameFrom[model.Position] = model.Position;
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                if (current != model.Position)
+                {
+                    AddFrontierCandidates(current, cameFrom, candidates);
+                }
+
+                EnqueueRememberedNeighbors(current, queue, cameFrom);
+            }
+
+            return candidates;
+        }
+
+        private void AddFrontierCandidates(
+            Vector2Int approachCell,
+            IReadOnlyDictionary<Vector2Int, Vector2Int> cameFrom,
+            ICollection<HeroExplorationCandidate> candidates)
+        {
+            var pathToApproach = BuildPath(cameFrom, model.Position, approachCell);
+            if (pathToApproach.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var neighbor in grid.WalkableNeighbors(approachCell))
+            {
+                if (model.Memory.IsRemembered(neighbor))
+                {
+                    continue;
+                }
+
+                candidates.Add(new HeroExplorationCandidate(
+                    approachCell,
+                    neighbor,
+                    new Queue<Vector2Int>(pathToApproach),
+                    pathToApproach.Count + 1,
+                    CountUnknownWalkableNeighbors(approachCell) + CountUnknownWalkableNeighbors(neighbor),
+                    CalculateStrategicWeight(neighbor)));
+            }
+        }
+
+        private int CountUnknownWalkableNeighbors(Vector2Int position)
+        {
+            var count = 0;
+            foreach (var neighbor in grid.WalkableNeighbors(position))
+            {
+                if (!model.Memory.IsRemembered(neighbor))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int CalculateStrategicWeight(Vector2Int position)
+        {
+            var weight = 0;
+            if (result.DownStairs != null && result.DownStairs.Position == position)
+            {
+                weight += 28;
+            }
+
+            if (result.UpStairs != null && result.UpStairs.Position == position)
+            {
+                weight += 18;
+            }
+
+            if (result.KeyPickups != null)
+            {
+                for (var i = 0; i < result.KeyPickups.Count; i++)
+                {
+                    var key = result.KeyPickups[i];
+                    if (key != null && key.IsAvailable && key.Position == position)
+                    {
+                        weight += 26;
+                    }
+                }
+            }
+
+            if (result.Chests != null)
+            {
+                for (var i = 0; i < result.Chests.Count; i++)
+                {
+                    var chest = result.Chests[i];
+                    if (chest != null && !chest.IsOpened && GridDistance(chest.Position, position) <= 1)
+                    {
+                        weight += 16;
+                    }
+                }
+            }
+
+            return weight;
         }
 
         private static Queue<Vector2Int> BuildPath(

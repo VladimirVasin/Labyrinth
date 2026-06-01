@@ -62,6 +62,8 @@ namespace Labyrinth.Core
             taxCollectorController.Clear();
             dungeonFortificationController.Clear();
             mineConstructionController.Clear();
+            heroGuildQuestController.Clear();
+            explorationCoordinator.Clear();
             baseAmbience.Clear();
             houseFundCouriers.Clear();
             cityAmbience.Clear();
@@ -84,6 +86,7 @@ namespace Labyrinth.Core
             unlockedDungeonLevel = 1;
             levelOneMaze = null;
             levelTwoMaze = null;
+            heroesGuildView = null;
             yield return ReportGenerationProgress(0.24f, "Генерация лабиринта");
 
             currentMaze = generator.Generate(settings);
@@ -101,6 +104,7 @@ namespace Labyrinth.Core
 
             TraceGenerationStage("maze validation", stageTimer);
             LogMazeSummary(currentMaze);
+            explorationCoordinator.Reset(currentMaze.Grid, currentMaze.EntrancePosition, currentMaze.LevelNumber);
             levelOneMaze = currentMaze;
             yield return ReportGenerationProgress(0.46f, "Отрисовка земли");
             yield return mazeTerrain.RenderAsync(

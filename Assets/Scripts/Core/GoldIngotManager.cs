@@ -53,6 +53,11 @@ namespace Labyrinth.Core
             }
         }
 
+        public bool HasAvailableIngotAt(Vector2Int position)
+        {
+            return FindAvailableAt(position) != null;
+        }
+
         public void Configure(ResourceWallet wallet)
         {
             resources = wallet;

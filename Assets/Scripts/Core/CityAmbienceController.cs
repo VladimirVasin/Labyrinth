@@ -565,6 +565,8 @@ namespace Labyrinth.Core
                     return BaseDevelopment.MarketFootprintRadiusCells;
                 case BuildingType.Antiquary:
                     return BaseDevelopment.AntiquaryFootprintRadiusCells;
+                case BuildingType.HeroesGuild:
+                    return BaseDevelopment.HeroesGuildFootprintRadiusCells;
                 case BuildingType.Castle:
                 default:
                     return BaseDevelopment.CastleFootprintRadiusCells;
@@ -601,6 +603,7 @@ namespace Labyrinth.Core
                     return CityWalkerRole.Lumberjack;
                 case BuildingType.Market:
                 case BuildingType.Antiquary:
+                case BuildingType.HeroesGuild:
                     return CityWalkerRole.Villager;
                 default:
                     return CityWalkerRole.Villager;
@@ -617,6 +620,7 @@ namespace Labyrinth.Core
                 case BuildingType.LumberjackCamp:
                 case BuildingType.Tavern:
                 case BuildingType.Market:
+                case BuildingType.HeroesGuild:
                     return 2;
                 case BuildingType.PeasantHut:
                     return 1;

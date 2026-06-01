@@ -75,7 +75,7 @@ namespace Labyrinth.Maze
             public static void Create(Vector3 position, float worldScale, string text)
             {
                 var textObject = new GameObject("Chest Reward Text");
-                textObject.transform.position = position + new Vector3(0f, worldScale * 1.05f, 0f);
+                textObject.transform.position = position + new Vector3(0f, worldScale * 0.72f, 0f);
                 textObject.transform.rotation = Quaternion.Euler(62f, 45f, 0f);
 
                 var view = textObject.AddComponent<ChestRewardTextView>();
@@ -90,21 +90,21 @@ namespace Labyrinth.Maze
                 textMesh.text = text;
                 textMesh.anchor = TextAnchor.MiddleCenter;
                 textMesh.alignment = TextAlignment.Center;
-                textMesh.characterSize = 0.15f;
-                textMesh.fontSize = 48;
+                textMesh.characterSize = 0.065f;
+                textMesh.fontSize = 30;
                 textMesh.color = startColor;
             }
 
             private void Update()
             {
                 age += Time.deltaTime;
-                transform.position += Vector3.up * (Time.deltaTime * 0.72f);
+                transform.position += Vector3.up * (Time.deltaTime * 0.48f);
 
                 var progress = Mathf.Clamp01(age / Lifetime);
                 var color = startColor;
                 color.a = 1f - progress;
                 textMesh.color = color;
-                transform.localScale = Vector3.one * scale * (1f + progress * 0.22f);
+                transform.localScale = Vector3.one * scale * (1f + progress * 0.08f);
 
                 if (age >= Lifetime)
                 {

@@ -13,7 +13,6 @@ namespace Labyrinth.Hero
         private const float VowOfReturnStepIntervalMultiplier = 0.45f;
         private const float FortifiedCellSpeedMultiplier = 1.2f;
         private const float VengeanceTokenReturnSpeedMultiplier = 1.1f;
-        private const float VengeanceBarrierPathSpeedMultiplier = 1.1f;
         private const float ActivityTraceInterval = 8f;
 
         private MazeGrid grid;
@@ -60,11 +59,13 @@ namespace Labyrinth.Hero
             HeroDeathTokenManager deathTokenManager,
             Action<HeroModel, int> entranceKnowledgeSync,
             Action<HeroModel, int, DungeonStairsModel> downStairsOpened,
+            HeroExplorer.NearbyMobInteractionCellProvider nearbyMobInteractionCellProvider,
+            HeroExplorationCoordinator explorationCoordinator,
             int statSeed = 0)
         {
             var controllerObject = new GameObject("HeroController");
             var controller = controllerObject.AddComponent<HeroController>();
-            controller.Initialize(result, startPosition, displayNumber, displayName, mazeRenderer, memory, memoryView, goldIngotManager, deathTokenManager, entranceKnowledgeSync, downStairsOpened, statSeed);
+            controller.Initialize(result, startPosition, displayNumber, displayName, mazeRenderer, memory, memoryView, goldIngotManager, deathTokenManager, entranceKnowledgeSync, downStairsOpened, nearbyMobInteractionCellProvider, explorationCoordinator, statSeed);
             return controller;
         }
 
@@ -196,6 +197,7 @@ namespace Labyrinth.Hero
             var damage = Model.ReceiveDamage(incomingDamage);
             if (wasAlive && !Model.IsAlive)
             {
+                explorer?.ReleaseExplorationTarget("defeated");
                 StartCorpseVisibility();
             }
 
@@ -209,6 +211,7 @@ namespace Labyrinth.Hero
             var damage = Model.ReceiveResolvedDamage(resolvedDamage);
             if (wasAlive && !Model.IsAlive)
             {
+                explorer?.ReleaseExplorationTarget("defeated");
                 StartCorpseVisibility();
             }
 
@@ -289,6 +292,8 @@ namespace Labyrinth.Hero
             HeroDeathTokenManager deathTokenManager,
             Action<HeroModel, int> entranceKnowledgeSync,
             Action<HeroModel, int, DungeonStairsModel> downStairsOpened,
+            HeroExplorer.NearbyMobInteractionCellProvider nearbyMobInteractionCellProvider,
+            HeroExplorationCoordinator explorationCoordinator,
             int statSeed)
         {
             grid = result.Grid;
@@ -299,7 +304,7 @@ namespace Labyrinth.Hero
             Model = new HeroModel(startPosition, memory, statSeed);
             Model.SetIdentity(DisplayNumber, DisplayName);
             Model.SetDungeonLevel(result.LevelNumber);
-            explorer = new HeroExplorer(result, Model, startPosition, displayNumber, mazeRenderer, goldIngotManager, deathTokenManager, entranceKnowledgeSync, downStairsOpened);
+            explorer = new HeroExplorer(result, Model, startPosition, displayNumber, mazeRenderer, goldIngotManager, deathTokenManager, entranceKnowledgeSync, downStairsOpened, nearbyMobInteractionCellProvider, explorationCoordinator);
             corpseExpired = false;
             corpseVisibilityRemaining = 0f;
 
@@ -323,13 +328,16 @@ namespace Labyrinth.Hero
             GoldIngotManager goldIngotManager,
             HeroDeathTokenManager deathTokenManager,
             Action<HeroModel, int> entranceKnowledgeSync,
-            Action<HeroModel, int, DungeonStairsModel> downStairsOpened)
+            Action<HeroModel, int, DungeonStairsModel> downStairsOpened,
+            HeroExplorer.NearbyMobInteractionCellProvider nearbyMobInteractionCellProvider,
+            HeroExplorationCoordinator explorationCoordinator)
         {
             if (Model == null || result == null)
             {
                 return;
             }
 
+            explorer?.ReleaseExplorationTarget("level transfer");
             grid = result.Grid;
             this.mazeRenderer = mazeRenderer;
             entrancePosition = startPosition;
@@ -341,7 +349,7 @@ namespace Labyrinth.Hero
             Model.ClearExpeditionBlessings();
             Model.SetState(HeroState.Exploring);
             Model.Visibility.Clear();
-            explorer = new HeroExplorer(result, Model, startPosition, DisplayNumber, mazeRenderer, goldIngotManager, deathTokenManager, entranceKnowledgeSync, downStairsOpened);
+            explorer = new HeroExplorer(result, Model, startPosition, DisplayNumber, mazeRenderer, goldIngotManager, deathTokenManager, entranceKnowledgeSync, downStairsOpened, nearbyMobInteractionCellProvider, explorationCoordinator);
             corpseExpired = false;
             corpseVisibilityRemaining = 0f;
             explorationPaused = false;
@@ -493,12 +501,6 @@ namespace Labyrinth.Hero
                 && Model.HasCompletedVengeance(HeroVengeanceKind.CarriedName))
             {
                 interval /= VengeanceTokenReturnSpeedMultiplier;
-            }
-
-            if (Model.State == HeroState.ReturningToDoor
-                && Model.HasCompletedVengeance(HeroVengeanceKind.ClosedDoor))
-            {
-                interval /= VengeanceBarrierPathSpeedMultiplier;
             }
 
             return interval;

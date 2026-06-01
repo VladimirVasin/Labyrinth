@@ -19,6 +19,7 @@ namespace Labyrinth.UI
         private Action buildMinersGuildRequested;
         private Action buildMarketRequested;
         private Action buildAntiquaryRequested;
+        private Action buildHeroesGuildRequested;
         private Action createHeroRequested;
         private Action mineSelectionRequested;
         private Action<BuildingUpgradeType> upgradeRequested;
@@ -33,6 +34,7 @@ namespace Labyrinth.UI
         private Func<string> minersGuildStatusProvider;
         private Func<string> marketStatusProvider;
         private Func<string> antiquaryStatusProvider;
+        private Func<string> heroesGuildStatusProvider;
         private Func<string> mineStatusProvider;
         private Func<string> heroHouseStatusProvider;
         private Func<BuildingCost> farmCostProvider;
@@ -46,6 +48,7 @@ namespace Labyrinth.UI
         private Func<BuildingCost> minersGuildCostProvider;
         private Func<BuildingCost> marketCostProvider;
         private Func<BuildingCost> antiquaryCostProvider;
+        private Func<BuildingCost> heroesGuildCostProvider;
         private Func<BuildingCost> heroCostProvider;
         private Func<bool> canBuildFarmProvider;
         private Func<bool> canBuildLumberjackCampProvider;
@@ -58,11 +61,13 @@ namespace Labyrinth.UI
         private Func<bool> canBuildMinersGuildProvider;
         private Func<bool> canBuildMarketProvider;
         private Func<bool> canBuildAntiquaryProvider;
+        private Func<bool> canBuildHeroesGuildProvider;
         private Func<bool> canStartMineSelectionProvider;
         private Func<bool> canCreateHeroProvider;
         private Func<BuildingUpgradeType, string> upgradeStatusProvider;
         private Func<BuildingUpgradeType, bool> canUpgradeProvider;
         private Func<BuildingUpgradeType, BuildingCost> upgradeCostProvider;
+        private readonly GuiHudTransition transition = new GuiHudTransition();
         private bool visible;
         private BaseHudTab selectedTab;
         private GUIStyle titleStyle;
@@ -147,6 +152,10 @@ namespace Labyrinth.UI
             Func<string> onAntiquaryStatusRequested,
             Func<bool> onCanBuildAntiquaryRequested,
             Func<BuildingCost> onAntiquaryCostRequested,
+            Action onBuildHeroesGuildRequested,
+            Func<string> onHeroesGuildStatusRequested,
+            Func<bool> onCanBuildHeroesGuildRequested,
+            Func<BuildingCost> onHeroesGuildCostRequested,
             Func<string> onHeroHouseStatusRequested,
             Action onCreateHeroRequested,
             Func<bool> onCanCreateHeroRequested,
@@ -171,6 +180,7 @@ namespace Labyrinth.UI
             buildMinersGuildRequested = onBuildMinersGuildRequested;
             buildMarketRequested = onBuildMarketRequested;
             buildAntiquaryRequested = onBuildAntiquaryRequested;
+            buildHeroesGuildRequested = onBuildHeroesGuildRequested;
             farmStatusProvider = onFarmStatusRequested;
             canBuildFarmProvider = onCanBuildFarmRequested;
             farmCostProvider = onFarmCostRequested;
@@ -204,6 +214,9 @@ namespace Labyrinth.UI
             antiquaryStatusProvider = onAntiquaryStatusRequested;
             canBuildAntiquaryProvider = onCanBuildAntiquaryRequested;
             antiquaryCostProvider = onAntiquaryCostRequested;
+            heroesGuildStatusProvider = onHeroesGuildStatusRequested;
+            canBuildHeroesGuildProvider = onCanBuildHeroesGuildRequested;
+            heroesGuildCostProvider = onHeroesGuildCostRequested;
             heroHouseStatusProvider = onHeroHouseStatusRequested;
             createHeroRequested = onCreateHeroRequested;
             canCreateHeroProvider = onCanCreateHeroRequested;
@@ -221,6 +234,7 @@ namespace Labyrinth.UI
             }
 
             visible = true;
+            transition.Show();
         }
 
         public void Hide()
@@ -231,18 +245,20 @@ namespace Labyrinth.UI
             }
 
             visible = false;
+            transition.Hide();
         }
 
         private void OnGUI()
         {
-            if (!visible || result == null)
+            if (!transition.IsDrawing || result == null)
             {
                 return;
             }
 
             EnsureStyles();
 
-            var rect = CalculatePanelRect();
+            var previousColor = transition.ApplyGuiAlpha();
+            var rect = transition.AnimateRect(CalculatePanelRect());
 
             DrawPanel(rect);
             GUI.Label(new Rect(rect.x + 20f, rect.y + 12f, rect.width - 40f, 30f), "Замок", titleStyle);
@@ -275,6 +291,8 @@ namespace Labyrinth.UI
             {
                 Hide();
             }
+
+            GUI.color = previousColor;
         }
 
         private void DrawTabs(Rect rect)
@@ -429,6 +447,18 @@ namespace Labyrinth.UI
                 CanBuildChapel(),
                 GetChapelStatus().StartsWith("построена") ? "Построено" : "Построить",
                 buildChapelRequested);
+            y += 112f;
+
+            DrawActionCard(
+                new Rect(rect.x, y, rect.width, 104f),
+                "!",
+                "Гильдия героев",
+                "Контракты зачистки",
+                CleanStatus(GetHeroesGuildStatus(), GetHeroesGuildCost()),
+                GetHeroesGuildCost(),
+                CanBuildHeroesGuild(),
+                GetHeroesGuildStatus().StartsWith("построена") ? "Построено" : "Построить",
+                buildHeroesGuildRequested);
         }
 
         private void DrawDungeonTab(Rect rect)
@@ -567,6 +597,11 @@ namespace Labyrinth.UI
             return antiquaryStatusProvider != null ? antiquaryStatusProvider.Invoke() : "не построен";
         }
 
+        private string GetHeroesGuildStatus()
+        {
+            return heroesGuildStatusProvider != null ? heroesGuildStatusProvider.Invoke() : "не построена";
+        }
+
         private string GetMineStatus()
         {
             return mineStatusProvider != null ? mineStatusProvider.Invoke() : "нужна Гильдия шахтёров";
@@ -691,6 +726,16 @@ namespace Labyrinth.UI
         private bool CanStartMineSelection()
         {
             return canStartMineSelectionProvider == null || canStartMineSelectionProvider.Invoke();
+        }
+
+        private bool CanBuildHeroesGuild()
+        {
+            return canBuildHeroesGuildProvider == null || canBuildHeroesGuildProvider.Invoke();
+        }
+
+        private BuildingCost GetHeroesGuildCost()
+        {
+            return heroesGuildCostProvider != null ? heroesGuildCostProvider.Invoke() : BaseDevelopment.HeroesGuildCost;
         }
 
         private bool CanCreateHero()
@@ -828,7 +873,7 @@ namespace Labyrinth.UI
         private static void FillRect(Rect rect, Color color)
         {
             var previousColor = GUI.color;
-            GUI.color = color;
+            GUI.color = new Color(color.r, color.g, color.b, color.a * previousColor.a);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previousColor;
         }

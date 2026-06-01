@@ -11,6 +11,8 @@ namespace Labyrinth.Hero
         private const float RotationSpeed = 720f;
         private const float WalkAnimationSpeed = 10f;
         private const float MapClickColliderHeight = 1.42f;
+        private const float LanternLightBaseIntensity = 9.2f;
+        private const float LanternLightRangeCells = 6.8f;
         private static readonly Vector3 VisualFootprintScale = new Vector3(0.78f, 0.92f, 0.78f);
 
         private static int nextLaneSerial;
@@ -33,6 +35,7 @@ namespace Labyrinth.Hero
         private Transform helmetVisor;
         private Transform helmetCrest;
         private Transform lanternGlow;
+        private Light lanternLight;
         private Transform leftBoot;
         private Transform rightBoot;
         private GameObject selectionMarker;
@@ -250,8 +253,8 @@ namespace Labyrinth.Hero
             var leather = CreateMaterial("Knight Leather", new Color(0.22f, 0.12f, 0.05f));
             var blade = CreateMaterial("Knight Sword", new Color(0.88f, 0.9f, 0.95f));
             var shield = CreateMaterial("Knight Shield", new Color(0.7f, 0.04f, 0.05f));
-            var lantern = VoxelVisuals.CreateEmissiveMaterial("Knight Lantern", new Color(1f, 0.58f, 0.16f), 2.25f);
-            var selection = CreateMaterial("Hero Selection", new Color(1f, 0.86f, 0.24f, 0.48f));
+            var lantern = VoxelVisuals.CreateEmissiveMaterial("Knight Lantern", new Color(1f, 0.58f, 0.16f), 1.55f);
+            var selection = CreateSelectionMaterial("Hero Selection", new Color(1f, 0.82f, 0.22f, 0.36f));
 
             VoxelVisuals.CreateContactShadow(
                 "Hero Contact Shadow",
@@ -284,10 +287,11 @@ namespace Labyrinth.Hero
             CreatePart("Shield", shieldArmPivot, PrimitiveType.Cube, new Vector3(-0.11f, -0.18f, 0.17f), new Vector3(0.08f, 0.44f, 0.34f), shield);
             CreatePart("Shield Boss", shieldArmPivot, PrimitiveType.Sphere, new Vector3(-0.16f, -0.18f, 0.34f), new Vector3(0.12f, 0.12f, 0.06f), armor);
             lanternGlow = CreatePart("Lantern Flame", shieldArmPivot, PrimitiveType.Cube, new Vector3(-0.19f, -0.46f, 0.22f), new Vector3(0.12f, 0.16f, 0.12f), lantern);
+            lanternLight = CreateLanternLight(shieldArmPivot, new Vector3(-0.19f, -0.36f, 0.22f));
             CreatePart("Sword Blade", swordArmPivot, PrimitiveType.Cube, new Vector3(0.12f, 0.08f, 0.08f), new Vector3(0.05f, 0.72f, 0.05f), blade);
             CreatePart("Sword Guard", swordArmPivot, PrimitiveType.Cube, new Vector3(0.12f, -0.25f, 0.08f), new Vector3(0.25f, 0.05f, 0.05f), leather);
 
-            selectionMarker = CreatePart("Selection Marker", transform, PrimitiveType.Cylinder, new Vector3(0f, 0.012f, 0f), new Vector3(0.38f, 0.006f, 0.38f), selection).gameObject;
+            selectionMarker = CreateSelectionRing(selection);
             selectionMarker.SetActive(false);
             SetIdlePose();
         }
@@ -390,6 +394,10 @@ namespace Labyrinth.Hero
             var pulse = 1f + Mathf.Sin(Time.time * 7.3f) * 0.08f + Mathf.Sin(Time.time * 11.7f) * 0.035f;
             lanternGlow.localScale = new Vector3(0.12f, 0.16f * pulse, 0.12f);
             lanternGlow.localRotation = Quaternion.Euler(0f, Time.time * 35f, 0f);
+            if (lanternLight != null)
+            {
+                lanternLight.intensity = LanternLightBaseIntensity * Mathf.Clamp(pulse, 0.88f, 1.1f);
+            }
         }
 
         private void SetBodyOffset(Vector3 offset, Quaternion rotation)
@@ -447,6 +455,77 @@ namespace Labyrinth.Hero
             return part.transform;
         }
 
+        private GameObject CreateSelectionRing(Material material)
+        {
+            var marker = new GameObject("Selection Marker");
+            marker.transform.SetParent(transform, false);
+            marker.transform.localPosition = new Vector3(0f, 0.018f, 0f);
+            marker.transform.localRotation = Quaternion.identity;
+
+            const int segments = 64;
+            const float innerRadius = 0.29f;
+            const float outerRadius = 0.41f;
+            var vertices = new Vector3[segments * 2];
+            var colors = new Color[segments * 2];
+            var uvs = new Vector2[segments * 2];
+            var triangles = new int[segments * 6];
+
+            for (var i = 0; i < segments; i++)
+            {
+                var t = i / (float)segments * Mathf.PI * 2f;
+                var direction = new Vector3(Mathf.Cos(t), 0f, Mathf.Sin(t));
+                vertices[i * 2] = direction * innerRadius;
+                vertices[i * 2 + 1] = direction * outerRadius;
+                colors[i * 2] = new Color(1f, 0.86f, 0.24f, 0.1f);
+                colors[i * 2 + 1] = new Color(1f, 0.86f, 0.24f, 0.36f);
+                uvs[i * 2] = new Vector2(0f, i / (float)segments);
+                uvs[i * 2 + 1] = new Vector2(1f, i / (float)segments);
+
+                var next = (i + 1) % segments;
+                var triangleIndex = i * 6;
+                triangles[triangleIndex] = i * 2;
+                triangles[triangleIndex + 1] = next * 2;
+                triangles[triangleIndex + 2] = i * 2 + 1;
+                triangles[triangleIndex + 3] = i * 2 + 1;
+                triangles[triangleIndex + 4] = next * 2;
+                triangles[triangleIndex + 5] = next * 2 + 1;
+            }
+
+            var mesh = new Mesh { name = "Selection Ring Mesh" };
+            mesh.vertices = vertices;
+            mesh.colors = colors;
+            mesh.uv = uvs;
+            mesh.triangles = triangles;
+            mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
+
+            marker.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var renderer = marker.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            return marker;
+        }
+
+        private Light CreateLanternLight(Transform parent, Vector3 localPosition)
+        {
+            var lightObject = new GameObject("Knight Lantern Point Light");
+            lightObject.transform.SetParent(parent, false);
+            lightObject.transform.localPosition = localPosition;
+            var light = lightObject.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = new Color(1f, 0.68f, 0.34f);
+            light.range = mazeRenderer.CellSize * LanternLightRangeCells;
+            light.intensity = LanternLightBaseIntensity;
+            light.shadows = LightShadows.Soft;
+            light.shadowStrength = 0.34f;
+            light.shadowBias = 0.04f;
+            light.shadowNormalBias = 0.24f;
+            light.bounceIntensity = 0.55f;
+            light.renderMode = LightRenderMode.ForcePixel;
+            return light;
+        }
+
         private Vector3 ToWorldPosition(Vector2Int gridPosition)
         {
             return mazeRenderer.GridToWorld(gridPosition);
@@ -455,6 +534,61 @@ namespace Labyrinth.Hero
         private static Material CreateMaterial(string materialName, Color color)
         {
             return VoxelVisuals.CreateLitMaterial(materialName, color);
+        }
+
+        private static Material CreateSelectionMaterial(string materialName, Color color)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null)
+            {
+                shader = Shader.Find("Unlit/Color");
+            }
+
+            if (shader == null)
+            {
+                return CreateMaterial(materialName, color);
+            }
+
+            var material = new Material(shader)
+            {
+                name = materialName,
+                color = color
+            };
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", color);
+            }
+
+            if (material.HasProperty("_Color"))
+            {
+                material.SetColor("_Color", color);
+            }
+
+            material.SetOverrideTag("RenderType", "Transparent");
+            material.renderQueue = 3100;
+            if (material.HasProperty("_Surface"))
+            {
+                material.SetFloat("_Surface", 1f);
+            }
+
+            if (material.HasProperty("_SrcBlend"))
+            {
+                material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            }
+
+            if (material.HasProperty("_DstBlend"))
+            {
+                material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            }
+
+            if (material.HasProperty("_ZWrite"))
+            {
+                material.SetInt("_ZWrite", 0);
+            }
+
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.EnableKeyword("_ALPHABLEND_ON");
+            return material;
         }
     }
 }

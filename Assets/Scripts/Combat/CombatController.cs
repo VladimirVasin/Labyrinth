@@ -50,7 +50,7 @@ namespace Labyrinth.Combat
         private const int MinBossOrcExperienceReward = 155;
         private const int MaxBossOrcExperienceReward = 185;
         private const int MaxCombatGuard = 10;
-        private const int HeroWoundDamageThreshold = 6;
+        private const int HeroWoundDamageThreshold = 2;
         private const int MobWoundDamageThreshold = 8;
         private const int EliteWoundDamageThreshold = 11;
         private const int OpeningRookieSafetyMaxHeroLevel = 2;

@@ -17,7 +17,9 @@ namespace Labyrinth.UI
 
         private Func<IReadOnlyList<HeroController>> heroesProvider;
         private Func<HeroController> selectedHeroProvider;
+        private Func<HeroController, HeroGuildQuestHudInfo> heroGuildQuestProvider;
         private Action<HeroController> heroSelected;
+        private readonly GuiHudTransition panelTransition = new GuiHudTransition();
         private bool panelVisible;
         private GUIStyle iconStyle;
         private GUIStyle iconCaptionStyle;
@@ -49,10 +51,12 @@ namespace Labyrinth.UI
         public void Configure(
             Func<IReadOnlyList<HeroController>> onHeroesRequested,
             Func<HeroController> onSelectedHeroRequested,
-            Action<HeroController> onHeroSelected)
+            Action<HeroController> onHeroSelected,
+            Func<HeroController, HeroGuildQuestHudInfo> onHeroGuildQuestRequested = null)
         {
             heroesProvider = onHeroesRequested;
             selectedHeroProvider = onSelectedHeroRequested;
+            heroGuildQuestProvider = onHeroGuildQuestRequested;
             heroSelected = onHeroSelected;
         }
 
@@ -64,11 +68,13 @@ namespace Labyrinth.UI
             }
 
             panelVisible = false;
+            panelTransition.Hide();
         }
 
         public void ShowSelectedPanel()
         {
             panelVisible = true;
+            panelTransition.Show();
         }
 
         public bool ContainsScreenPoint(Vector2 screenPosition)
@@ -91,6 +97,7 @@ namespace Labyrinth.UI
             if (heroes == null || heroes.Count == 0)
             {
                 panelVisible = false;
+                panelTransition.Hide();
                 return;
             }
 
@@ -121,12 +128,14 @@ namespace Labyrinth.UI
                     {
                         GameAudioController.PlayUi(GameSfx.HudClose);
                         panelVisible = false;
+                        panelTransition.Hide();
                     }
                     else
                     {
                         GameAudioController.PlayUi(GameSfx.HudOpen);
                         heroSelected?.Invoke(hero);
                         panelVisible = true;
+                        panelTransition.Show();
                     }
                 }
 
@@ -134,9 +143,11 @@ namespace Labyrinth.UI
                 drawnIcons++;
             }
 
-            if (panelVisible && selectedHero != null && selectedHero.Model != null)
+            if (panelTransition.IsDrawing && selectedHero != null && selectedHero.Model != null)
             {
+                var previousColor = panelTransition.ApplyGuiAlpha();
                 DrawHeroPanel(selectedHero, GetHeroDisplayNumber(selectedHero, GetHeroNumber(heroes, selectedHero)));
+                GUI.color = previousColor;
             }
         }
 
@@ -230,6 +241,13 @@ namespace Labyrinth.UI
             return fallbackNumber > 0 ? $"Рыцарь {fallbackNumber}" : "Рыцарь";
         }
 
+        private HeroGuildQuestHudInfo GetHeroGuildQuestInfo(HeroController hero)
+        {
+            return heroGuildQuestProvider != null
+                ? heroGuildQuestProvider.Invoke(hero)
+                : HeroGuildQuestHudInfo.None;
+        }
+
         private static string BuildHeroIconTitle(HeroController hero, int fallbackNumber)
         {
             var title = BuildHeroTitle(hero, fallbackNumber);
@@ -250,7 +268,7 @@ namespace Labyrinth.UI
             }
 
             var previousColor = GUI.color;
-            GUI.color = new Color(1f, 0.86f, 0.24f);
+            GUI.color = new Color(1f, 0.86f, 0.24f, previousColor.a);
             GUI.Box(new Rect(iconRect.x - 4f, iconRect.y - 4f, iconRect.width + 8f, iconRect.height + 8f), GUIContent.none);
             GUI.color = previousColor;
         }
@@ -388,7 +406,7 @@ namespace Labyrinth.UI
             GUI.Label(new Rect(rect.x + 8f, rect.y, rect.width * 0.48f, rect.height), label, statLabelStyle);
 
             var previousColor = GUI.color;
-            GUI.color = valueColor;
+            GUI.color = new Color(valueColor.r, valueColor.g, valueColor.b, valueColor.a * previousColor.a);
             GUI.Label(new Rect(rect.x + rect.width * 0.48f, rect.y, rect.width * 0.48f - 8f, rect.height), value, statValueStyle);
             GUI.color = previousColor;
         }
@@ -444,7 +462,8 @@ namespace Labyrinth.UI
             var labelWidth = Mathf.Min(116f, rect.width * 0.42f);
             GUI.Label(new Rect(rect.x, rect.y, labelWidth, rect.height), $"{title}:", slotLabelStyle);
             var previousColor = GUI.color;
-            GUI.color = active ? new Color(1f, 0.78f, 0.28f) : new Color(0.92f, 0.9f, 0.84f);
+            var valueColor = active ? new Color(1f, 0.78f, 0.28f) : new Color(0.92f, 0.9f, 0.84f);
+            GUI.color = new Color(valueColor.r, valueColor.g, valueColor.b, valueColor.a * previousColor.a);
             GUI.Label(new Rect(rect.x + labelWidth, rect.y, rect.width - labelWidth, rect.height), string.IsNullOrEmpty(value) ? "нет" : value, blessingValueStyle);
             GUI.color = previousColor;
         }
@@ -463,7 +482,7 @@ namespace Labyrinth.UI
         {
             GUI.Label(new Rect(rect.x, rect.y, rect.width * 0.45f, rect.height), $"{label}:", slotLabelStyle);
             var previousColor = GUI.color;
-            GUI.color = valueColor;
+            GUI.color = new Color(valueColor.r, valueColor.g, valueColor.b, valueColor.a * previousColor.a);
             GUI.Label(new Rect(rect.x + rect.width * 0.45f, rect.y, rect.width * 0.55f, rect.height), value, chipValueStyle);
             GUI.color = previousColor;
         }
@@ -473,7 +492,8 @@ namespace Labyrinth.UI
             var labelWidth = Mathf.Min(58f, rect.width * 0.58f);
             GUI.Label(new Rect(rect.x, rect.y, labelWidth, rect.height), $"{title}:", chipLabelStyle);
             var previousColor = GUI.color;
-            GUI.color = active ? new Color(1f, 0.78f, 0.28f) : new Color(0.88f, 0.86f, 0.78f);
+            var valueColor = active ? new Color(1f, 0.78f, 0.28f) : new Color(0.88f, 0.86f, 0.78f);
+            GUI.color = new Color(valueColor.r, valueColor.g, valueColor.b, valueColor.a * previousColor.a);
             GUI.Label(new Rect(rect.x + labelWidth, rect.y, rect.width - labelWidth, rect.height), string.IsNullOrEmpty(value) ? "нет" : value, blessingValueStyle);
             GUI.color = previousColor;
         }
@@ -483,7 +503,7 @@ namespace Labyrinth.UI
             FillRect(rect, new Color(color.r, color.g, color.b, 0.18f));
             DrawOutline(rect, new Color(color.r, color.g, color.b, 0.55f));
             var previousColor = GUI.color;
-            GUI.color = color;
+            GUI.color = new Color(color.r, color.g, color.b, color.a * previousColor.a);
             GUI.Label(rect, text, statusBadgeStyle);
             GUI.color = previousColor;
         }
@@ -517,7 +537,7 @@ namespace Labyrinth.UI
             DrawInfoChipIcon(new Rect(rect.x + 8f, rect.y + 10f, 18f, 18f), label);
             GUI.Label(new Rect(rect.x + 31f, rect.y + 4f, rect.width - 39f, 14f), $"{label}:", chipLabelStyle);
             var previousColor = GUI.color;
-            GUI.color = valueColor;
+            GUI.color = new Color(valueColor.r, valueColor.g, valueColor.b, valueColor.a * previousColor.a);
             GUI.Label(new Rect(rect.x + 31f, rect.y + 17f, rect.width - 39f, 18f), value, chipValueStyle);
             GUI.color = previousColor;
         }
@@ -528,7 +548,7 @@ namespace Labyrinth.UI
             DrawOutline(rect, new Color(1f, 1f, 1f, 0.1f));
             DrawCombatIcon(new Rect(rect.x + 10f, rect.y + 14f, 22f, 22f), label);
             var previousColor = GUI.color;
-            GUI.color = valueColor;
+            GUI.color = new Color(valueColor.r, valueColor.g, valueColor.b, valueColor.a * previousColor.a);
             GUI.Label(new Rect(rect.x + 36f, rect.y + 7f, rect.width - 44f, 24f), value, combatValueStyle);
             GUI.color = previousColor;
             GUI.Label(new Rect(rect.x + 36f, rect.y + 29f, rect.width - 44f, 18f), label, combatLabelStyle);
@@ -728,7 +748,7 @@ namespace Labyrinth.UI
         private static void FillRect(Rect rect, Color color)
         {
             var previousColor = GUI.color;
-            GUI.color = color;
+            GUI.color = new Color(color.r, color.g, color.b, color.a * previousColor.a);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = previousColor;
         }
@@ -910,7 +930,7 @@ namespace Labyrinth.UI
         private void DrawCircle(Rect rect, Color color)
         {
             var previousColor = GUI.color;
-            GUI.color = color;
+            GUI.color = new Color(color.r, color.g, color.b, color.a * previousColor.a);
             GUI.DrawTexture(rect, circleTexture);
             GUI.color = previousColor;
         }

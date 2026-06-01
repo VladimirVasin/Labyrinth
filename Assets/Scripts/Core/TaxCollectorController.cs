@@ -9,7 +9,7 @@ namespace Labyrinth.Core
     public sealed class TaxCollectorController : MonoBehaviour
     {
         public const int HutTaxCapacity = 10;
-        public const float TaxProductionIntervalSeconds = ResourceProductionController.FarmProductionIntervalSeconds * 2f;
+        public const float TaxProductionIntervalSeconds = ResourceProductionController.FarmProductionIntervalSeconds;
 
         private const float CollectorSpeedCellsPerSecond = 2.1f;
         private const float CollectorYOffset = 0.07f;
@@ -21,6 +21,7 @@ namespace Labyrinth.Core
         private ResourceWallet resources;
         private BaseDevelopment baseDevelopment;
         private MazeRenderer mazeRenderer;
+        private TerrainDecorationController terrainDecorations;
         private MazeGenerationResult result;
         private TaxCollectorRuntime collector;
         private Material bodyMaterial;
@@ -28,11 +29,12 @@ namespace Labyrinth.Core
         private Material bagMaterial;
         private float taxProgress;
 
-        public void Configure(ResourceWallet wallet, BaseDevelopment development, MazeRenderer renderer)
+        public void Configure(ResourceWallet wallet, BaseDevelopment development, MazeRenderer renderer, TerrainDecorationController decorations = null)
         {
             resources = wallet;
             baseDevelopment = development;
             mazeRenderer = renderer;
+            terrainDecorations = decorations;
         }
 
         public void Initialize(MazeGenerationResult generationResult)
@@ -302,6 +304,11 @@ namespace Labyrinth.Core
                 return false;
             }
 
+            if (terrainDecorations != null && terrainDecorations.BlocksCityWalker(position))
+            {
+                return false;
+            }
+
             if (IsInsideFootprint(result.BasePosition, BaseDevelopment.CastleFootprintRadiusCells, position)
                 || IsInsideFootprint(targetHut, BaseDevelopment.PeasantHutFootprintRadiusCells, position))
             {
@@ -363,7 +370,8 @@ namespace Labyrinth.Core
                 || (baseDevelopment.HasChapel && IsInsideFootprint(baseDevelopment.ChapelPosition, BaseDevelopment.ChapelFootprintRadiusCells, position))
                 || (baseDevelopment.HasMinersGuild && IsInsideFootprint(baseDevelopment.MinersGuildPosition, BaseDevelopment.MinersGuildFootprintRadiusCells, position))
                 || (baseDevelopment.HasMarket && IsInsideFootprint(baseDevelopment.MarketPosition, BaseDevelopment.MarketFootprintRadiusCells, position))
-                || (baseDevelopment.HasAntiquary && IsInsideFootprint(baseDevelopment.AntiquaryPosition, BaseDevelopment.AntiquaryFootprintRadiusCells, position));
+                || (baseDevelopment.HasAntiquary && IsInsideFootprint(baseDevelopment.AntiquaryPosition, BaseDevelopment.AntiquaryFootprintRadiusCells, position))
+                || (baseDevelopment.HasHeroesGuild && IsInsideFootprint(baseDevelopment.HeroesGuildPosition, BaseDevelopment.HeroesGuildFootprintRadiusCells, position));
         }
 
         private bool IsInsideTerrain(Vector2Int position)

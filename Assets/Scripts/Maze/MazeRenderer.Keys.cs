@@ -39,7 +39,7 @@ namespace Labyrinth.Maze
             head.GetComponent<Renderer>().sharedMaterial = keyGoldMaterial;
             RemoveCollider(head);
             VoxelVisuals.ApplyBlockStyle(head, PrimitiveType.Sphere, keyGoldMaterial, false);
-            TrackCellRenderer(key.Position, head);
+            TrackExternalCellRenderer(key.Position, head);
 
             var shaft = CreateCube(
                 "Key Shaft",
@@ -48,7 +48,7 @@ namespace Labyrinth.Maze
                 keyGoldMaterial,
                 keyRoot.transform,
                 false);
-            TrackCellRenderer(key.Position, shaft);
+            TrackExternalCellRenderer(key.Position, shaft);
 
             var tooth = CreateCube(
                 "Key Tooth",
@@ -57,7 +57,7 @@ namespace Labyrinth.Maze
                 keyGoldMaterial,
                 keyRoot.transform,
                 false);
-            TrackCellRenderer(key.Position, tooth);
+            TrackExternalCellRenderer(key.Position, tooth);
 
             var hudTarget = keyRoot.AddComponent<ObjectMicroHudTarget>();
             hudTarget.Configure(

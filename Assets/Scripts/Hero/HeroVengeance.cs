@@ -12,10 +12,7 @@ namespace Labyrinth.Hero
         BrokenBanner,
         LastMonster,
         CarriedName,
-        UndeliveredGold,
-        BlackCell,
-        ClosedDoor,
-        LowerStone
+        UndeliveredGold
     }
 
     public readonly struct HeroDeathContext
@@ -269,11 +266,6 @@ namespace Labyrinth.Hero
                 return CreateBrokenBanner(death);
             }
 
-            if (death.NearBarrier)
-            {
-                return CreateClosedDoor(death);
-            }
-
             if (death.CarriedDeathToken)
             {
                 return CreateCarriedName(death);
@@ -282,11 +274,6 @@ namespace Labyrinth.Hero
             if (death.CarriedGoldIngot)
             {
                 return CreateUndeliveredGold(death);
-            }
-
-            if (death.DiedInDarkness || death.KillerSpawnedFromDarkness)
-            {
-                return CreateBlackCell(death);
             }
 
             if (death.HasKiller)
@@ -302,7 +289,7 @@ namespace Labyrinth.Hero
                 }
             }
 
-            return death.DungeonLevel > 1 ? CreateLowerStone(death) : CreateNone();
+            return CreateNone();
         }
 
         public HeroVengeanceProgressResult RegisterMobDefeated(MobModel mob)
@@ -324,8 +311,6 @@ namespace Labyrinth.Hero
                     return mob.IsMiniBoss ? Complete() : HeroVengeanceProgressResult.None;
                 case HeroVengeanceKind.LastMonster:
                     return mob.IsBoss ? Complete() : HeroVengeanceProgressResult.None;
-                case HeroVengeanceKind.BlackCell:
-                    return mob.SpawnedFromDarkness ? IncrementProgress() : HeroVengeanceProgressResult.None;
                 default:
                     return HeroVengeanceProgressResult.None;
             }
@@ -347,6 +332,7 @@ namespace Labyrinth.Hero
 
         public HeroVengeanceProgressResult RegisterBarrierOpened(Vector2Int position, bool isStairs)
         {
+            _ = position;
             if (!CanProgress())
             {
                 return HeroVengeanceProgressResult.None;
@@ -357,21 +343,7 @@ namespace Labyrinth.Hero
                 return Complete();
             }
 
-            if (Kind != HeroVengeanceKind.ClosedDoor)
-            {
-                return HeroVengeanceProgressResult.None;
-            }
-
-            return TargetPosition == default || GridDistance(position, TargetPosition) <= 1
-                ? Complete()
-                : HeroVengeanceProgressResult.None;
-        }
-
-        public HeroVengeanceProgressResult RegisterNewCellExplored(int dungeonLevel)
-        {
-            return CanProgress() && Kind == HeroVengeanceKind.LowerStone && dungeonLevel == TargetDungeonLevel
-                ? IncrementProgress()
-                : HeroVengeanceProgressResult.None;
+            return HeroVengeanceProgressResult.None;
         }
 
         private bool CanProgress()
@@ -405,10 +377,6 @@ namespace Labyrinth.Hero
                     return new HeroVengeanceProgressResult(true, $"{OathName} исполнена", 0, 5, 0, 0, 0);
                 case HeroVengeanceKind.LastMonster:
                     return new HeroVengeanceProgressResult(true, $"{OathName} исполнена", 0, 10, 0, 0, 0);
-                case HeroVengeanceKind.ClosedDoor:
-                    return new HeroVengeanceProgressResult(true, $"{OathName} исполнена", 0, 0, 0, 0, 1);
-                case HeroVengeanceKind.LowerStone:
-                    return new HeroVengeanceProgressResult(true, $"{OathName} исполнена", 0, 0, 0, 1, 0);
                 default:
                     return new HeroVengeanceProgressResult(true, $"{OathName} исполнена", 0, 0, 0, 0, 0);
             }
@@ -519,56 +487,5 @@ namespace Labyrinth.Hero
                 death.DungeonLevel);
         }
 
-        private static HeroVengeanceQuest CreateBlackCell(HeroDeathContext death)
-        {
-            return new HeroVengeanceQuest(
-                HeroVengeanceKind.BlackCell,
-                "Клятва чёрной клетки",
-                "\"Тьма забрала его без свидетелей. Меня она увидит.\"",
-                "Убить 3 врагов, появившихся из темноты.",
-                "Тьма меня увидит",
-                "+1 видимости, +2 атаки против тёмного респауна.",
-                3,
-                MobSpecies.Orc,
-                MobRank.Regular,
-                death.DungeonLevel);
-        }
-
-        private static HeroVengeanceQuest CreateClosedDoor(HeroDeathContext death)
-        {
-            return new HeroVengeanceQuest(
-                HeroVengeanceKind.ClosedDoor,
-                "Клятва закрытой двери",
-                "\"Дверь запомнила его руку. Теперь запомнит мою.\"",
-                $"Открыть или пройти преграду: {death.BarrierName}.",
-                "Дверь запомнит меня",
-                "+1 Max Stamina, быстрее путь к дверям и спускам.",
-                1,
-                MobSpecies.Orc,
-                MobRank.Regular,
-                death.DungeonLevel,
-                death.BarrierPosition,
-                death.BarrierName);
-        }
-
-        private static HeroVengeanceQuest CreateLowerStone(HeroDeathContext death)
-        {
-            return new HeroVengeanceQuest(
-                HeroVengeanceKind.LowerStone,
-                "Клятва нижнего камня",
-                "\"Внизу камень тяжелее. Значит, я стану тяжелее тоже.\"",
-                $"Разведать 10 новых клеток на уровне {death.DungeonLevel}.",
-                "Кровь глубины",
-                $"+1 HP и +1 атаки на уровне {death.DungeonLevel}.",
-                10,
-                MobSpecies.Orc,
-                MobRank.Regular,
-                death.DungeonLevel);
-        }
-
-        private static int GridDistance(Vector2Int a, Vector2Int b)
-        {
-            return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
-        }
     }
 }
