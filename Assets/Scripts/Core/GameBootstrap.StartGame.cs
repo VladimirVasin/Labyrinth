@@ -57,6 +57,7 @@ namespace Labyrinth.Core
             terrainDecorations.Clear();
             mazeRenderer.Clear();
             fogOfWarView.Clear();
+            baseConstructionController.Clear();
             goldIngotManager.Clear();
             deathTokenManager.Clear();
             taxCollectorController.Clear();
@@ -77,6 +78,7 @@ namespace Labyrinth.Core
             levelTwoCartographerMemory = null;
             resources.ResetToDefault();
             baseDevelopment.Reset();
+            ClearBaseConstructionPayloads();
             productionController.ResetProgress();
             victoryAchieved = false;
             adventureMusicStarted = false;

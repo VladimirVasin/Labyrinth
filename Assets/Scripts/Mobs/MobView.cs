@@ -10,6 +10,8 @@ namespace Labyrinth.Mobs
         private const float MoveSpeed = 3.4f;
         private const float WalkAnimationSpeed = 7.5f;
         private const float AttackDuration = 0.3f;
+        private const float DefeatAnimationDuration = 0.82f;
+        private const float DefeatImpactDuration = 0.18f;
         private static readonly Vector3 HumanoidVisualFootprintScale = new Vector3(0.82f, 0.94f, 0.82f);
         private static readonly Vector3 RatVisualFootprintScale = new Vector3(0.76f, 0.92f, 0.76f);
 
@@ -40,6 +42,14 @@ namespace Labyrinth.Mobs
         private Vector2Int visualGridPosition;
         private MobSpecies species;
         private MobRank rank;
+        private bool defeated;
+        private float defeatTimer;
+        private Vector3 defeatStartPosition;
+        private Vector3 defeatTargetPosition;
+        private Vector3 defeatStartScale;
+        private Vector3 defeatTargetScale;
+        private Quaternion defeatStartRotation;
+        private Quaternion defeatTargetRotation;
 
         public MobController Controller { get; private set; }
 
@@ -69,7 +79,7 @@ namespace Labyrinth.Mobs
 
             foreach (var collider in GetComponentsInChildren<Collider>())
             {
-                collider.enabled = visible;
+                collider.enabled = visible && !defeated;
             }
         }
 
@@ -123,13 +133,45 @@ namespace Labyrinth.Mobs
 
         public void SetDefeated()
         {
-            visualRoot.localRotation = Quaternion.Euler(0f, 0f, 72f);
-            visualRoot.localPosition = new Vector3(0f, 0.16f, 0f);
-            visualRoot.localScale = GetVisualFootprintScale();
+            if (defeated || visualRoot == null)
+            {
+                return;
+            }
+
+            defeated = true;
+            defeatTimer = 0f;
+            attackTimer = 0f;
+            movePath.Clear();
+            moveWaypointIndex = 0;
+            targetPosition = transform.position;
+            defeatStartPosition = visualRoot.localPosition;
+            defeatStartRotation = visualRoot.localRotation;
+            defeatStartScale = visualRoot.localScale;
+            defeatTargetPosition = species == MobSpecies.Rat
+                ? new Vector3(0f, 0.07f, 0.02f)
+                : new Vector3(0f, 0.12f, 0f);
+            defeatTargetRotation = Quaternion.Euler(
+                species == MobSpecies.Rat ? 0f : -4f,
+                0f,
+                species == MobSpecies.Rat ? -86f : 82f);
+            defeatTargetScale = Vector3.Scale(
+                GetVisualFootprintScale(),
+                species == MobSpecies.Rat ? new Vector3(1.12f, 0.66f, 1.08f) : new Vector3(1.08f, 0.72f, 1.06f));
+
+            foreach (var collider in GetComponentsInChildren<Collider>())
+            {
+                collider.enabled = false;
+            }
         }
 
         private void Update()
         {
+            if (defeated)
+            {
+                AnimateDefeat();
+                return;
+            }
+
             var isMoving = movePath.Count > 0 && moveWaypointIndex < movePath.Count;
 
             if (isMoving)
@@ -149,6 +191,31 @@ namespace Labyrinth.Mobs
             }
 
             AnimateMob(isMoving);
+        }
+
+        private void AnimateDefeat()
+        {
+            if (visualRoot == null)
+            {
+                return;
+            }
+
+            defeatTimer += Time.deltaTime;
+            var t = Mathf.Clamp01(defeatTimer / DefeatAnimationDuration);
+            var eased = t * t * (3f - 2f * t);
+            var impact = Mathf.Sin(Mathf.Clamp01(defeatTimer / DefeatImpactDuration) * Mathf.PI) * (1f - t);
+            visualRoot.localPosition = Vector3.Lerp(defeatStartPosition, defeatTargetPosition, eased)
+                + new Vector3(0f, impact * 0.045f, 0f);
+            visualRoot.localRotation = Quaternion.Slerp(defeatStartRotation, defeatTargetRotation, eased);
+            visualRoot.localScale = Vector3.Lerp(defeatStartScale, defeatTargetScale, eased);
+
+            if (species == MobSpecies.Rat)
+            {
+                AnimateRatDefeat(eased);
+                return;
+            }
+
+            AnimateHumanoidDefeat(eased);
         }
 
         private void Initialize(MazeRenderer renderer, Vector2Int startPosition, MobSpecies species, MobRank rank)
@@ -400,6 +467,62 @@ namespace Labyrinth.Mobs
             clubArmPivot.localRotation = Quaternion.Euler(-fast * 28f, 0f, 0f);
             leftLegPivot.localRotation = Quaternion.Euler(-fast * 24f, 0f, 0f);
             rightLegPivot.localRotation = Quaternion.Euler(fast * 24f, 0f, 0f);
+        }
+
+        private void AnimateHumanoidDefeat(float t)
+        {
+            if (bodyPart != null)
+            {
+                bodyPart.localRotation = Quaternion.Slerp(bodyPart.localRotation, Quaternion.Euler(-8f, 0f, -10f), t);
+                bodyPart.localScale = Vector3.Lerp(bodyPart.localScale, Vector3.Scale(bodyBaseScale, new Vector3(1.04f, 0.82f, 1.08f)), t);
+            }
+
+            if (beltPart != null)
+            {
+                beltPart.localRotation = bodyPart != null ? bodyPart.localRotation : Quaternion.identity;
+            }
+
+            if (headPart != null)
+            {
+                headPart.localPosition = Vector3.Lerp(headPart.localPosition, headBasePosition + new Vector3(0.03f, -0.12f, 0.02f), t);
+                headPart.localRotation = Quaternion.Slerp(headPart.localRotation, Quaternion.Euler(18f, -10f, 16f), t);
+            }
+
+            leftLegPivot.localRotation = Quaternion.Slerp(leftLegPivot.localRotation, Quaternion.Euler(16f, 0f, 22f), t);
+            rightLegPivot.localRotation = Quaternion.Slerp(rightLegPivot.localRotation, Quaternion.Euler(-14f, 0f, -24f), t);
+            freeArmPivot.localRotation = Quaternion.Slerp(freeArmPivot.localRotation, Quaternion.Euler(36f, 0f, 42f), t);
+            clubArmPivot.localRotation = Quaternion.Slerp(clubArmPivot.localRotation, Quaternion.Euler(-24f, 0f, -58f), t);
+        }
+
+        private void AnimateRatDefeat(float t)
+        {
+            if (bodyPart != null)
+            {
+                bodyPart.localScale = Vector3.Lerp(bodyPart.localScale, Vector3.Scale(bodyBaseScale, new Vector3(1.12f, 0.74f, 1.02f)), t);
+                bodyPart.localRotation = Quaternion.Slerp(bodyPart.localRotation, Quaternion.Euler(0f, -8f, 0f), t);
+            }
+
+            if (secondaryBodyPart != null)
+            {
+                secondaryBodyPart.localPosition = Vector3.Lerp(secondaryBodyPart.localPosition, secondaryBodyBasePosition + new Vector3(0f, -0.07f, 0.02f), t);
+                secondaryBodyPart.localRotation = Quaternion.Slerp(secondaryBodyPart.localRotation, Quaternion.Euler(0f, 12f, -8f), t);
+            }
+
+            if (headPart != null)
+            {
+                headPart.localPosition = Vector3.Lerp(headPart.localPosition, headBasePosition + new Vector3(0.04f, -0.08f, -0.03f), t);
+                headPart.localRotation = Quaternion.Slerp(headPart.localRotation, Quaternion.Euler(12f, -18f, 8f), t);
+            }
+
+            if (tailPart != null)
+            {
+                tailPart.localRotation = Quaternion.Slerp(tailPart.localRotation, Quaternion.Euler(0f, 0f, -34f), t);
+            }
+
+            freeArmPivot.localRotation = Quaternion.Slerp(freeArmPivot.localRotation, Quaternion.Euler(24f, 0f, 16f), t);
+            clubArmPivot.localRotation = Quaternion.Slerp(clubArmPivot.localRotation, Quaternion.Euler(-18f, 0f, -18f), t);
+            leftLegPivot.localRotation = Quaternion.Slerp(leftLegPivot.localRotation, Quaternion.Euler(-16f, 0f, 24f), t);
+            rightLegPivot.localRotation = Quaternion.Slerp(rightLegPivot.localRotation, Quaternion.Euler(16f, 0f, -24f), t);
         }
 
         private void SetIdlePose()

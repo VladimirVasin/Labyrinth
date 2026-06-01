@@ -6,6 +6,8 @@ namespace Labyrinth.Core
 {
     public static class GameDebugLog
     {
+        public static bool VerboseTrace { get; set; }
+
         private const string Prefix = "[Labyrinth]";
         private const string FileName = "debug.log";
 

@@ -30,6 +30,7 @@ namespace Labyrinth.Core
         private TimeScaleController timeScaleController;
         private ResourceWallet resources;
         private BaseDevelopment baseDevelopment;
+        private BaseConstructionController baseConstructionController;
         private BaseAmbienceController baseAmbience;
         private HeroHouseFundCourierController houseFundCouriers;
         private CityAmbienceController cityAmbience;
@@ -81,6 +82,7 @@ namespace Labyrinth.Core
         private int unlockedDungeonLevel = 1;
         private GameState state;
         private GameState stateBeforePause = GameState.Playing;
+        private bool debugBuildingMode;
 
         private void Awake()
         {
@@ -92,8 +94,11 @@ namespace Labyrinth.Core
             mazeRenderer = gameObject.AddComponent<MazeRenderer>();
             terrainDecorations = gameObject.AddComponent<TerrainDecorationController>();
             baseDevelopment.ConfigurePlacementBlocker((position, footprintRadius) => terrainDecorations.BlocksBuilding(position, footprintRadius));
+            baseConstructionController = gameObject.AddComponent<BaseConstructionController>();
+            baseConstructionController.Configure(mazeRenderer, terrainDecorations, () => currentMaze, HandleBaseConstructionCompleted);
             baseAmbience = gameObject.AddComponent<BaseAmbienceController>();
             baseAmbience.Configure(terrainDecorations);
+            baseAmbience.RoadCompleted += HandleBaseRoadCompleted;
             houseFundCouriers = gameObject.AddComponent<HeroHouseFundCourierController>();
             houseFundCouriers.Configure(mazeRenderer, baseAmbience);
             cityAmbience = gameObject.AddComponent<CityAmbienceController>();
@@ -186,6 +191,11 @@ namespace Labyrinth.Core
                 return;
             }
 
+            if (TryToggleDebugBuildingMode())
+            {
+                return;
+            }
+
             if (state == GameState.PauseMenu)
             {
                 return;
@@ -227,6 +237,8 @@ namespace Labyrinth.Core
             {
                 return;
             }
+
+            UpdateHeroEntranceCommutes();
 
             if (currentDungeonLevel == 1)
             {
@@ -417,6 +429,8 @@ namespace Labyrinth.Core
                 GetMineStatus,
                 CanStartMineSelection,
                 BeginMineSelection,
+                IsBuildingUnlocked,
+                HasPendingBuilding,
                 GetBuildingUpgradeStatus,
                 CanUpgradeBuilding,
                 GetBuildingUpgradeCost,
@@ -494,6 +508,7 @@ namespace Labyrinth.Core
             terrainDecorations.Clear();
             mazeRenderer.Clear();
             fogOfWarView.Clear();
+            baseConstructionController.Clear();
             baseAmbience.Clear();
             houseFundCouriers.Clear();
             cityAmbience.Clear();
@@ -506,6 +521,7 @@ namespace Labyrinth.Core
             cartographerMemory = null;
             levelOneCartographerMemory = null;
             levelTwoCartographerMemory = null;
+            ClearBaseConstructionPayloads();
             rootGenerationSettings = null;
             levelOneMaze = null;
             levelTwoMaze = null;
@@ -583,135 +599,32 @@ namespace Labyrinth.Core
 
         private void BuildFarmFromBase()
         {
-            if (currentMaze == null)
-            {
-                return;
-            }
-
-            var cost = GetFarmCost();
-            if (!resources.CanAfford(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"нужно {cost.Format()}");
-                GameDebugLog.Warning(
-                    "Base",
-                    $"Farm build blocked: gold={resources.Gold}, wood={resources.Wood}, required={cost.Format()}");
-                return;
-            }
-
-            if (!baseDevelopment.TryBuildFarm(currentMaze, out var farmPosition))
-            {
-                var blockMessage = baseDevelopment.LastBuildMessage;
-                baseDevelopment.ReportBuildBlocked($"ферма: {blockMessage}");
-                GameDebugLog.Warning("Base", $"Farm build blocked: {blockMessage}");
-                return;
-            }
-
-            if (resources.TrySpend(cost))
-            {
-                ClearTerrainDecorationsAround(farmPosition, BaseDevelopment.FarmFootprintRadiusCells);
-                mazeRenderer.RenderFarm(farmPosition);
-                RefreshAllBuildingUpgradeVisuals();
-                baseAmbience.RegisterBuilding(BuildingType.Farm, farmPosition);
-                cityAmbience.RegisterBuilding(BuildingType.Farm, farmPosition);
-                SyncPeasantHuts();
-                GameAudioController.Play(GameSfx.Build, mazeRenderer.GridToWorld(farmPosition));
-                GameDebugLog.Info(
-                    "Base",
-                    $"Farm built at {GameDebugLog.Position(farmPosition)}. farms={baseDevelopment.FarmCount}, cost={cost.Format()}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, foodPerSecond={baseDevelopment.FoodPerTimeUnit}");
-            }
+            TryStartBaseBuildingConstruction(BuildingType.Farm, GetFarmCost(), "Farm", out _);
         }
 
         private void BuildAlchemistShopFromBase()
         {
-            if (currentMaze == null)
-            {
-                return;
-            }
-
-            var cost = GetAlchemistShopCost();
-            if (!resources.CanAfford(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"лавка алхимика: нужно {cost.Format()}");
-                GameDebugLog.Warning(
-                    "Base",
-                    $"Alchemist shop build blocked: gold={resources.Gold}, wood={resources.Wood}, required={cost.Format()}");
-                return;
-            }
-
-            if (!baseDevelopment.TryBuildAlchemistShop(currentMaze, out var shopPosition))
-            {
-                var blockMessage = baseDevelopment.LastBuildMessage;
-                baseDevelopment.ReportBuildBlocked($"лавка алхимика: {blockMessage}");
-                GameDebugLog.Warning("Base", $"Alchemist shop build blocked: {blockMessage}");
-                return;
-            }
-
-            if (resources.TrySpend(cost))
-            {
-                ClearTerrainDecorationsAround(shopPosition, BaseDevelopment.AlchemistShopFootprintRadiusCells);
-                mazeRenderer.RenderAlchemistShop(shopPosition);
-                RefreshAllBuildingUpgradeVisuals();
-                baseAmbience.RegisterBuilding(BuildingType.AlchemistShop, shopPosition);
-                cityAmbience.RegisterBuilding(BuildingType.AlchemistShop, shopPosition);
-                SyncPeasantHuts();
-                RefreshSelectedHeroVisibility();
-                GameAudioController.Play(GameSfx.Build, mazeRenderer.GridToWorld(shopPosition));
-                GameDebugLog.Info(
-                    "Base",
-                    $"Alchemist shop built at {GameDebugLog.Position(shopPosition)}. buildCost={cost.Format()}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, potionCost={BaseDevelopment.HealthPotionGoldCost}");
-            }
+            TryStartBaseBuildingConstruction(BuildingType.AlchemistShop, GetAlchemistShopCost(), "Alchemist shop", out _);
         }
 
         private void BuildTavernFromBase()
         {
-            if (currentMaze == null)
-            {
-                return;
-            }
-
-            var cost = GetTavernCost();
-            if (!resources.CanAfford(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"харчевня: нужно {cost.Format()}");
-                GameDebugLog.Warning(
-                    "Base",
-                    $"Tavern build blocked: gold={resources.Gold}, wood={resources.Wood}, required={cost.Format()}");
-                return;
-            }
-
-            if (!baseDevelopment.TryBuildTavern(currentMaze, out var tavernPosition))
-            {
-                var blockMessage = baseDevelopment.LastBuildMessage;
-                baseDevelopment.ReportBuildBlocked($"харчевня: {blockMessage}");
-                GameDebugLog.Warning("Base", $"Tavern build blocked: {blockMessage}");
-                return;
-            }
-
-            if (resources.TrySpend(cost))
-            {
-                ClearTerrainDecorationsAround(tavernPosition, BaseDevelopment.TavernFootprintRadiusCells);
-                mazeRenderer.RenderTavern(tavernPosition);
-                RefreshAllBuildingUpgradeVisuals();
-                baseAmbience.RegisterBuilding(BuildingType.Tavern, tavernPosition);
-                cityAmbience.RegisterBuilding(BuildingType.Tavern, tavernPosition);
-                SyncPeasantHuts();
-                RefreshSelectedHeroVisibility();
-                GameAudioController.Play(GameSfx.Build, mazeRenderer.GridToWorld(tavernPosition));
-                GameDebugLog.Info(
-                    "Base",
-                    $"Tavern built at {GameDebugLog.Position(tavernPosition)}. buildCost={cost.Format()}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, ration={BaseDevelopment.RationFoodCost} food -> {BaseDevelopment.RationGoldCost} gold.");
-            }
+            TryStartBaseBuildingConstruction(BuildingType.Tavern, GetTavernCost(), "Tavern", out _);
         }
 
         private bool CanBuildFarm()
         {
-            return currentMaze != null && resources.CanAfford(GetFarmCost());
+            return currentMaze != null
+                && IsBuildingUnlocked(BuildingType.Farm)
+                && resources.CanAfford(GetFarmCost());
         }
 
         private bool CanBuildAlchemistShop()
         {
             return currentMaze != null
                 && !baseDevelopment.HasAlchemistShop
+                && !HasPendingBuilding(BuildingType.AlchemistShop)
+                && IsBuildingUnlocked(BuildingType.AlchemistShop)
                 && resources.CanAfford(GetAlchemistShopCost());
         }
 
@@ -719,6 +632,8 @@ namespace Labyrinth.Core
         {
             return currentMaze != null
                 && !baseDevelopment.HasTavern
+                && !HasPendingBuilding(BuildingType.Tavern)
+                && IsBuildingUnlocked(BuildingType.Tavern)
                 && resources.CanAfford(GetTavernCost());
         }
 
@@ -731,7 +646,7 @@ namespace Labyrinth.Core
                 status += $", {baseDevelopment.LastBuildMessage}";
             }
 
-            return status;
+            return AppendBuildingUnlockStatus(BuildingType.Farm, status);
         }
 
         private string GetAlchemistShopStatus()
@@ -744,7 +659,7 @@ namespace Labyrinth.Core
                 status += $", {baseDevelopment.LastBuildMessage}";
             }
 
-            return status;
+            return AppendBuildingUnlockStatus(BuildingType.AlchemistShop, status);
         }
 
         private string GetTavernStatus()
@@ -757,7 +672,7 @@ namespace Labyrinth.Core
                 status += $", {baseDevelopment.LastBuildMessage}";
             }
 
-            return status;
+            return AppendBuildingUnlockStatus(BuildingType.Tavern, status);
         }
 
         private void DestroyHeroMemoryView()
@@ -898,6 +813,36 @@ namespace Labyrinth.Core
         private static bool WasEscapePressed()
         {
             return Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
+        }
+
+        private bool TryToggleDebugBuildingMode()
+        {
+            if (Keyboard.current == null || !Keyboard.current.f9Key.wasPressedThisFrame)
+            {
+                return false;
+            }
+
+            SetDebugBuildingMode(!debugBuildingMode);
+            return true;
+        }
+
+        private void SetDebugBuildingMode(bool enabled)
+        {
+            if (debugBuildingMode == enabled)
+            {
+                return;
+            }
+
+            debugBuildingMode = enabled;
+            if (baseDevelopment != null)
+            {
+                baseDevelopment.DebugAllBuildingsUnlocked = enabled;
+            }
+
+            GameAudioController.PlayUi(enabled ? GameSfx.HudConfirm : GameSfx.HudClick);
+            GameDebugLog.Info(
+                "Debug",
+                $"Building debug mode {(enabled ? "enabled" : "disabled")}: freeBuildings={enabled}, allBuildingUnlocks={enabled}.");
         }
     }
 }

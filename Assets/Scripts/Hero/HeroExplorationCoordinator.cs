@@ -99,6 +99,12 @@ namespace Labyrinth.Hero
             }
 
             var hasPrevious = reservationsByHero.TryGetValue(heroNumber, out var previous);
+            if (hasPrevious && TryFindCandidate(candidates, previous.TargetCell, out selected))
+            {
+                Reserve(heroNumber, selected, 0, 0, previous.Sector);
+                return true;
+            }
+
             var bestScore = int.MaxValue;
             var bestPenalty = 0;
             var bestSector = 0;
@@ -192,6 +198,24 @@ namespace Labyrinth.Hero
             GameDebugLog.Info(
                 "Hero",
                 $"Hero #{heroNumber} assigned exploration target: target={GameDebugLog.Position(candidate.TargetCell)}, approach={GameDebugLog.Position(candidate.ApproachCell)}, distance={candidate.Distance}, unknownNeighbors={candidate.UnknownNeighborCount}, score={score}, crowdPenalty={reservationPenalty}, sector={sector}, level={levelNumber}.");
+        }
+
+        private static bool TryFindCandidate(
+            IReadOnlyList<HeroExplorationCandidate> candidates,
+            Vector2Int target,
+            out HeroExplorationCandidate candidate)
+        {
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                if (candidates[i].TargetCell == target)
+                {
+                    candidate = candidates[i];
+                    return true;
+                }
+            }
+
+            candidate = default;
+            return false;
         }
 
         private int ScoreCandidate(

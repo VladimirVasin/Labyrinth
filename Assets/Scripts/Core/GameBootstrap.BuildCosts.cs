@@ -2,64 +2,71 @@ namespace Labyrinth.Core
 {
     public sealed partial class GameBootstrap
     {
+        private static readonly BuildingCost DebugFreeBuildingCost = new BuildingCost(0, 0, 0, 0);
+
         private BuildingCost GetFarmCost()
         {
-            return BaseDevelopment.FarmCost;
+            return GetDebugAdjustedBuildingCost(BaseDevelopment.FarmCost);
         }
 
         private BuildingCost GetLumberjackCampCost()
         {
-            return BaseDevelopment.GetLumberjackCampCost(baseDevelopment.LumberjackCampCount);
+            return GetDebugAdjustedBuildingCost(BaseDevelopment.GetLumberjackCampCost(baseDevelopment.LumberjackCampCount));
         }
 
         private BuildingCost GetAlchemistShopCost()
         {
-            return BaseDevelopment.AlchemistShopCost;
+            return GetDebugAdjustedBuildingCost(BaseDevelopment.AlchemistShopCost);
         }
 
         private BuildingCost GetTavernCost()
         {
-            return BaseDevelopment.TavernCost;
+            return GetDebugAdjustedBuildingCost(BaseDevelopment.TavernCost);
         }
 
         private BuildingCost GetForgeCost()
         {
-            return BaseDevelopment.ForgeCost;
+            return GetDebugAdjustedBuildingCost(BaseDevelopment.ForgeCost);
         }
 
         private BuildingCost GetInfirmaryCost()
         {
-            return BaseDevelopment.InfirmaryCost;
+            return GetDebugAdjustedBuildingCost(BaseDevelopment.InfirmaryCost);
         }
 
         private BuildingCost GetCartographerHouseCost()
         {
-            return BaseDevelopment.CartographerHouseCost;
+            return GetDebugAdjustedBuildingCost(BaseDevelopment.CartographerHouseCost);
         }
 
         private BuildingCost GetChapelCost()
         {
-            return BaseDevelopment.ChapelCost;
+            return GetDebugAdjustedBuildingCost(BaseDevelopment.ChapelCost);
         }
 
         private BuildingCost GetMinersGuildCost()
         {
-            return BaseDevelopment.MinersGuildCost;
+            return GetDebugAdjustedBuildingCost(BaseDevelopment.MinersGuildCost);
         }
 
         private BuildingCost GetAntiquaryCost()
         {
-            return BaseDevelopment.AntiquaryCost;
+            return GetDebugAdjustedBuildingCost(BaseDevelopment.AntiquaryCost);
         }
 
         private BuildingCost GetHeroesGuildCost()
         {
-            return BaseDevelopment.HeroesGuildCost;
+            return GetDebugAdjustedBuildingCost(BaseDevelopment.HeroesGuildCost);
         }
 
         private BuildingCost GetHeroCost()
         {
-            return BaseDevelopment.HeroCost;
+            return GetDebugAdjustedBuildingCost(BaseDevelopment.HeroCost);
+        }
+
+        private BuildingCost GetDebugAdjustedBuildingCost(BuildingCost normalCost)
+        {
+            return debugBuildingMode ? DebugFreeBuildingCost : normalCost;
         }
     }
 }

@@ -7,49 +7,15 @@ namespace Labyrinth.Core
     {
         private void BuildInfirmaryFromBase()
         {
-            if (currentMaze == null)
-            {
-                return;
-            }
-
-            var cost = GetInfirmaryCost();
-            if (!resources.CanAfford(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"лазарет: нужно {cost.Format()}");
-                GameDebugLog.Warning("Base", $"Infirmary build blocked: gold={resources.Gold}, wood={resources.Wood}, required={cost.Format()}");
-                return;
-            }
-
-            if (!baseDevelopment.TryBuildInfirmary(currentMaze, out var infirmaryPosition))
-            {
-                var blockMessage = baseDevelopment.LastBuildMessage;
-                baseDevelopment.ReportBuildBlocked($"лазарет: {blockMessage}");
-                GameDebugLog.Warning("Base", $"Infirmary build blocked: {blockMessage}");
-                return;
-            }
-
-            if (!resources.TrySpend(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"лазарет: нужно {cost.Format()}");
-                return;
-            }
-
-            ClearTerrainDecorationsAround(infirmaryPosition, BaseDevelopment.InfirmaryFootprintRadiusCells);
-            InfirmaryRenderer.Render(mazeRenderer, infirmaryPosition);
-            baseAmbience.RegisterBuilding(BuildingType.Infirmary, infirmaryPosition);
-            cityAmbience.RegisterBuilding(BuildingType.Infirmary, infirmaryPosition);
-            SyncPeasantHuts();
-            RefreshSelectedHeroVisibility();
-            GameAudioController.Play(GameSfx.Build, mazeRenderer.GridToWorld(infirmaryPosition));
-            GameDebugLog.Info(
-                "Base",
-                $"Infirmary built at {GameDebugLog.Position(infirmaryPosition)}. buildCost={cost.Format()}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, healFoodPerHp={BaseDevelopment.InfirmaryFoodPerHitPoint}, healGoldPerHp={BaseDevelopment.InfirmaryGoldPerHitPoint}.");
+            TryStartBaseBuildingConstruction(BuildingType.Infirmary, GetInfirmaryCost(), "Infirmary", out _);
         }
 
         private bool CanBuildInfirmary()
         {
             return currentMaze != null
                 && !baseDevelopment.HasInfirmary
+                && !HasPendingBuilding(BuildingType.Infirmary)
+                && IsBuildingUnlocked(BuildingType.Infirmary)
                 && resources.CanAfford(GetInfirmaryCost());
         }
 
@@ -63,7 +29,7 @@ namespace Labyrinth.Core
                 status += $", {baseDevelopment.LastBuildMessage}";
             }
 
-            return status;
+            return AppendBuildingUnlockStatus(BuildingType.Infirmary, status);
         }
     }
 }

@@ -13,22 +13,17 @@ namespace Labyrinth.Core
                 return;
             }
 
-            while (baseDevelopment.PeasantHutCount < baseDevelopment.RequiredPeasantHutCount)
+            while (baseDevelopment.PeasantHutCount + GetPendingBuildingCount(BuildingType.PeasantHut) < baseDevelopment.RequiredPeasantHutCount)
             {
-                if (!baseDevelopment.TryBuildPeasantHut(currentMaze, out var hutPosition))
+                if (!TryStartBaseBuildingConstruction(BuildingType.PeasantHut, new BuildingCost(0, 0), "Peasant hut", out var hutPosition))
                 {
-                    GameDebugLog.Warning("Base", $"Peasant hut build skipped: {baseDevelopment.LastBuildMessage}");
+                    GameDebugLog.Warning("Base", $"Peasant hut construction skipped: {baseDevelopment.LastBuildMessage}");
                     return;
                 }
 
-                ClearTerrainDecorationsAround(hutPosition, BaseDevelopment.PeasantHutFootprintRadiusCells);
-                var view = PeasantHutRenderer.Render(mazeRenderer, hutPosition);
-                taxCollectorController.RegisterHut(hutPosition, view);
-                baseAmbience.RegisterBuilding(BuildingType.PeasantHut, hutPosition);
-                cityAmbience.RegisterBuilding(BuildingType.PeasantHut, hutPosition);
                 GameDebugLog.Info(
                     "Base",
-                    $"Peasant hut created at {GameDebugLog.Position(hutPosition)}. activeBuildings={baseDevelopment.ActivePlayerBuildingCount}, huts={baseDevelopment.PeasantHutCount}/{baseDevelopment.RequiredPeasantHutCount}.");
+                    $"Peasant hut construction queued at {GameDebugLog.Position(hutPosition)}. activeBuildings={baseDevelopment.ActivePlayerBuildingCount}, huts={baseDevelopment.PeasantHutCount}, pending={GetPendingBuildingCount(BuildingType.PeasantHut)}/{baseDevelopment.RequiredPeasantHutCount}.");
             }
 
             RefreshSelectedHeroVisibility();

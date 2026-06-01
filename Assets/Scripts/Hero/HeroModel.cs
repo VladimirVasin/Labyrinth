@@ -12,8 +12,8 @@ namespace Labyrinth.Hero
         public const int DefaultBaseArmorPoints = 0;
         public const int StaminaPerLevel = 1;
         public const int HitPointsPerLevel = 1;
-        public const int FirstLevelExperienceCost = 15;
-        public const int ExperienceCostGrowthPerLevel = 5;
+        public const int FirstLevelExperienceCost = 20;
+        public const int ExperienceCostGrowthPerLevel = 12;
         public const int ExperiencePerNewCell = 1;
         public const int GoldPerCommonMapCell = 1;
         public const int PilgrimLightSightBonus = 2;
@@ -531,10 +531,12 @@ namespace Labyrinth.Hero
             while (Experience >= ExperienceForNextLevel)
             {
                 Level++;
-                MaxStamina += StaminaPerLevel;
-                Stamina += StaminaPerLevel;
-                MaxHitPoints += HitPointsPerLevel;
-                HitPoints += HitPointsPerLevel;
+                var staminaGain = GetStaminaGainForLevel(Level);
+                var hitPointGain = GetHitPointGainForLevel(Level);
+                MaxStamina += staminaGain;
+                Stamina += staminaGain;
+                MaxHitPoints += hitPointGain;
+                HitPoints += hitPointGain;
                 gainedLevels++;
             }
 
@@ -548,7 +550,7 @@ namespace Labyrinth.Hero
 
         public int RewardNewCellExploration(out HeroVengeanceProgressResult vengeanceProgress)
         {
-            var gainedLevels = AddExperience(ExperiencePerNewCell);
+            var gainedLevels = AddExperience(GetNewCellExperienceReward());
             vengeanceProgress = HeroVengeanceProgressResult.None;
             return gainedLevels;
         }
@@ -611,6 +613,37 @@ namespace Labyrinth.Hero
                 * (FirstLevelExperienceCost * 2L + (long)(previousLevel - 1) * ExperienceCostGrowthPerLevel)
                 / 2;
             return required > int.MaxValue ? int.MaxValue : (int)required;
+        }
+
+        private int GetNewCellExperienceReward()
+        {
+            var remembered = Memory != null ? Memory.RememberedCount : 0;
+            if (remembered <= 80)
+            {
+                return ExperiencePerNewCell;
+            }
+
+            if (remembered <= 220)
+            {
+                return remembered % 2 == 0 ? ExperiencePerNewCell : 0;
+            }
+
+            if (remembered <= 500)
+            {
+                return remembered % 4 == 0 ? ExperiencePerNewCell : 0;
+            }
+
+            return remembered % 8 == 0 ? ExperiencePerNewCell : 0;
+        }
+
+        private static int GetStaminaGainForLevel(int level)
+        {
+            return level % 2 == 1 ? StaminaPerLevel : 0;
+        }
+
+        private static int GetHitPointGainForLevel(int level)
+        {
+            return level % 2 == 0 ? HitPointsPerLevel : 0;
         }
 
         private static HeroBaseStats BuildBaseStats(int statSeed)

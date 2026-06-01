@@ -307,6 +307,61 @@ namespace Labyrinth.Core
                     return;
                 }
             }
+
+            if (TryAssignFallbackWalkerStep(walker, walkerIndex))
+            {
+                return;
+            }
+
+            TryRelocateWalker(walker, walkerIndex);
+        }
+
+        private bool TryAssignFallbackWalkerStep(CityWalker walker, int walkerIndex)
+        {
+            var seed = Hash(walker.CurrentCell + new Vector2Int(walkerIndex * 29, Mathf.RoundToInt(Time.time * 7f)));
+            for (var offset = 0; offset < CardinalDirections.Length; offset++)
+            {
+                var direction = CardinalDirections[(seed + offset) % CardinalDirections.Length];
+                var target = walker.CurrentCell + direction;
+                if (!IsSafeWalkerCell(target))
+                {
+                    continue;
+                }
+
+                var path = new List<Vector2Int>
+                {
+                    walker.CurrentCell,
+                    target
+                };
+                walker.SetPath(BuildWorldPathNodes(path, walkerIndex ^ 0x70d1));
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryRelocateWalker(CityWalker walker, int walkerIndex)
+        {
+            if (walkerAnchors.Count == 0)
+            {
+                return false;
+            }
+
+            var seed = Hash(walker.CurrentCell + new Vector2Int(walkerIndex * 31, walkerAnchors.Count * 13));
+            for (var offset = 0; offset < walkerAnchors.Count; offset++)
+            {
+                var anchor = walkerAnchors[(seed + offset) % walkerAnchors.Count].Position;
+                if (!IsSafeWalkerCell(anchor) || (anchor == walker.CurrentCell && walkerAnchors.Count > 1))
+                {
+                    continue;
+                }
+
+                walker.Relocate(anchor, ToWorld(anchor));
+                return true;
+            }
+
+            walker.ClearPath();
+            return false;
         }
 
         private void BuildWalkerModel(Transform parent, CityWalkerRole role)
@@ -834,6 +889,25 @@ namespace Labyrinth.Core
                 }
 
                 hasTarget = TryAdvanceTarget();
+            }
+
+            public void Relocate(Vector2Int cell, Vector3 worldPosition)
+            {
+                ClearPath();
+                CurrentCell = cell;
+                targetCell = cell;
+                targetWorld = worldPosition;
+                if (root != null)
+                {
+                    root.position = worldPosition;
+                }
+            }
+
+            public void ClearPath()
+            {
+                targetCells.Clear();
+                targetWorlds.Clear();
+                hasTarget = false;
             }
 
             private bool TryAdvanceTarget()

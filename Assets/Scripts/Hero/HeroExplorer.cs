@@ -26,6 +26,8 @@ namespace Labyrinth.Hero
         private readonly HeroDeathTokenManager deathTokenManager;
         private readonly HeroModel model;
         private readonly Vector2Int entrancePosition;
+        private readonly Dictionary<Vector2Int, int> distancesFromEntrance;
+        private readonly int maxDistanceFromEntrance;
         private readonly int heroNumber;
         private readonly Action<HeroModel, int> entranceKnowledgeSync;
         private readonly Action<HeroModel, int, DungeonStairsModel> downStairsOpened;
@@ -58,6 +60,8 @@ namespace Labyrinth.Hero
             this.deathTokenManager = deathTokenManager;
             this.model = model;
             this.entrancePosition = entrancePosition;
+            distancesFromEntrance = MazeValidation.GetReachableDistances(grid, entrancePosition, true);
+            maxDistanceFromEntrance = CalculateMaxEntranceDistance(distancesFromEntrance);
             this.heroNumber = heroNumber;
             this.entranceKnowledgeSync = entranceKnowledgeSync;
             this.downStairsOpened = downStairsOpened;

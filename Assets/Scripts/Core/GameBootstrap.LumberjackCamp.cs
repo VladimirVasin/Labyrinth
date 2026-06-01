@@ -7,48 +7,14 @@ namespace Labyrinth.Core
     {
         private void BuildLumberjackCampFromBase()
         {
-            if (currentMaze == null)
-            {
-                return;
-            }
-
-            var cost = GetLumberjackCampCost();
-            if (!resources.CanAfford(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"лагерь лесорубов: нужно {cost.Format()}");
-                GameDebugLog.Warning(
-                    "Base",
-                    $"Lumberjack camp build blocked: gold={resources.Gold}, wood={resources.Wood}, required={cost.Format()}");
-                return;
-            }
-
-            if (!baseDevelopment.TryBuildLumberjackCamp(currentMaze, out var campPosition))
-            {
-                var blockMessage = baseDevelopment.LastBuildMessage;
-                baseDevelopment.ReportBuildBlocked($"лагерь лесорубов: {blockMessage}");
-                GameDebugLog.Warning("Base", $"Lumberjack camp build blocked: {blockMessage}");
-                return;
-            }
-
-            if (resources.TrySpend(cost))
-            {
-                ClearTerrainDecorationsAround(campPosition, BaseDevelopment.LumberjackCampFootprintRadiusCells);
-                LumberjackCampRenderer.Render(mazeRenderer, campPosition);
-                RefreshAllBuildingUpgradeVisuals();
-                baseAmbience.RegisterBuilding(BuildingType.LumberjackCamp, campPosition);
-                cityAmbience.RegisterBuilding(BuildingType.LumberjackCamp, campPosition);
-                SyncPeasantHuts();
-                RefreshSelectedHeroVisibility();
-                GameAudioController.Play(GameSfx.Build, mazeRenderer.GridToWorld(campPosition));
-                GameDebugLog.Info(
-                    "Base",
-                    $"Lumberjack camp built at {GameDebugLog.Position(campPosition)}. buildCost={cost.Format()}, goldLeft={resources.Gold}, woodLeft={resources.Wood}.");
-            }
+            TryStartBaseBuildingConstruction(BuildingType.LumberjackCamp, GetLumberjackCampCost(), "Lumberjack camp", out _);
         }
 
         private bool CanBuildLumberjackCamp()
         {
-            return currentMaze != null && resources.CanAfford(GetLumberjackCampCost());
+            return currentMaze != null
+                && IsBuildingUnlocked(BuildingType.LumberjackCamp)
+                && resources.CanAfford(GetLumberjackCampCost());
         }
 
         private string GetLumberjackCampStatus()
@@ -60,7 +26,7 @@ namespace Labyrinth.Core
                 status += $", {baseDevelopment.LastBuildMessage}";
             }
 
-            return status;
+            return AppendBuildingUnlockStatus(BuildingType.LumberjackCamp, status);
         }
     }
 }

@@ -2,6 +2,7 @@ namespace Labyrinth.Hero
 {
     public enum HeroState
     {
+        GoingToEntrance,
         Exploring,
         SearchingKey,
         ReturningToDoor,

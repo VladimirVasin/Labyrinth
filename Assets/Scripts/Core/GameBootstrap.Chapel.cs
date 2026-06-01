@@ -8,49 +8,15 @@ namespace Labyrinth.Core
     {
         private void BuildChapelFromBase()
         {
-            if (currentMaze == null)
-            {
-                return;
-            }
-
-            var cost = GetChapelCost();
-            if (!resources.CanAfford(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"часовня: нужно {cost.Format()}");
-                GameDebugLog.Warning("Base", $"Chapel build blocked: gold={resources.Gold}, wood={resources.Wood}, required={cost.Format()}");
-                return;
-            }
-
-            if (!baseDevelopment.TryBuildChapel(currentMaze, out var chapelPosition))
-            {
-                var blockMessage = baseDevelopment.LastBuildMessage;
-                baseDevelopment.ReportBuildBlocked($"часовня: {blockMessage}");
-                GameDebugLog.Warning("Base", $"Chapel build blocked: {blockMessage}");
-                return;
-            }
-
-            if (!resources.TrySpend(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"часовня: нужно {cost.Format()}");
-                return;
-            }
-
-            ClearTerrainDecorationsAround(chapelPosition, BaseDevelopment.ChapelFootprintRadiusCells);
-            ChapelRenderer.Render(mazeRenderer, chapelPosition);
-            baseAmbience.RegisterBuilding(BuildingType.Chapel, chapelPosition);
-            cityAmbience.RegisterBuilding(BuildingType.Chapel, chapelPosition);
-            SyncPeasantHuts();
-            RefreshSelectedHeroVisibility();
-            GameAudioController.Play(GameSfx.Build, mazeRenderer.GridToWorld(chapelPosition));
-            GameDebugLog.Info(
-                "Base",
-                $"Chapel built at {GameDebugLog.Position(chapelPosition)}. buildCost={cost.Format()}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, blessingPrices={BuildBlessingPriceSummary()}.");
+            TryStartBaseBuildingConstruction(BuildingType.Chapel, GetChapelCost(), "Chapel", out _);
         }
 
         private bool CanBuildChapel()
         {
             return currentMaze != null
                 && !baseDevelopment.HasChapel
+                && !HasPendingBuilding(BuildingType.Chapel)
+                && IsBuildingUnlocked(BuildingType.Chapel)
                 && resources.CanAfford(GetChapelCost());
         }
 
@@ -64,7 +30,7 @@ namespace Labyrinth.Core
                 status += $", {baseDevelopment.LastBuildMessage}";
             }
 
-            return status;
+            return AppendBuildingUnlockStatus(BuildingType.Chapel, status);
         }
 
         private static string BuildBlessingPriceSummary()

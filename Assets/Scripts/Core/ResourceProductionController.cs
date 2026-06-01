@@ -83,16 +83,17 @@ namespace Labyrinth.Core
             foreach (var farmPosition in baseDevelopment.FarmPositions)
             {
                 var currentAmount = GetStoredFood(farmPosition);
-                var capacity = baseDevelopment.FarmBatchCapacity;
-                if (currentAmount >= capacity)
+                var batchCapacity = baseDevelopment.FarmBatchCapacity;
+                var storageCapacity = baseDevelopment.FarmStorageCapacity;
+                if (currentAmount >= storageCapacity)
                 {
                     TryDispatchFarmCart(farmPosition);
                     continue;
                 }
 
-                storedFood[farmPosition] = Mathf.Min(capacity, currentAmount + baseDevelopment.FarmUnitsPerTick);
+                storedFood[farmPosition] = Mathf.Min(storageCapacity, currentAmount + baseDevelopment.FarmUnitsPerTick);
 
-                if (storedFood[farmPosition] >= capacity)
+                if (storedFood[farmPosition] >= batchCapacity)
                 {
                     TryDispatchFarmCart(farmPosition);
                 }
@@ -115,16 +116,17 @@ namespace Labyrinth.Core
             foreach (var campPosition in baseDevelopment.LumberjackCampPositions)
             {
                 var currentAmount = GetStoredWood(campPosition);
-                var capacity = baseDevelopment.LumberjackBatchCapacity;
-                if (currentAmount >= capacity)
+                var batchCapacity = baseDevelopment.LumberjackBatchCapacity;
+                var storageCapacity = baseDevelopment.LumberjackStorageCapacity;
+                if (currentAmount >= storageCapacity)
                 {
                     TryDispatchLumberCart(campPosition);
                     continue;
                 }
 
-                storedWood[campPosition] = Mathf.Min(capacity, currentAmount + baseDevelopment.LumberjackUnitsPerTick);
+                storedWood[campPosition] = Mathf.Min(storageCapacity, currentAmount + baseDevelopment.LumberjackUnitsPerTick);
 
-                if (storedWood[campPosition] >= capacity)
+                if (storedWood[campPosition] >= batchCapacity)
                 {
                     TryDispatchLumberCart(campPosition);
                 }
@@ -155,10 +157,10 @@ namespace Labyrinth.Core
                 return false;
             }
 
-            storedFood[farmPosition] = 0;
+            storedFood[farmPosition] = Mathf.Max(0, GetStoredFood(farmPosition) - capacity);
             GameDebugLog.Info(
                 "Base",
-                $"Farm storage dispatched: farm={GameDebugLog.Position(farmPosition)}, food={capacity}, farmLevel={baseDevelopment.FarmLevel}.");
+                $"Farm storage dispatched: farm={GameDebugLog.Position(farmPosition)}, food={capacity}, storedLeft={GetStoredFood(farmPosition)}, farmLevel={baseDevelopment.FarmLevel}.");
             return true;
         }
 
@@ -170,15 +172,15 @@ namespace Labyrinth.Core
                 return false;
             }
 
-            if (!baseAmbience.TrySendFarmCart(campPosition, capacity))
+            if (!baseAmbience.TrySendLumberCart(campPosition, capacity))
             {
                 return false;
             }
 
-            storedWood[campPosition] = 0;
+            storedWood[campPosition] = Mathf.Max(0, GetStoredWood(campPosition) - capacity);
             GameDebugLog.Info(
                 "Base",
-                $"Lumber camp storage dispatched: camp={GameDebugLog.Position(campPosition)}, wood={capacity}, lumberLevel={baseDevelopment.LumberjackCampLevel}.");
+                $"Lumber camp storage dispatched: camp={GameDebugLog.Position(campPosition)}, wood={capacity}, storedLeft={GetStoredWood(campPosition)}, lumberLevel={baseDevelopment.LumberjackCampLevel}.");
             return true;
         }
 

@@ -1008,10 +1008,11 @@ MVP считается готовым, если выполнены все пун
 - в HUD базы есть кнопка постройки часовни в разделе героев;
 - строительные цены используют ресурсы базы: ферма `25 зол., 5 дер.`, первый лагерь лесорубов `25 зол.`, следующие лагеря лесорубов `25 зол., 10 дер.`, дом героя `25 зол., 10 пищи`, лавка алхимика `50 зол., 15 дер.`, харчевня `40 зол., 20 дер.`, кузница `60 зол., 25 дер.`, лазарет `45 зол., 15 дер.`, Дом картографа `50 зол., 15 дер.`, часовня `55 зол., 20 дер.`, Гильдия шахтёров `60 зол., 25 дер.`;
 - кнопки строительства в HUD базы блокируются, если не хватает нужных ресурсов;
+- при заказе здания сразу резервируется стройплощадка с подписью; сначала строится дорога к площадке, затем из замка выходит один строитель и завершает постепенную визуальную стройку, а до завершения здание не функционирует;
 - после постройки `Гильдии шахтёров` в HUD замка появляется режим выбора шахты: игрок выбирает изученную малую пещеру с рудной залежью, а рабочие автоматически укрепляют маршрут от входа до выбранной пещеры;
 - шахтёры выходят из гильдии по очереди, максимум `5` активных рабочих одновременно, и до замка идут строго по уже достроенной дороге от гильдии;
 - дерево списывается только в замке: рабочий берет `1 дерево` на текущую клетку укрепления, идет по дороге к входу, дальше по лабиринту проходит только через уже укрепленные клетки маршрута и текущую проходимую клетку;
-- перед постройкой самой шахты рабочие укрепляют не только коридор до центра выбранной минипещеры, но и все `9` проходимых клеток ее footprint `3 x 3`, после чего возвращаются к центру для финального строительства;
+- перед постройкой самой шахты рабочие больше не укрепляют footprint минипещеры `3 x 3`: после укрепления коридора они приносят дерево к центру пещеры, а там постепенно возводится визуальная модель шахты;
 - после укрепления клетки шахтёр возвращается в замок тем же валидным маршрутом и может получить следующую задачу; прямые телепорт-прыжки через стены, неукреплённые клетки или неизвестные зоны запрещены;
 - укрепление одной клетки маршрута стоит `1 дерево`; факел ставится не на каждой клетке, а только на укрепленной клетке у стены, если эта клетка еще не покрыта зоной света существующих факелов;
 - при укреплении проходимая клетка пола получает деревянную текстуру укрепленного настила, а соседние клетки стен получают деревянную текстуру усиленной стены;
@@ -1108,7 +1109,7 @@ MVP считается готовым, если выполнены все пун
 - текущая скорость времени отображается в правом верхнем углу;
 - после разблокировки нижнего уровня игрок может переключаться между доступными уровнями через отдельный HUD;
 - внутриигровая музыка заметно тише SFX, а SFX отличаются по типам игровых событий и HUD-действий;
-- `Escape` открывает/закрывает меню паузы, а новая генерация запускается кнопкой старта внутри этого меню;
+- `Escape` открывает/закрывает меню паузы, а новая генерация запускается видимой кнопкой `Начать экспедицию` внутри этого меню;
 - камера показывает сгенерированную карту без ручной настройки;
 - физический terrain создается вместе с картой, выглядит как земля вне лабиринта, остается видимым в режиме `F2` и не раскрывает скрытые клетки благодаря черной подложке под сеткой лабиринта;
 - клик по базе открывает HUD базы;
@@ -1208,10 +1209,24 @@ Runtime должен писать диагностические сообщен�
 - HUD замка показывает здания и кнопку `Создать героя`, но не показывает список героев.
 - Начальные позиции мобов должны распределяться по лабиринту равномерно: каждый следующий моб выбирается как максимально удаленный от уже выбранных позиций и босса, с мягкой минимальной дистанцией между стартовыми позициями.
 - Вкладка подземелья в HUD замка содержит `Гильдию шахтёров` и, после её постройки, действие `Шахта`: игрок выбирает изученную малую пещеру с железной или золотой залежью, система ставит стройзону, рабочие укрепляют маршрут от входа по `1 дерево` за клетку, затем шахтёр строит шахту за `10 дерева`.
-- Шахтёры визуально выходят из `Гильдии шахтёров` по одному, до `5` активных одновременно, идут к замку только по завершённой дороге, берут дерево в замке, заходят в лабиринт через вход и двигаются только по укреплённому коридору до текущей клетки строительства; перед постройкой шахты они укрепляют все клетки минипещеры `3 x 3` и после работы возвращаются в замок за следующим деревом. Укреплённые клетки всегда дают свет в режиме F2, факелы ставятся с учётом радиуса света и открывают MicroHUD стройзоны/шахты.
+- Шахтёры визуально выходят из `Гильдии шахтёров` по одному, до `5` активных одновременно, идут к замку только по завершённой дороге, берут дерево в замке, заходят в лабиринт через вход и двигаются только по укреплённому коридору до текущей клетки строительства; перед постройкой шахты они больше не обходят все клетки минипещеры `3 x 3`, а приносят материалы к центру пещеры, где постепенно возводится шахта. Укреплённые клетки всегда дают свет в режиме F2, факелы ставятся с учётом радиуса света и открывают MicroHUD стройзоны/шахты.
 - Построенная шахта улучшается через свой MicroHUD: уровень `2` стоит `75 зол., 25 дер., 20 жел.` и повышает размер партии до `15`, уровень `3` стоит `130 зол., 45 дер., 45 жел.` и ускоряет добычу до `+2` ресурса за тик.
 ## Cartographer Map Display
 
 - After the Cartographer House is built, cells stored in the current level's common cartographer memory are shown through the minimap/expanded `M` map and explored-cell fog logic.
 - The common cartographer memory no longer renders a separate world-space overlay above the labyrinth.
 - Live mobs, items, resources, and dungeon objects remain hidden outside current lighting/visibility.
+
+## 2026-06-01 Construction And Mine Runtime Notes
+
+- Base building orders immediately reserve and render a labeled pending construction site. The final building is non-functional; its road is queued first, and the castle builder is dispatched only after that road connection completes.
+- Base HUD build actions show `Строится` and stay disabled while their building type has a pending construction site.
+- Each pending base building has its own visible builder and staged foundation/scaffold/plank progress after the road is ready. On completion the normal building renderer, ambience registration, HUD target, and resource production/service behavior are activated.
+- Base roads are no longer timer-only visuals: each road connection spawns a visible road worker at the castle-side end of the route, walks to the next path cell, builds that segment, then advances cell by cell toward the destination until the road is complete.
+- Road bridges over rivers are created only when the road worker completes the relevant road segment, so rivers remain blocked for walkers until the bridge cell is actually built.
+- Hero creation now builds a pending HeroHouse first. After that house construction completes, the knight appears at the house in `GoingToEntrance`, waits for completed house-to-castle and castle-to-entrance roads, walks to the labyrinth entrance, and only then starts normal dungeon exploration.
+- Mine routes end at the selected cave center. Miners no longer reinforce every cell of the 3 x 3 cave footprint before final mine construction.
+- Final mine construction is a resource shuttle to the cave center: miners carry one wood per trip, update a staged mine-site visual, and complete the mine after the required wood is delivered.
+- Mine carts depart from the cave center and follow the fortified route directly back to the entrance/castle road, without touring internal cave footprint cells.
+- Farm/lumber and mine carts deliver their payload at the castle, hide cargo, then return along the same route before the building can send another active cart.
+- Mine workers, mine carts, active mine sites, and completed mines have small warm point lights. Completed mines also register their cave centers as dungeon light origins for F2/lighting visibility. Mine torch/source lighting is stronger than knight lantern lighting but keeps per-torch flicker for uneven highlights.

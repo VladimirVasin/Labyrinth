@@ -140,6 +140,8 @@ namespace Labyrinth.Hero
 
         public bool CanAddReturnStone => !HasReturnStone && IsSlotEmpty(HeroInventorySlotType.Artifact);
 
+        public bool HasEmptyCarrySlot => IsSlotEmpty(HeroInventorySlotType.Empty);
+
         public int AttackBonus => GetEquipmentBonus(HeroInventorySlotType.Weapon, true);
 
         public int ArmorBonus => GetEquipmentBonus(HeroInventorySlotType.Armor, false);

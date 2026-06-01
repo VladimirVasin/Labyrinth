@@ -60,6 +60,7 @@ namespace Labyrinth.Core
             SkipAlreadyFortifiedRouteCells(zone);
             if (zone.RouteIndex >= zone.Route.Count)
             {
+                zone.AssignedRouteCells.Clear();
                 zone.State = MineZoneState.BuildingMine;
                 lastStatus = "маршрут укреплён, шахта ждёт строительство";
                 GameDebugLog.Info("Mine", $"Mine route completed. cave={GameDebugLog.Position(zone.Cave.Center)}, routeLength={zone.Route.Count}.");
@@ -78,9 +79,17 @@ namespace Labyrinth.Core
             }
 
             TrySpawnMineWorker(zone);
-            if (!HasActiveMineBuildWorker(zone))
+            var assigned = 0;
+            while (TryAssignWaitingWorkerToMine(zone))
             {
-                TryAssignWaitingWorkerToMine(zone);
+                assigned++;
+            }
+
+            if (assigned > 0)
+            {
+                GameDebugLog.Info(
+                    "Mine",
+                    $"Mine build assignment pass: assigned={assigned}, deliveredWood={zone.MineBuildDeliveredWood}/{MineWoodCost}, activeBuildWorkers={CountActiveMineBuildWorkers(zone)}.");
             }
         }
 
@@ -98,11 +107,33 @@ namespace Labyrinth.Core
             var zone = worker.Zone;
             if (worker.BuildsMine)
             {
+                zone.MineBuildDeliveredWood = Mathf.Min(MineWoodCost, zone.MineBuildDeliveredWood + RouteWoodCost);
+                constructionRenderer.RenderMineBuildProgress(
+                    zone.Cave,
+                    zone.OreType,
+                    Mathf.Clamp01(zone.MineBuildDeliveredWood / (float)MineWoodCost));
                 GameDebugLog.Info(
                     "Mine",
-                    $"Mine worker #{worker.Id} finished mine build: cave={GameDebugLog.Position(zone.Cave.Center)}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, buildSeconds={FormatSeconds(worker.BuildSeconds)}.");
-                CompleteMine(zone);
-                DismissWorkersForZone(zone);
+                    $"Mine worker #{worker.Id} delivered mine materials: cave={GameDebugLog.Position(zone.Cave.Center)}, deliveredWood={zone.MineBuildDeliveredWood}/{MineWoodCost}, position={FormatWorldPosition(worker.CurrentWorldPosition)}, buildSeconds={FormatSeconds(worker.BuildSeconds)}.");
+                if (zone.MineBuildDeliveredWood >= MineWoodCost)
+                {
+                    CompleteMine(zone);
+                    DismissWorkersForZone(zone);
+                    return;
+                }
+
+                if (TryBuildRouteTargetToCastleWorldPath(zone.Route, worker.TargetIndex, out var mineReturnPath))
+                {
+                    worker.ReturnToCastle(mineReturnPath);
+                    constructionRenderer.SetWorkerCarryingWood(worker.Root, false);
+                    return;
+                }
+
+                GameDebugLog.Warning(
+                    "Mine",
+                    $"Mine worker #{worker.Id} removed after mine material delivery: no valid return path, cave={GameDebugLog.Position(zone.Cave.Center)}.");
+                constructionRenderer.DestroyWorker(worker.Root);
+                activeWorkers.RemoveAt(workerIndex);
                 return;
             }
 
@@ -242,30 +273,37 @@ namespace Labyrinth.Core
                 return false;
             }
 
+            if (CountFortifiedRouteCells(zone) < zone.Route.Count)
+            {
+                zone.State = MineZoneState.BuildingRoute;
+                lastStatus = "сначала нужно укрепить маршрут шахты";
+                return false;
+            }
+
+            if (zone.MineBuildDeliveredWood + CountActiveMineBuildWorkers(zone) * RouteWoodCost >= MineWoodCost)
+            {
+                return false;
+            }
+
             if (!TryBuildCastleToMineWorldPath(zone.Route, out var path))
             {
                 lastStatus = "шахта ждёт укреплённый маршрут";
                 return false;
             }
 
-            if (!zone.MineBuildPaid)
+            if (!resources.TrySpendWood(RouteWoodCost))
             {
-                if (!resources.TrySpendWood(MineWoodCost))
-                {
-                    lastStatus = $"нужно {MineWoodCost} дерева на шахту";
-                    return false;
-                }
-
-                zone.MineBuildPaid = true;
+                lastStatus = $"нужно {RouteWoodCost} дерева для материалов шахты";
+                return false;
             }
 
             var targetIndex = Mathf.Max(0, zone.Route.Count - 1);
-            worker.AssignTarget(zone, zone.Cave.Center, targetIndex, path, MineBuildSeconds, true);
+            worker.AssignTarget(zone, zone.Cave.Center, targetIndex, path, Mathf.Max(0.65f, MineBuildSeconds / MineWoodCost), true);
             constructionRenderer.SetWorkerCarryingWood(worker.Root, true);
             lastStatus = $"шахтёр несёт материалы к шахте {GameDebugLog.Position(zone.Cave.Center)}";
             GameDebugLog.Info(
                 "Mine",
-                $"Mine worker #{worker.Id} assigned mine build: cave={GameDebugLog.Position(zone.Cave.Center)}, from={FormatWorldPosition(worker.CurrentWorldPosition)}, destination={FormatWorldPosition(worker.DestinationWorld)}, pathWaypoints={worker.PathLength}, costWood={MineWoodCost}, woodLeft={resources.Wood}.");
+                $"Mine worker #{worker.Id} assigned mine material trip: cave={GameDebugLog.Position(zone.Cave.Center)}, from={FormatWorldPosition(worker.CurrentWorldPosition)}, destination={FormatWorldPosition(worker.DestinationWorld)}, pathWaypoints={worker.PathLength}, deliveredWood={zone.MineBuildDeliveredWood}/{MineWoodCost}, woodLeft={resources.Wood}.");
             return true;
         }
 
@@ -329,15 +367,21 @@ namespace Labyrinth.Core
 
         private bool HasActiveMineBuildWorker(MineZone zone)
         {
+            return CountActiveMineBuildWorkers(zone) > 0;
+        }
+
+        private int CountActiveMineBuildWorkers(MineZone zone)
+        {
+            var count = 0;
             for (var i = 0; i < activeWorkers.Count; i++)
             {
                 if (activeWorkers[i] != null && activeWorkers[i].Zone == zone && activeWorkers[i].IsWorkingOnMine)
                 {
-                    return true;
+                    count++;
                 }
             }
 
-            return false;
+            return count;
         }
 
         private void DismissWorkersForZone(MineZone zone)
@@ -360,6 +404,12 @@ namespace Labyrinth.Core
         private void TraceMineWorkers()
         {
             if (activeWorkers.Count == 0)
+            {
+                workerTraceTimer = 0f;
+                return;
+            }
+
+            if (!GameDebugLog.VerboseTrace)
             {
                 workerTraceTimer = 0f;
                 return;

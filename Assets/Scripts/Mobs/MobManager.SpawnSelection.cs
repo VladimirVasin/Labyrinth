@@ -44,9 +44,13 @@ namespace Labyrinth.Mobs
                 species[FindClosestToEntranceIndex(spawnPositions, distancesFromEntrance)] = MobSpecies.Goblin;
             }
 
-            if (!useOpeningSpawnRules && species.Count >= 8 && !species.Contains(MobSpecies.Orc))
+            if (!useOpeningSpawnRules && species.Count >= 10 && !species.Contains(MobSpecies.Orc))
             {
-                species[FindFarthestFromEntranceIndex(spawnPositions, distancesFromEntrance)] = MobSpecies.Orc;
+                var farthestIndex = FindFarthestFromEntranceIndex(spawnPositions, distancesFromEntrance);
+                if (IsDeepEnoughForInitialOrc(spawnPositions[farthestIndex], distancesFromEntrance, maxDistanceFromEntrance, 0.62f))
+                {
+                    species[farthestIndex] = MobSpecies.Orc;
+                }
             }
 
             return species;
@@ -67,19 +71,19 @@ namespace Labyrinth.Mobs
             var distanceRatio = distance / (float)maxDistanceFromEntrance;
             if (useOpeningSpawnRules)
             {
-                if (distanceRatio <= 0.72f)
+                if (distanceRatio <= 0.82f)
                 {
                     return MobSpecies.Goblin;
                 }
 
-                return random.NextDouble() < 0.82 ? MobSpecies.Goblin : MobSpecies.Orc;
+                return random.NextDouble() < 0.94 ? MobSpecies.Goblin : MobSpecies.Orc;
             }
 
-            var goblinChance = distanceRatio <= 0.4f
-                ? 0.92
-                : distanceRatio <= 0.7f
-                    ? 0.68
-                    : 0.35;
+            var goblinChance = distanceRatio <= 0.55f
+                ? 0.96
+                : distanceRatio <= 0.78f
+                    ? 0.84
+                    : 0.58;
             return random.NextDouble() < goblinChance ? MobSpecies.Goblin : MobSpecies.Orc;
         }
 
@@ -123,17 +127,60 @@ namespace Labyrinth.Mobs
             switch (stage)
             {
                 case MobThreatStage.Early:
-                    return new RespawnWeights(78, 19, 3);
+                    return new RespawnWeights(85, 14, 1);
                 case MobThreatStage.RatFade:
-                    return new RespawnWeights(68, 25, 7);
+                    return new RespawnWeights(74, 23, 3);
                 case MobThreatStage.GoblinCore:
-                    return new RespawnWeights(58, 32, 10);
+                    return new RespawnWeights(62, 32, 6);
                 case MobThreatStage.OrcRise:
-                    return new RespawnWeights(48, 36, 16);
+                    return new RespawnWeights(50, 39, 11);
                 case MobThreatStage.OrcDominant:
                 default:
-                    return new RespawnWeights(42, 34, 24);
+                    return new RespawnWeights(42, 42, 16);
             }
+        }
+
+        private int CalculateEffectiveRegularMobTarget(IReadOnlyList<HeroController> activeHeroes)
+        {
+            if (regularMobTargetCount <= MinimumRegularMobCount)
+            {
+                return regularMobTargetCount;
+            }
+
+            if (activeHeroes == null || activeHeroes.Count == 0)
+            {
+                return Mathf.Min(regularMobTargetCount, MinimumRegularMobCount + 2);
+            }
+
+            var aliveCount = 0;
+            var highestLevel = 1;
+            var highestMemory = 0;
+            for (var i = 0; i < activeHeroes.Count; i++)
+            {
+                var hero = activeHeroes[i];
+                if (hero == null || hero.Model == null || !hero.Model.IsAlive)
+                {
+                    continue;
+                }
+
+                aliveCount++;
+                highestLevel = Mathf.Max(highestLevel, hero.Model.Level);
+                highestMemory = Mathf.Max(highestMemory, hero.Model.Memory.RememberedCount);
+            }
+
+            if (aliveCount <= 0)
+            {
+                return Mathf.Min(regularMobTargetCount, MinimumRegularMobCount + 2);
+            }
+
+            var knownCellBudget = distancesFromEntrance != null && distancesFromEntrance.Count > 0
+                ? distancesFromEntrance.Count
+                : Mathf.Max(highestMemory, 1);
+            var explorationRatio = Mathf.Clamp01(highestMemory / (float)Mathf.Max(1, knownCellBudget));
+            var progressTarget = MinimumRegularMobCount
+                + Mathf.RoundToInt((regularMobTargetCount - MinimumRegularMobCount) * Mathf.Clamp01(0.18f + explorationRatio * 0.82f));
+            var heroTarget = MinimumRegularMobCount + aliveCount + highestLevel * 2;
+            return Mathf.Clamp(Mathf.Max(progressTarget, heroTarget), MinimumRegularMobCount, regularMobTargetCount);
         }
 
         private static MobThreatStage CalculateThreatStage(IReadOnlyList<HeroController> activeHeroes)
@@ -194,6 +241,22 @@ namespace Labyrinth.Mobs
             return result.CentralRoom.IsValid
                 ? position.x < result.CentralRoom.Min.x && !result.CentralRoom.Contains(position)
                 : IsInEntranceHalf(result, position);
+        }
+
+        private static bool IsDeepEnoughForInitialOrc(
+            Vector2Int position,
+            Dictionary<Vector2Int, int> distancesFromEntrance,
+            int maxDistanceFromEntrance,
+            float threshold)
+        {
+            if (maxDistanceFromEntrance <= 0
+                || distancesFromEntrance == null
+                || !distancesFromEntrance.TryGetValue(position, out var distance))
+            {
+                return false;
+            }
+
+            return distance / (float)maxDistanceFromEntrance >= threshold;
         }
 
         private static bool IsInEntranceHalf(MazeGenerationResult result, Vector2Int position)

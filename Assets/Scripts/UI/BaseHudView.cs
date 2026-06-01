@@ -1,4 +1,5 @@
 using System;
+using Labyrinth.Base;
 using Labyrinth.Core;
 using Labyrinth.Maze;
 using UnityEngine;
@@ -67,6 +68,8 @@ namespace Labyrinth.UI
         private Func<BuildingUpgradeType, string> upgradeStatusProvider;
         private Func<BuildingUpgradeType, bool> canUpgradeProvider;
         private Func<BuildingUpgradeType, BuildingCost> upgradeCostProvider;
+        private Func<BuildingType, bool> buildingUnlockedProvider;
+        private Func<BuildingType, bool> pendingBuildingProvider;
         private readonly GuiHudTransition transition = new GuiHudTransition();
         private bool visible;
         private BaseHudTab selectedTab;
@@ -163,6 +166,8 @@ namespace Labyrinth.UI
             Func<string> onMineStatusRequested,
             Func<bool> onCanStartMineSelectionRequested,
             Action onMineSelectionRequested,
+            Func<BuildingType, bool> onBuildingUnlockedRequested,
+            Func<BuildingType, bool> onPendingBuildingRequested,
             Func<BuildingUpgradeType, string> onUpgradeStatusRequested,
             Func<BuildingUpgradeType, bool> onCanUpgradeRequested,
             Func<BuildingUpgradeType, BuildingCost> onUpgradeCostRequested,
@@ -224,6 +229,8 @@ namespace Labyrinth.UI
             mineStatusProvider = onMineStatusRequested;
             canStartMineSelectionProvider = onCanStartMineSelectionRequested;
             mineSelectionRequested = onMineSelectionRequested;
+            buildingUnlockedProvider = onBuildingUnlockedRequested;
+            pendingBuildingProvider = onPendingBuildingRequested;
             upgradeStatusProvider = onUpgradeStatusRequested;
             canUpgradeProvider = onCanUpgradeRequested;
             upgradeCostProvider = onUpgradeCostRequested;
@@ -329,95 +336,103 @@ namespace Labyrinth.UI
             var leftX = rect.x;
             var rightX = rect.x + cardWidth + gap;
 
-            DrawActionCard(
+            DrawBuildingActionCard(
+                BuildingType.Farm,
                 new Rect(leftX, y, cardWidth, cardHeight),
                 "🌾",
                 "Фермы",
                 "Пища и караваны",
                 CleanStatus(GetFarmStatus(), GetFarmCost()),
                 GetFarmCost(),
-                CanBuildFarm(),
-                "Построить",
+                IsBuildActionAvailable(BuildingType.Farm, CanBuildFarm()),
+                GetBuildActionLabel(BuildingType.Farm, false),
                 buildFarmRequested);
 
-            DrawActionCard(
+            DrawBuildingActionCard(
+                BuildingType.LumberjackCamp,
                 new Rect(rightX, y, cardWidth, cardHeight),
                 "🪓",
                 "Лагеря лесорубов",
                 "Дерево и караваны",
                 CleanStatus(GetLumberjackCampStatus(), GetLumberjackCampCost()),
                 GetLumberjackCampCost(),
-                CanBuildLumberjackCamp(),
-                "Построить",
+                IsBuildActionAvailable(BuildingType.LumberjackCamp, CanBuildLumberjackCamp()),
+                GetBuildActionLabel(BuildingType.LumberjackCamp, false),
                 buildLumberjackCampRequested);
             y += cardHeight + gap;
 
-            DrawActionCard(
+            DrawBuildingActionCard(
+                BuildingType.AlchemistShop,
                 new Rect(leftX, y, cardWidth, cardHeight),
                 "⚗",
                 "Лавка алхимика",
                 "Зелья здоровья",
                 CleanStatus(GetAlchemistShopStatus(), GetAlchemistShopCost()),
                 GetAlchemistShopCost(),
-                CanBuildAlchemistShop(),
-                GetAlchemistShopStatus().StartsWith("построена") ? "Построено" : "Построить",
+                IsBuildActionAvailable(BuildingType.AlchemistShop, CanBuildAlchemistShop()),
+                GetBuildActionLabel(BuildingType.AlchemistShop, GetAlchemistShopStatus().StartsWith("построена")),
                 buildAlchemistShopRequested);
 
-            DrawActionCard(
+            DrawBuildingActionCard(
+                BuildingType.Tavern,
                 new Rect(rightX, y, cardWidth, cardHeight),
                 "🍖",
                 "Харчевня",
                 "Пайки для рыцарей",
                 CleanStatus(GetTavernStatus(), GetTavernCost()),
                 GetTavernCost(),
-                CanBuildTavern(),
-                GetTavernStatus().StartsWith("построена") ? "Построено" : "Построить",
+                IsBuildActionAvailable(BuildingType.Tavern, CanBuildTavern()),
+                GetBuildActionLabel(BuildingType.Tavern, GetTavernStatus().StartsWith("построена")),
                 buildTavernRequested);
             y += cardHeight + gap;
 
-            DrawActionCard(
+            DrawBuildingActionCard(
+                BuildingType.Infirmary,
                 new Rect(leftX, y, cardWidth, cardHeight),
                 "✚",
                 "Лазарет",
                 "Лечение за пищу",
                 CleanStatus(GetInfirmaryStatus(), GetInfirmaryCost()),
                 GetInfirmaryCost(),
-                CanBuildInfirmary(),
-                GetInfirmaryStatus().StartsWith("построен") ? "Построено" : "Построить",
+                IsBuildActionAvailable(BuildingType.Infirmary, CanBuildInfirmary()),
+                GetBuildActionLabel(BuildingType.Infirmary, GetInfirmaryStatus().StartsWith("построен")),
                 buildInfirmaryRequested);
 
-            DrawActionCard(
+            DrawBuildingActionCard(
+                BuildingType.Forge,
                 new Rect(rightX, y, cardWidth, cardHeight),
                 "⚒",
                 "Кузница",
                 "Оружие и броня 2 уровня",
                 CleanStatus(GetForgeStatus(), GetForgeCost()),
                 GetForgeCost(),
-                CanBuildForge(),
-                GetForgeStatus().StartsWith("построена") ? "Построено" : "Построить",
+                IsBuildActionAvailable(BuildingType.Forge, CanBuildForge()),
+                GetBuildActionLabel(BuildingType.Forge, GetForgeStatus().StartsWith("построена")),
                 buildForgeRequested);
             y += cardHeight + gap;
 
-            DrawActionCard(
+            DrawBuildingActionCard(
+                BuildingType.Market,
                 new Rect(leftX, y, cardWidth, cardHeight),
                 "⚖",
                 "Рынок",
                 "Обмен ресурсов",
                 CleanStatus(GetMarketStatus(), GetMarketCost()),
                 GetMarketCost(),
-                CanBuildMarket(),
-                GetMarketStatus().StartsWith("построен") ? "Построено" : "Построить",
+                IsBuildActionAvailable(BuildingType.Market, CanBuildMarket()),
+                GetBuildActionLabel(BuildingType.Market, GetMarketStatus().StartsWith("построен")),
                 buildMarketRequested);
 
-            DrawActionCard(
+            DrawBuildingActionCard(
+                BuildingType.Antiquary,
                 new Rect(rightX, y, cardWidth, cardHeight),
                 "◆",
                 "Антиквариат",
                 "Редкие артефакты",
                 CleanStatus(GetAntiquaryStatus(), GetAntiquaryCost()),
                 GetAntiquaryCost(),
-                CanBuildAntiquary(),
-                GetAntiquaryStatus().StartsWith("построен") ? "Построено" : "Построить",
+                IsBuildActionAvailable(BuildingType.Antiquary, CanBuildAntiquary()),
+                GetBuildActionLabel(BuildingType.Antiquary, GetAntiquaryStatus().StartsWith("построен")),
                 buildAntiquaryRequested);
         }
 
@@ -425,39 +440,42 @@ namespace Labyrinth.UI
         {
             DrawSection(new Rect(rect.x, rect.y, rect.width, 22f), "Герои");
             var y = rect.y + 30f;
-            DrawActionCard(
+            DrawBuildingActionCard(
+                BuildingType.HeroHouse,
                 new Rect(rect.x, y, rect.width, 96f),
                 "🛡",
                 "Рыцари",
                 "Дома героя и лимит отряда",
                 CleanStatus(GetHeroHouseStatus(), GetHeroCost()),
                 GetHeroCost(),
-                CanCreateHero(),
-                "Создать",
+                IsBuildActionAvailable(BuildingType.HeroHouse, CanCreateHero()),
+                GetBuildActionLabel(BuildingType.HeroHouse, false, "Создать"),
                 createHeroRequested);
             y += 104f;
 
-            DrawActionCard(
+            DrawBuildingActionCard(
+                BuildingType.Chapel,
                 new Rect(rect.x, y, rect.width, 104f),
                 "✦",
                 "Часовня",
                 "Благословения для вылазок",
                 CleanStatus(GetChapelStatus(), GetChapelCost()),
                 GetChapelCost(),
-                CanBuildChapel(),
-                GetChapelStatus().StartsWith("построена") ? "Построено" : "Построить",
+                IsBuildActionAvailable(BuildingType.Chapel, CanBuildChapel()),
+                GetBuildActionLabel(BuildingType.Chapel, GetChapelStatus().StartsWith("построена")),
                 buildChapelRequested);
             y += 112f;
 
-            DrawActionCard(
+            DrawBuildingActionCard(
+                BuildingType.HeroesGuild,
                 new Rect(rect.x, y, rect.width, 104f),
                 "!",
                 "Гильдия героев",
                 "Контракты зачистки",
                 CleanStatus(GetHeroesGuildStatus(), GetHeroesGuildCost()),
                 GetHeroesGuildCost(),
-                CanBuildHeroesGuild(),
-                GetHeroesGuildStatus().StartsWith("построена") ? "Построено" : "Построить",
+                IsBuildActionAvailable(BuildingType.HeroesGuild, CanBuildHeroesGuild()),
+                GetBuildActionLabel(BuildingType.HeroesGuild, GetHeroesGuildStatus().StartsWith("построена")),
                 buildHeroesGuildRequested);
         }
 
@@ -465,27 +483,29 @@ namespace Labyrinth.UI
         {
             DrawSection(new Rect(rect.x, rect.y, rect.width, 22f), "Подземелье");
             var y = rect.y + 30f;
-            DrawActionCard(
+            DrawBuildingActionCard(
+                BuildingType.CartographerHouse,
                 new Rect(rect.x, y, rect.width, 96f),
                 "🗺",
                 "Дом картографа",
                 "Общая карта рыцарей",
                 CleanStatus(GetCartographerHouseStatus(), GetCartographerHouseCost()),
                 GetCartographerHouseCost(),
-                CanBuildCartographerHouse(),
-                GetCartographerHouseStatus().StartsWith("построен") ? "Построено" : "Построить",
+                IsBuildActionAvailable(BuildingType.CartographerHouse, CanBuildCartographerHouse()),
+                GetBuildActionLabel(BuildingType.CartographerHouse, GetCartographerHouseStatus().StartsWith("построен")),
                 buildCartographerHouseRequested);
             y += 104f;
 
-            DrawActionCard(
+            DrawBuildingActionCard(
+                BuildingType.MinersGuild,
                 new Rect(rect.x, y, rect.width, 96f),
                 "⛏",
                 "Гильдия шахтёров",
                 "Подготовка шахт",
                 CleanStatus(GetMinersGuildStatus(), GetMinersGuildCost()),
                 GetMinersGuildCost(),
-                CanBuildMinersGuild(),
-                GetMinersGuildStatus().StartsWith("построена") ? "Построено" : "Построить",
+                IsBuildActionAvailable(BuildingType.MinersGuild, CanBuildMinersGuild()),
+                GetBuildActionLabel(BuildingType.MinersGuild, GetMinersGuildStatus().StartsWith("построена")),
                 buildMinersGuildRequested);
             y += 104f;
 
@@ -797,6 +817,27 @@ namespace Labyrinth.UI
             GUI.Label(new Rect(rect.x + rect.width * 0.34f, rect.y, rect.width * 0.63f - 12f, rect.height), value, statValueStyle);
         }
 
+        private void DrawBuildingActionCard(
+            BuildingType type,
+            Rect rect,
+            string icon,
+            string title,
+            string subtitle,
+            string status,
+            BuildingCost cost,
+            bool available,
+            string actionLabel,
+            Action action,
+            string extraCost = "")
+        {
+            if (!IsBuildingCardVisible(type))
+            {
+                return;
+            }
+
+            DrawActionCard(rect, icon, title, subtitle, status, cost, available, actionLabel, action, extraCost);
+        }
+
         private void DrawActionCard(
             Rect rect,
             string icon,
@@ -827,7 +868,7 @@ namespace Labyrinth.UI
             var costText = string.IsNullOrEmpty(extraCost)
                 ? $"Цена: {cost.Format()}"
                 : $"Цена: {cost.Format()}, {extraCost}";
-            var costAvailable = available || actionLabel == "Построено";
+            var costAvailable = available || actionLabel == "Построено" || actionLabel == "Строится";
             GUI.Label(
                 new Rect(rect.x + rect.width - buttonWidth - 12f, rect.y + 8f, buttonWidth, 30f),
                 costText,
@@ -843,6 +884,14 @@ namespace Labyrinth.UI
             GUI.enabled = true;
         }
 
+        private bool IsBuildActionAvailable(BuildingType type, bool available) => available && !HasPendingBuilding(type);
+
+        private bool IsBuildingCardVisible(BuildingType type) =>
+            buildingUnlockedProvider == null || buildingUnlockedProvider.Invoke(type) || HasPendingBuilding(type);
+
+        private string GetBuildActionLabel(BuildingType type, bool built, string defaultLabel = "Построить") =>
+            HasPendingBuilding(type) ? "Строится" : built ? "Построено" : defaultLabel;
+        private bool HasPendingBuilding(BuildingType type) => pendingBuildingProvider != null && pendingBuildingProvider.Invoke(type);
         private static string CleanStatus(string status, BuildingCost cost)
         {
             if (string.IsNullOrEmpty(status))

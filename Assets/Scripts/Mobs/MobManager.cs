@@ -8,24 +8,24 @@ namespace Labyrinth.Mobs
 {
     public sealed partial class MobManager : MonoBehaviour
     {
-        private const int WalkableCellsPerRegularMob = 38;
-        private const int WalkableCellsPerRatMob = 22;
+        private const int WalkableCellsPerRegularMob = 68;
+        private const int WalkableCellsPerRatMob = 34;
         private const int MinimumRegularMobCount = 4;
-        private const int MaximumRegularMobCount = 120;
-        private const int MaximumRatMobCount = 80;
+        private const int MaximumRegularMobCount = 72;
+        private const int MaximumRatMobCount = 48;
         private const int NormalEntranceMobBuffer = 4;
         private const int OpeningEntranceMobBuffer = 8;
         private const int MinimumMobDistanceFloor = 4;
         private const int MinimumMobDistanceDivisor = 12;
-        private const float RespawnCheckInterval = 1.35f;
-        private const float RespawnChancePerCheck = 0.88f;
-        private const int RespawnDarkPaddingCells = 1;
+        private const float RespawnCheckInterval = 4.5f;
+        private const float RespawnChancePerCheck = 0.42f;
+        private const int RespawnDarkPaddingCells = 2;
         private const int RespawnMaxCandidateChecks = 180;
         private const float RespawnSummaryInterval = 12f;
-        private const float OpeningRespawnGraceSeconds = 24f;
+        private const float OpeningRespawnGraceSeconds = 45f;
         private const float OpeningMobWanderDelaySeconds = 5.25f;
-        private const float OpeningRegularTargetMultiplier = 1.35f;
-        private const float RegularTargetMultiplier = 1.75f;
+        private const float OpeningRegularTargetMultiplier = 0.95f;
+        private const float RegularTargetMultiplier = 1.18f;
 
         private readonly List<MobController> mobs = new List<MobController>();
         private MazeGenerationResult result;
@@ -290,6 +290,11 @@ namespace Labyrinth.Mobs
             }
 
             respawnTimer = RespawnCheckInterval;
+            if (CountPendingRemovalMobs() == 0 && CountRegularMobs() >= regularMobTargetCount)
+            {
+                return false;
+            }
+
             return true;
         }
 
@@ -304,6 +309,7 @@ namespace Labyrinth.Mobs
                 return;
             }
             var threatStage = CalculateThreatStage(activeHeroes);
+            var effectiveTarget = CalculateEffectiveRegularMobTarget(activeHeroes);
             if (CountPendingRemovalMobs() > 0)
             {
                 respawnPendingRemovalSkips++;
@@ -312,7 +318,7 @@ namespace Labyrinth.Mobs
             }
 
             var regularCount = CountRegularMobs();
-            if (regularCount >= regularMobTargetCount)
+            if (regularCount >= effectiveTarget)
             {
                 respawnAtTargetSkips++;
                 TraceRespawnSummary(respawnBlockedCells.Count, threatStage);
@@ -363,7 +369,7 @@ namespace Labyrinth.Mobs
             respawnSuccessesSinceSummary++;
             GameDebugLog.Info(
                 "Mobs",
-                $"Respawned {mob.DebugName} at {GameDebugLog.Position(position)} in unlit cell. threatStage={threatStage}, regular={CountRegularMobs()}/{regularMobTargetCount}, respawnBlockedCells={respawnBlockedCells.Count}, aliveMobs={CountAliveMobs()}, runtimeMobs={mobs.Count}");
+                $"Respawned {mob.DebugName} at {GameDebugLog.Position(position)} in unlit cell. threatStage={threatStage}, regular={CountRegularMobs()}/{effectiveTarget}, maxTarget={regularMobTargetCount}, respawnBlockedCells={respawnBlockedCells.Count}, aliveMobs={CountAliveMobs()}, runtimeMobs={mobs.Count}");
             TraceRespawnSummary(respawnBlockedCells.Count, threatStage);
         }
 
@@ -626,15 +632,20 @@ namespace Labyrinth.Mobs
                 && result.CentralRoom.IsBeyondExitSide(position)
                 && !result.CentralRoom.Contains(position))
             {
-                return true;
+                return result.LevelNumber > 1 || IsDeepEnoughForOrc(position, 0.68f);
             }
 
+            return IsDeepEnoughForOrc(position, result != null && result.LevelNumber <= 1 ? 0.68f : 0.55f);
+        }
+
+        private bool IsDeepEnoughForOrc(Vector2Int position, float threshold)
+        {
             if (maxDistanceFromEntrance <= 0 || distancesFromEntrance == null || !distancesFromEntrance.TryGetValue(position, out var distance))
             {
                 return false;
             }
 
-            return distance / (float)maxDistanceFromEntrance >= 0.45f;
+            return distance / (float)maxDistanceFromEntrance >= threshold;
         }
 
         private static bool IsNearRespawnBlockedCell(Vector2Int position, HashSet<Vector2Int> respawnBlockedCells)

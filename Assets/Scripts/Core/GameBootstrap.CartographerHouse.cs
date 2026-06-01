@@ -7,49 +7,15 @@ namespace Labyrinth.Core
     {
         private void BuildCartographerHouseFromBase()
         {
-            if (currentMaze == null)
-            {
-                return;
-            }
-
-            var cost = GetCartographerHouseCost();
-            if (!resources.CanAfford(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"дом картографа: нужно {cost.Format()}");
-                GameDebugLog.Warning("Base", $"Cartographer house build blocked: gold={resources.Gold}, wood={resources.Wood}, required={cost.Format()}");
-                return;
-            }
-
-            if (!baseDevelopment.TryBuildCartographerHouse(currentMaze, out var housePosition))
-            {
-                var blockMessage = baseDevelopment.LastBuildMessage;
-                baseDevelopment.ReportBuildBlocked($"дом картографа: {blockMessage}");
-                GameDebugLog.Warning("Base", $"Cartographer house build blocked: {blockMessage}");
-                return;
-            }
-
-            if (!resources.TrySpend(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"дом картографа: нужно {cost.Format()}");
-                return;
-            }
-
-            ClearTerrainDecorationsAround(housePosition, BaseDevelopment.CartographerHouseFootprintRadiusCells);
-            CartographerHouseRenderer.Render(mazeRenderer, housePosition);
-            baseAmbience.RegisterBuilding(BuildingType.CartographerHouse, housePosition);
-            cityAmbience.RegisterBuilding(BuildingType.CartographerHouse, housePosition);
-            SyncPeasantHuts();
-            RefreshSelectedHeroVisibility();
-            GameAudioController.Play(GameSfx.Build, mazeRenderer.GridToWorld(housePosition));
-            GameDebugLog.Info(
-                "Cartographer",
-                $"Cartographer house built at {GameDebugLog.Position(housePosition)}. buildCost={cost.Format()}, goldLeft={resources.Gold}, woodLeft={resources.Wood}.");
+            TryStartBaseBuildingConstruction(BuildingType.CartographerHouse, GetCartographerHouseCost(), "Cartographer house", out _);
         }
 
         private bool CanBuildCartographerHouse()
         {
             return currentMaze != null
                 && !baseDevelopment.HasCartographerHouse
+                && !HasPendingBuilding(BuildingType.CartographerHouse)
+                && IsBuildingUnlocked(BuildingType.CartographerHouse)
                 && resources.CanAfford(GetCartographerHouseCost());
         }
 
@@ -63,7 +29,7 @@ namespace Labyrinth.Core
                 status += $", {baseDevelopment.LastBuildMessage}";
             }
 
-            return status;
+            return AppendBuildingUnlockStatus(BuildingType.CartographerHouse, status);
         }
     }
 }

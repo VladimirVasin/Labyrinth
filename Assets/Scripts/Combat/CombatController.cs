@@ -15,16 +15,16 @@ namespace Labyrinth.Combat
         private const float FinishDelay = 1f;
         private const int MinOrcGoldReward = 18;
         private const int MaxOrcGoldReward = 32;
-        private const int MinOrcExperienceReward = 15;
-        private const int MaxOrcExperienceReward = 20;
+        private const int MinOrcExperienceReward = 10;
+        private const int MaxOrcExperienceReward = 14;
         private const int MinGoblinGoldReward = 8;
         private const int MaxGoblinGoldReward = 16;
-        private const int MinGoblinExperienceReward = 7;
-        private const int MaxGoblinExperienceReward = 10;
+        private const int MinGoblinExperienceReward = 4;
+        private const int MaxGoblinExperienceReward = 6;
         private const int MinRatGoldReward = 4;
         private const int MaxRatGoldReward = 8;
-        private const int MinRatExperienceReward = 2;
-        private const int MaxRatExperienceReward = 4;
+        private const int MinRatExperienceReward = 1;
+        private const int MaxRatExperienceReward = 2;
         private const int MinMiniBossRatGoldReward = 44;
         private const int MaxMiniBossRatGoldReward = 76;
         private const int MinMiniBossRatExperienceReward = 50;
@@ -63,6 +63,7 @@ namespace Labyrinth.Combat
         private MazeRenderer mazeRenderer;
         private bool heroTurn;
         private bool finishing;
+        private bool heroRetreated;
         private bool heroOpeningAttackUsed;
         private bool mobOpeningAttackUsed;
         private CombatActorState heroCombat;
@@ -86,6 +87,7 @@ namespace Labyrinth.Combat
             roundNumber = 0;
             IsActive = false;
             finishing = false;
+            heroRetreated = false;
         }
 
         public bool StartCombat(HeroController heroController, MobController mobController, MazeGrid mazeGrid, MazeRenderer mazeRenderer)
@@ -105,6 +107,7 @@ namespace Labyrinth.Combat
             grid = mazeGrid;
             this.mazeRenderer = mazeRenderer;
             finishing = false;
+            heroRetreated = false;
             heroOpeningAttackUsed = false;
             mobOpeningAttackUsed = false;
             ResetPendingRound();
@@ -206,6 +209,12 @@ namespace Labyrinth.Combat
                 LogCombatSummary("mob-defeated");
                 MobDefeated?.Invoke(hero, mob);
             }
+            else if (heroRetreated && mob != null)
+            {
+                LogCombatSummary("hero-retreated");
+                mob.LeaveCombat();
+                hero?.RetreatFromCombatToCastle();
+            }
             else if (mob != null)
             {
                 if (hero != null && hero.Model != null && !hero.Model.IsAlive)
@@ -235,6 +244,7 @@ namespace Labyrinth.Combat
             roundNumber = 0;
             IsActive = false;
             finishing = false;
+            heroRetreated = false;
         }
 
         private void LogCombatSummary(string outcome)

@@ -9,7 +9,7 @@ namespace Labyrinth.Core
     public sealed class GoldIngotManager : MonoBehaviour
     {
         public const int TreasuryGoldReward = 20;
-        public const int DeliveryExperienceReward = 5;
+        public const int DeliveryExperienceReward = 8;
 
         private const int MinimumIngotCount = 5;
         private const int AreaPerIngot = 250;
@@ -131,6 +131,11 @@ namespace Labyrinth.Core
 
             var ingot = FindAvailableAt(hero.Position);
             if (ingot == null)
+            {
+                return false;
+            }
+
+            if (!hero.Inventory.HasEmptyCarrySlot)
             {
                 return false;
             }

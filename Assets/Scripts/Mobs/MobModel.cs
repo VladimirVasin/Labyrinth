@@ -157,13 +157,13 @@ namespace Labyrinth.Mobs
             switch (species)
             {
                 case MobSpecies.Orc:
-                    return new MobStatRange(new IntRange(44, 54), new IntRange(9, 12), new IntRange(3, 5));
+                    return new MobStatRange(new IntRange(48, 60), new IntRange(7, 9), new IntRange(3, 4));
                 case MobSpecies.Goblin:
-                    return new MobStatRange(new IntRange(20, 25), new IntRange(5, 7), new IntRange(1, 3));
+                    return new MobStatRange(new IntRange(24, 30), new IntRange(4, 6), new IntRange(1, 2));
                 case MobSpecies.Rat:
-                    return new MobStatRange(new IntRange(12, 16), new IntRange(3, 5), new IntRange(0, 1));
+                    return new MobStatRange(new IntRange(15, 20), new IntRange(2, 4), new IntRange(0, 1));
                 default:
-                    return new MobStatRange(new IntRange(20, 25), new IntRange(5, 7), new IntRange(1, 3));
+                    return new MobStatRange(new IntRange(24, 30), new IntRange(4, 6), new IntRange(1, 2));
             }
         }
 
@@ -172,13 +172,13 @@ namespace Labyrinth.Mobs
             switch (species)
             {
                 case MobSpecies.Orc:
-                    return new MobStatRange(new IntRange(28, 36), new IntRange(5, 7), new IntRange(1, 2));
+                    return new MobStatRange(new IntRange(30, 38), new IntRange(4, 5), new IntRange(1, 2));
                 case MobSpecies.Goblin:
-                    return new MobStatRange(new IntRange(12, 16), new IntRange(2, 4), new IntRange(0, 1));
+                    return new MobStatRange(new IntRange(14, 18), new IntRange(2, 3), new IntRange(0, 1));
                 case MobSpecies.Rat:
-                    return new MobStatRange(new IntRange(6, 9), new IntRange(1, 2), new IntRange(0, 0));
+                    return new MobStatRange(new IntRange(7, 10), new IntRange(1, 2), new IntRange(0, 0));
                 default:
-                    return new MobStatRange(new IntRange(12, 16), new IntRange(2, 4), new IntRange(0, 1));
+                    return new MobStatRange(new IntRange(14, 18), new IntRange(2, 3), new IntRange(0, 1));
             }
         }
 

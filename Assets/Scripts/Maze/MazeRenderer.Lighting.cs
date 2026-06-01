@@ -250,11 +250,6 @@ namespace Labyrinth.Maze
                 return Mathf.Clamp01(brightness);
             }
 
-            if (visibleCells != null && !visibleCells.Contains(cell))
-            {
-                return Mathf.Clamp01(brightness);
-            }
-
             foreach (var origin in builtTorchOrigins)
             {
                 var dx = cell.x - origin.x;

@@ -15,6 +15,7 @@ namespace Labyrinth.Combat
         private CombatActionDefinition pendingMobAction;
         private bool pendingHeroFirst;
         private bool pendingSecondAction;
+        private int lastHeroHeavyHitDamage;
 
         private void ExecuteRound()
         {
@@ -31,6 +32,7 @@ namespace Labyrinth.Combat
             }
 
             roundNumber++;
+            lastHeroHeavyHitDamage = 0;
             pendingHeroAction = SelectHeroAction();
             pendingMobAction = SelectMobAction();
             var heroInitiative = roundNumber == 1 ? heroCombat.Initiative : RollRoundInitiative(heroCombat, true);
@@ -91,7 +93,12 @@ namespace Labyrinth.Combat
                 return;
             }
 
-            EndRound();
+            if (!EndRound())
+            {
+                ResetPendingRound();
+                return;
+            }
+
             ResetPendingRound();
             timer = TurnDelay;
         }
@@ -241,7 +248,7 @@ namespace Labyrinth.Combat
 
                     if (CanUse(mobCombat, CombatActionType.BreakArmor)
                         && (hero.Model.ArmorPoints - heroCombat.ArmorBreak >= 2
-                            || (!openingRookieCombat && rewardRandom.Next(100) < 35)))
+                            || (!openingRookieCombat && rewardRandom.Next(100) < 22)))
                     {
                         return GetAction(CombatActionType.BreakArmor);
                     }
@@ -251,7 +258,7 @@ namespace Labyrinth.Combat
                         return GetAction(CombatActionType.GuardedStrike);
                     }
 
-                    return CanUse(mobCombat, CombatActionType.HeavyStrike) && rewardRandom.Next(100) < 45
+                    return CanUse(mobCombat, CombatActionType.HeavyStrike) && rewardRandom.Next(100) < 25
                         ? GetAction(CombatActionType.HeavyStrike)
                         : GetAction(CombatActionType.LightStrike);
                 case MobSpecies.Orc:
@@ -262,14 +269,15 @@ namespace Labyrinth.Combat
                         return GetAction(CombatActionType.BreakArmor);
                     }
 
-                    if (CanUse(mobCombat, CombatActionType.HeavyStrike))
-                    {
-                        return GetAction(CombatActionType.HeavyStrike);
-                    }
-
-                    if (hpRatio <= 0.5f && CanUse(mobCombat, CombatActionType.GuardedStrike))
+                    if (hpRatio <= 0.48f && CanUse(mobCombat, CombatActionType.GuardedStrike))
                     {
                         return GetAction(CombatActionType.GuardedStrike);
+                    }
+
+                    if (CanUse(mobCombat, CombatActionType.HeavyStrike)
+                        && rewardRandom.Next(100) < (mob.Model.Rank == MobRank.Regular ? 48 : 64))
+                    {
+                        return GetAction(CombatActionType.HeavyStrike);
                     }
 
                     return CanUse(mobCombat, CombatActionType.LightStrike)
@@ -320,10 +328,11 @@ namespace Labyrinth.Combat
             var targetBaseArmor = actorIsHero ? mob.Model.ArmorPoints : hero.Model.ArmorPoints;
             var armorBeforePierce = targetState.EffectiveArmor(targetBaseArmor);
             var effectiveArmor = Mathf.Max(0, armorBeforePierce - action.ArmorPierce);
+            var armorBlock = CalculateArmorBlock(actorIsHero, effectiveArmor);
             var guardBroken = targetState.ConsumeGuard(action.GuardDamage);
             var guardAbsorb = targetState.ConsumeGuard(Mathf.CeilToInt(scaledAttack * 0.45f));
             var attackAfterGuard = Mathf.Max(0, scaledAttack - guardAbsorb);
-            var resolvedDamage = attackAfterGuard <= 0 ? 0 : Mathf.Max(1, attackAfterGuard - effectiveArmor);
+            var resolvedDamage = attackAfterGuard <= 0 ? 0 : Mathf.Max(1, attackAfterGuard - armorBlock);
             var hpBefore = actorIsHero ? mob.Model.HitPoints : hero.Model.HitPoints;
             var actualDamage = ApplyResolvedDamage(actorIsHero, resolvedDamage, targetPosition);
             var hpAfter = actorIsHero ? mob.Model.HitPoints : hero.Model.HitPoints;
@@ -337,11 +346,18 @@ namespace Labyrinth.Combat
 
             actorState.AddDamageDealt(actualDamage);
             targetState.AddDamageTaken(actualDamage);
+            if (!actorIsHero
+                && actualDamage > 0
+                && (action.Type == CombatActionType.HeavyStrike || action.Type == CombatActionType.DesperateStrike))
+            {
+                lastHeroHeavyHitDamage = Mathf.Max(lastHeroHeavyHitDamage, actualDamage);
+            }
+
             ShowAttackFeedback(targetPosition, actualDamage, guardAbsorb, guardBroken, armorBreakApplied, staminaDamaged, woundApplied, actorIsHero);
             ShowSupportFeedback(actorPosition, recoveredStamina, guardAdded, forcedRecover);
             GameDebugLog.Info(
                 "Combat",
-                $"Round {roundNumber} action: actor={(actorIsHero ? "Hero" : "Mob")}, action={action.Type}, forcedRecover={forcedRecover}, baseAttack={baseAttack}, scaledAttack={scaledAttack}, firstHitBonus={firstHitBonus}, vengeanceBonus={vengeanceBonus}, vengeanceReduction={vengeanceReduction}, personalBonus={personalBonus}, personalReduction={personalReduction}, phaseBonus={phaseBonus}, desperateBonus={desperateBonus}, targetArmorBase={targetBaseArmor}, targetArmorBreak={targetState.ArmorBreak}, armorBeforePierce={armorBeforePierce}, pierce={action.ArmorPierce}, effectiveArmor={effectiveArmor}, guardBroken={guardBroken}, guardAbsorb={guardAbsorb}, resolvedDamage={resolvedDamage}, damage={actualDamage}, targetHP={hpBefore}->{hpAfter}, armorBreakApplied={armorBreakApplied}, staminaDamaged={staminaDamaged}, woundApplied={woundApplied}, actorCST={actorState.Stamina}/{actorState.MaxStamina}, targetCST={targetState.Stamina}/{targetState.MaxStamina}, targetGuard={targetState.Guard}, targetWounds={targetState.Wounds}.");
+                $"Round {roundNumber} action: actor={(actorIsHero ? "Hero" : "Mob")}, action={action.Type}, forcedRecover={forcedRecover}, baseAttack={baseAttack}, scaledAttack={scaledAttack}, firstHitBonus={firstHitBonus}, vengeanceBonus={vengeanceBonus}, vengeanceReduction={vengeanceReduction}, personalBonus={personalBonus}, personalReduction={personalReduction}, phaseBonus={phaseBonus}, desperateBonus={desperateBonus}, targetArmorBase={targetBaseArmor}, targetArmorBreak={targetState.ArmorBreak}, armorBeforePierce={armorBeforePierce}, pierce={action.ArmorPierce}, effectiveArmor={effectiveArmor}, armorBlock={armorBlock}, guardBroken={guardBroken}, guardAbsorb={guardAbsorb}, resolvedDamage={resolvedDamage}, damage={actualDamage}, targetHP={hpBefore}->{hpAfter}, armorBreakApplied={armorBreakApplied}, staminaDamaged={staminaDamaged}, woundApplied={woundApplied}, actorCST={actorState.Stamina}/{actorState.MaxStamina}, targetCST={targetState.Stamina}/{targetState.MaxStamina}, targetGuard={targetState.Guard}, targetWounds={targetState.Wounds}.");
 
             if (actorIsHero)
             {
@@ -471,7 +487,7 @@ namespace Labyrinth.Combat
             }
         }
 
-        private void EndRound()
+        private bool EndRound()
         {
             heroCombat.DecayGuard(1);
             mobCombat.DecayGuard(1);
@@ -479,6 +495,54 @@ namespace Labyrinth.Combat
             GameDebugLog.Info(
                 "Combat",
                 $"Round {roundNumber} end: heroHP={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, heroCST={heroCombat.Stamina}/{heroCombat.MaxStamina}, heroGuard={heroCombat.Guard}, heroArmorBreak={heroCombat.ArmorBreak}, heroWounds={heroCombat.Wounds}, mobHP={mob.Model.HitPoints}/{mob.Model.MaxHitPoints}, mobCST={mobCombat.Stamina}/{mobCombat.MaxStamina}, mobGuard={mobCombat.Guard}, mobArmorBreak={mobCombat.ArmorBreak}, mobWounds={mobCombat.Wounds}, mobPhase={mobCombat.Phase}.");
+            return !TryBeginHeroRetreatAfterHeavyHit();
+        }
+
+        private bool TryBeginHeroRetreatAfterHeavyHit()
+        {
+            if (heroRetreated
+                || lastHeroHeavyHitDamage <= 0
+                || hero == null
+                || mob == null
+                || hero.Model == null
+                || mob.Model == null
+                || !hero.Model.IsAlive
+                || !mob.Model.IsAlive)
+            {
+                return false;
+            }
+
+            var hpRatio = hero.Model.MaxHitPoints > 0 ? hero.Model.HitPoints / (float)hero.Model.MaxHitPoints : 1f;
+            var damageThreshold = Mathf.Max(3, Mathf.CeilToInt(hero.Model.MaxHitPoints * 0.28f));
+            if (lastHeroHeavyHitDamage < damageThreshold && hpRatio > 0.4f)
+            {
+                return false;
+            }
+
+            var retreatChance = 18
+                + (lastHeroHeavyHitDamage >= damageThreshold ? 18 : 0)
+                + (hpRatio <= 0.35f ? 24 : 0)
+                + heroCombat.ArmorBreak * 4
+                - hero.Model.Level * 2;
+            retreatChance = Mathf.Clamp(retreatChance, 10, 65);
+            if (rewardRandom.Next(100) >= retreatChance)
+            {
+                return false;
+            }
+
+            heroRetreated = true;
+            DamageNumberView.CreateCombatText(
+                mazeRenderer,
+                hero.Model.Position,
+                "отступает",
+                new Color(0.62f, 0.9f, 1f),
+                2.05f,
+                CombatSecondaryFeedbackDelay);
+            GameDebugLog.Info(
+                "Combat",
+                $"Hero retreat triggered: hero=#{hero.DisplayNumber}, mob={mob.DebugName}, damage={lastHeroHeavyHitDamage}, threshold={damageThreshold}, hpRatio={hpRatio:0.00}, chance={retreatChance}, armorBreak={heroCombat.ArmorBreak}, level={hero.Model.Level}.");
+            BeginFinish();
+            return true;
         }
 
         private void ShowActionLabel(bool actorIsHero, string text, bool forcedRecover)
@@ -653,6 +717,18 @@ namespace Labyrinth.Combat
                 : Mathf.Max(0, mob.Model.MaxHitPoints - mob.Model.HitPoints);
         }
 
+        private static int CalculateArmorBlock(bool actorIsHero, int effectiveArmor)
+        {
+            if (effectiveArmor <= 0)
+            {
+                return 0;
+            }
+
+            return actorIsHero
+                ? effectiveArmor
+                : effectiveArmor + Mathf.CeilToInt(effectiveArmor * 0.5f);
+        }
+
         private int GetMobPhaseAttackBonus()
         {
             if (mob == null || mobCombat == null || mobCombat.Phase <= 0)
@@ -673,7 +749,7 @@ namespace Labyrinth.Combat
             switch (species)
             {
                 case MobSpecies.Rat:
-                    return 5;
+                    return 4;
                 case MobSpecies.Goblin:
                     return 7;
                 case MobSpecies.Orc:
@@ -701,7 +777,7 @@ namespace Labyrinth.Combat
             switch (type)
             {
                 case CombatActionType.HeavyStrike:
-                    return new CombatActionDefinition(type, "тяжёлый удар", 1.45f, 1, 4, 0, 0, 1, 1, 0, 0);
+                    return new CombatActionDefinition(type, "тяжёлый удар", 1.32f, 0, 5, 0, 0, 0, 1, 0, 0);
                 case CombatActionType.GuardedStrike:
                     return new CombatActionDefinition(type, "удар из-за щита", 0.72f, 0, 2, 0, 4, 0, 0, 0, 0);
                 case CombatActionType.Recover:
@@ -711,7 +787,7 @@ namespace Labyrinth.Combat
                 case CombatActionType.BreakArmor:
                     return new CombatActionDefinition(type, "пролом брони", 0.9f, 0, 4, 0, 0, 2, 3, 1, 0);
                 case CombatActionType.DesperateStrike:
-                    return new CombatActionDefinition(type, "отчаянный выпад", 1.7f, 2, 3, 0, 0, 1, 2, 0, 0);
+                    return new CombatActionDefinition(type, "отчаянный выпад", 1.55f, 1, 4, 0, 0, 1, 2, 0, 0);
                 case CombatActionType.LightStrike:
                 default:
                     return new CombatActionDefinition(CombatActionType.LightStrike, "быстрый удар", 1f, 0, 1, 0, 0, 0, 1, 0, 0);

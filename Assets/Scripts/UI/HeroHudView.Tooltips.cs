@@ -35,6 +35,8 @@ namespace Labyrinth.UI
         {
             switch (model.State)
             {
+                case HeroState.GoingToEntrance:
+                    return "Герой вышел из дома и идет по городским дорогам к входу в лабиринт.";
                 case HeroState.Exploring:
                     return "Герой сам исследует неизвестные проходы, запоминает маршрут и получает награду за новые клетки.";
                 case HeroState.SearchingKey:

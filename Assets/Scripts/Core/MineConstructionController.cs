@@ -14,6 +14,8 @@ namespace Labyrinth.Core
 
         public const int BaseMineBatchCapacity = 10;
         private const int TorchLightRange = 2;
+        private const int CompletedMineLightRange = 3;
+        private const int DynamicMineLightRange = 2;
         private const float WorkerSpeedCellsPerSecond = 2.25f;
         private const float WorkerYOffset = 0.08f;
         private const float CartYOffset = 0.06f;
@@ -33,6 +35,7 @@ namespace Labyrinth.Core
         private readonly List<MineCartRuntime> mineCarts = new List<MineCartRuntime>();
         private readonly HashSet<Vector2Int> fortifiedCells = new HashSet<Vector2Int>();
         private readonly HashSet<Vector2Int> torchPositions = new HashSet<Vector2Int>();
+        private readonly HashSet<Vector2Int> completedMineLightPositions = new HashSet<Vector2Int>();
         private readonly HashSet<Vector2Int> torchLitCells = new HashSet<Vector2Int>();
         private readonly HashSet<string> reinforcedWallFaces = new HashSet<string>();
 
@@ -57,6 +60,32 @@ namespace Labyrinth.Core
 
         public IReadOnlyCollection<Vector2Int> TorchPositions => torchPositions;
 
+        public IReadOnlyCollection<Vector2Int> CompletedMineLightPositions => completedMineLightPositions;
+
+        public void AddActiveLightOrigins(List<Vector2Int> origins)
+        {
+            if (origins == null || result == null || result.Grid == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < activeWorkers.Count; i++)
+            {
+                if (TryGetDynamicLightOrigin(activeWorkers[i].CurrentWorldPosition, out var origin))
+                {
+                    origins.Add(origin);
+                }
+            }
+
+            for (var i = 0; i < mineCarts.Count; i++)
+            {
+                if (TryGetDynamicLightOrigin(mineCarts[i].CurrentWorldPosition, out var origin))
+                {
+                    origins.Add(origin);
+                }
+            }
+        }
+
         public bool IsCellFortified(Vector2Int cell)
         {
             return fortifiedCells.Contains(cell);
@@ -75,7 +104,7 @@ namespace Labyrinth.Core
                     }
                 }
 
-                return $"зон {zones.Count}, готово {completed}, укреплено {fortifiedCells.Count}, {lastStatus}";
+                return $"зон {zones.Count}, готово {completed}, {lastStatus}";
             }
         }
 
@@ -112,6 +141,7 @@ namespace Labyrinth.Core
             mineCarts.Clear();
             fortifiedCells.Clear();
             torchPositions.Clear();
+            completedMineLightPositions.Clear();
             torchLitCells.Clear();
             reinforcedWallFaces.Clear();
             selectionModeActive = false;
@@ -233,9 +263,9 @@ namespace Labyrinth.Core
             mazeRenderer.TrackExternalCellRenderer(cave.Center, constructionRenderer.GetCellRoot(cave.Center));
             selectionModeActive = false;
             constructionRenderer.ClearSelection();
-            lastStatus = $"зона шахты поставлена {GameDebugLog.Position(cave.Center)}, маршрут {path.Count} клеток";
+            lastStatus = $"стройзона шахты поставлена {GameDebugLog.Position(cave.Center)}, маршрут 0/{path.Count}";
             GameAudioController.Play(GameSfx.HudConfirm, mazeRenderer.GridToWorld(cave.Center), 0.9f);
-            GameDebugLog.Info("Mine", $"Mine zone placed at {GameDebugLog.Position(cave.Center)}. routeLength={path.Count}, caveFootprint=3x3, zones={zones.Count}.");
+            GameDebugLog.Info("Mine", $"Mine zone placed at {GameDebugLog.Position(cave.Center)}. routeLength={path.Count}, construction=route-first, caveFootprint=center, zones={zones.Count}.");
             return true;
         }
 
@@ -281,6 +311,8 @@ namespace Labyrinth.Core
             {
                 visibleCells.Add(position);
             }
+
+            AddActiveMineLightCells(visibleCells);
         }
 
         private void CompleteRouteCell(MineZone zone, Vector2Int target)
@@ -310,7 +342,10 @@ namespace Labyrinth.Core
             }
 
             zone.State = MineZoneState.Completed;
+            zone.AssignedRouteCells.Clear();
             var mineRoot = constructionRenderer.RenderMine(zone.Cave, zone.OreType, zone.Level);
+            completedMineLightPositions.Add(zone.Cave.Center);
+            RefreshTorchLight();
             ConfigureMineHud(zone, mineRoot);
             mazeRenderer.TrackExternalCellRenderer(zone.Cave.Center, constructionRenderer.GetCellRoot(zone.Cave.Center));
             lastStatus = $"{GetOreTypeName(zone.OreType)} шахта готова {GameDebugLog.Position(zone.Cave.Center)}";
@@ -334,14 +369,14 @@ namespace Labyrinth.Core
             var completed = zone.State == MineZoneState.Completed;
             hudTarget.Configure(
                 completed ? "Шахта" : "Стройзона шахты",
-                completed ? $"{GetOreTypeName(zone.OreType)} залежь" : $"{GetOreTypeName(zone.OreType)} маршрут укрепляется",
+                completed ? $"{GetOreTypeName(zone.OreType)} залежь" : $"{GetOreTypeName(zone.OreType)} шахта строится",
                 "Шахта",
                 zone.Cave.Center,
                 GetOreAccentColor(zone.OreType),
                 () => GetZoneHudStatus(zone),
                 () => zone.State == MineZoneState.Completed
                     ? $"Шахта ур. {zone.Level} добывает {GetOreResourceName(zone.OreType)} до склада {GetMineBatchCapacity(zone)}, затем отправляет караван в замок. Ресурс попадает в казну только после доставки."
-                    : "Шахтёры идут из гильдии в замок за деревом, затем несут его в подземелье и укрепляют маршрут по одной клетке.");
+                    : "Шахтёры сначала укрепляют все клетки маршрута от входа до пещеры, затем несут материалы в центр и постепенно возводят шахту.");
             if (completed)
             {
                 hudTarget.ConfigureAction(
@@ -358,9 +393,17 @@ namespace Labyrinth.Core
                 return "нет данных";
             }
 
-            return zone.State == MineZoneState.Completed
-                ? $"{GetOreTypeName(zone.OreType)}, ур. {zone.Level}, склад {zone.StoredAmount}/{GetMineBatchCapacity(zone)}, караваны {zone.ActiveCartCount}"
-                : $"строится, укреплено {Mathf.Min(zone.RouteIndex, zone.Route.Count)}/{zone.Route.Count}";
+            if (zone.State == MineZoneState.Completed)
+            {
+                return $"{GetOreTypeName(zone.OreType)}, ур. {zone.Level}, склад {zone.StoredAmount}/{GetMineBatchCapacity(zone)}, караваны {zone.ActiveCartCount}";
+            }
+
+            if (zone.State == MineZoneState.BuildingRoute)
+            {
+                return $"укрепляется маршрут {CountFortifiedRouteCells(zone)}/{zone.Route.Count}";
+            }
+
+            return $"строится, материалы {zone.MineBuildDeliveredWood}/{MineWoodCost}";
         }
 
         private string GetMineActionLabel(MineZone zone)
@@ -494,7 +537,7 @@ namespace Labyrinth.Core
             lastStatus = $"{GetOreTypeName(zone.OreType)} караван отправлен из {GameDebugLog.Position(zone.Cave.Center)}";
             GameDebugLog.Info(
                 "Mine",
-                $"Mine cart #{cart.Id} dispatched: cave={GameDebugLog.Position(zone.Cave.Center)}, ore={zone.OreType}, amount={capacity}, level={zone.Level}, pathWaypoints={waypoints.Count}, fortifiedRouteCells={zone.Route.Count}, from={FormatWorldPosition(waypoints[0])}, to={FormatWorldPosition(waypoints[waypoints.Count - 1])}, activeCarts={zone.ActiveCartCount}.");
+                $"Mine cart #{cart.Id} dispatched: cave={GameDebugLog.Position(zone.Cave.Center)}, ore={zone.OreType}, amount={capacity}, level={zone.Level}, pathWaypoints={waypoints.Count}, routeCells={zone.Route.Count}, from={FormatWorldPosition(waypoints[0])}, to={FormatWorldPosition(waypoints[waypoints.Count - 1])}, activeCarts={zone.ActiveCartCount}.");
             return true;
         }
 
@@ -537,9 +580,9 @@ namespace Labyrinth.Core
                 return false;
             }
 
-            if (!TryValidateMineCartFortifiedRoute(zone.Route))
+            if (!TryValidateMineCartRoute(zone.Route))
             {
-                lastStatus = "караван шахты: маршрут не укреплен";
+                lastStatus = "караван шахты: маршрут заблокирован";
                 return false;
             }
 
@@ -576,7 +619,7 @@ namespace Labyrinth.Core
             return waypoints.Count >= 2;
         }
 
-        private bool TryValidateMineCartFortifiedRoute(IReadOnlyList<Vector2Int> route)
+        private bool TryValidateMineCartRoute(IReadOnlyList<Vector2Int> route)
         {
             if (route == null || route.Count < 2 || route[0] != result.EntrancePosition)
             {
@@ -593,15 +636,15 @@ namespace Labyrinth.Core
                     return false;
                 }
 
-                if (!fortifiedCells.Contains(cell))
+                if (i > 0 && ManhattanDistance(route[i - 1], cell) != 1)
                 {
-                    GameDebugLog.Warning("Mine", $"Mine cart route rejected: cell {GameDebugLog.Position(cell)} at index {i} is not fortified.");
+                    GameDebugLog.Warning("Mine", $"Mine cart route rejected: non-adjacent route step {GameDebugLog.Position(route[i - 1])} -> {GameDebugLog.Position(cell)}.");
                     return false;
                 }
 
-                if (i > 0 && ManhattanDistance(route[i - 1], cell) != 1)
+                if (!fortifiedCells.Contains(cell))
                 {
-                    GameDebugLog.Warning("Mine", $"Mine cart route rejected: non-adjacent fortified step {GameDebugLog.Position(route[i - 1])} -> {GameDebugLog.Position(cell)}.");
+                    GameDebugLog.Warning("Mine", $"Mine cart route rejected: cell {GameDebugLog.Position(cell)} at index {i} is not fortified.");
                     return false;
                 }
             }
@@ -619,14 +662,25 @@ namespace Labyrinth.Core
             var speed = mazeRenderer.CellSize * CartSpeedCellsPerSecond * Time.deltaTime;
             for (var i = mineCarts.Count - 1; i >= 0; i--)
             {
-                if (!mineCarts[i].Move(speed))
+                var arrival = mineCarts[i].Move(speed);
+                if (arrival == MineCartArrival.None)
                 {
                     continue;
                 }
 
-                CompleteMineCartDelivery(mineCarts[i]);
-                mineCarts[i].Destroy();
-                mineCarts.RemoveAt(i);
+                if (arrival == MineCartArrival.Delivered)
+                {
+                    CompleteMineCartDelivery(mineCarts[i]);
+                    mineCarts[i].BeginReturn();
+                    continue;
+                }
+
+                if (arrival == MineCartArrival.Returned)
+                {
+                    mineCarts[i].Zone.ActiveCartCount = Mathf.Max(0, mineCarts[i].Zone.ActiveCartCount - 1);
+                    mineCarts[i].Destroy();
+                    mineCarts.RemoveAt(i);
+                }
             }
 
             TraceMineCarts();
@@ -645,7 +699,6 @@ namespace Labyrinth.Core
                 ShowFloatingText(result.BasePosition, $"+{cart.Amount} золото", GetOreAccentColor(cart.Zone.OreType), 4.2f);
             }
 
-            cart.Zone.ActiveCartCount = Mathf.Max(0, cart.Zone.ActiveCartCount - 1);
             GameAudioController.Play(GameSfx.Deposit, mazeRenderer.GridToWorld(result.BasePosition), 0.9f);
             GameDebugLog.Info(
                 "Mine",
@@ -655,6 +708,12 @@ namespace Labyrinth.Core
         private void TraceMineCarts()
         {
             if (mineCarts.Count == 0)
+            {
+                cartTraceTimer = 0f;
+                return;
+            }
+
+            if (!GameDebugLog.VerboseTrace)
             {
                 cartTraceTimer = 0f;
                 return;
@@ -775,6 +834,14 @@ namespace Labyrinth.Core
                 Mathf.RoundToInt(worldPosition.z / size));
         }
 
+        private bool TryGetDynamicLightOrigin(Vector3 worldPosition, out Vector2Int origin)
+        {
+            origin = WorldToApproxGridCell(worldPosition);
+            return result != null
+                && result.Grid != null
+                && result.Grid.InBounds(origin);
+        }
+
         private MineZone GetNextActiveZone()
         {
             for (var i = 0; i < zones.Count; i++)
@@ -801,6 +868,25 @@ namespace Labyrinth.Core
             }
 
             return completed;
+        }
+
+        private int CountFortifiedRouteCells(MineZone zone)
+        {
+            if (zone == null || zone.Route == null)
+            {
+                return 0;
+            }
+
+            var count = 0;
+            for (var i = 0; i < zone.Route.Count; i++)
+            {
+                if (fortifiedCells.Contains(zone.Route[i]))
+                {
+                    count++;
+                }
+            }
+
+            return count;
         }
 
         private void SkipAlreadyFortifiedRouteCells(MineZone zone)
@@ -871,26 +957,65 @@ namespace Labyrinth.Core
             torchLitCells.Clear();
             foreach (var cell in torchPositions)
             {
-                AddLightFrom(cell);
+                AddLightFrom(cell, TorchLightRange);
+            }
+
+            foreach (var cell in completedMineLightPositions)
+            {
+                AddLightFrom(cell, CompletedMineLightRange);
             }
         }
 
-        private void AddLightFrom(Vector2Int origin)
+        private void AddLightFrom(Vector2Int origin, int lightRange)
         {
-            for (var x = origin.x - TorchLightRange; x <= origin.x + TorchLightRange; x++)
+            AddLightFrom(origin, lightRange, torchLitCells);
+        }
+
+        private void AddLightFrom(Vector2Int origin, int lightRange, HashSet<Vector2Int> targetCells)
+        {
+            if (targetCells == null || result == null || result.Grid == null)
             {
-                for (var y = origin.y - TorchLightRange; y <= origin.y + TorchLightRange; y++)
+                return;
+            }
+
+            for (var x = origin.x - lightRange; x <= origin.x + lightRange; x++)
+            {
+                for (var y = origin.y - lightRange; y <= origin.y + lightRange; y++)
                 {
                     var target = new Vector2Int(x, y);
-                    if (!result.Grid.InBounds(target) || ChebyshevDistance(origin, target) > TorchLightRange)
+                    if (!result.Grid.InBounds(target) || ChebyshevDistance(origin, target) > lightRange)
                     {
                         continue;
                     }
 
                     if (CanSee(result.Grid, origin, target))
                     {
-                        torchLitCells.Add(target);
+                        targetCells.Add(target);
                     }
+                }
+            }
+        }
+
+        private void AddActiveMineLightCells(HashSet<Vector2Int> visibleCells)
+        {
+            if (visibleCells == null || result == null || result.Grid == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < activeWorkers.Count; i++)
+            {
+                if (TryGetDynamicLightOrigin(activeWorkers[i].CurrentWorldPosition, out var origin))
+                {
+                    AddLightFrom(origin, DynamicMineLightRange, visibleCells);
+                }
+            }
+
+            for (var i = 0; i < mineCarts.Count; i++)
+            {
+                if (TryGetDynamicLightOrigin(mineCarts[i].CurrentWorldPosition, out var origin))
+                {
+                    AddLightFrom(origin, DynamicMineLightRange, visibleCells);
                 }
             }
         }

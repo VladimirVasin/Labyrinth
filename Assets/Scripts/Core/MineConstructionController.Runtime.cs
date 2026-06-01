@@ -22,6 +22,13 @@ namespace Labyrinth.Core
             ReturningToCastle
         }
 
+        private enum MineCartArrival
+        {
+            None,
+            Delivered,
+            Returned
+        }
+
         private sealed class MineZone
         {
             public MineZone(CaveInfo cave, List<Vector2Int> route, OreDepositType oreType)
@@ -29,6 +36,7 @@ namespace Labyrinth.Core
                 Cave = cave;
                 Route = route;
                 OreType = oreType;
+                State = MineZoneState.BuildingRoute;
             }
 
             public CaveInfo Cave { get; }
@@ -41,7 +49,7 @@ namespace Labyrinth.Core
 
             public MineZoneState State { get; set; }
 
-            public bool MineBuildPaid { get; set; }
+            public int MineBuildDeliveredWood { get; set; }
 
             public int StoredAmount { get; set; }
 
@@ -219,13 +227,19 @@ namespace Labyrinth.Core
 
             private readonly Transform root;
             private readonly List<Vector3> waypoints;
+            private readonly List<Vector3> returnWaypoints;
+            private readonly Transform cargo;
             private int nextWaypoint = 1;
+            private bool returning;
 
             public MineCartRuntime(int id, Transform cartRoot, List<Vector3> cartWaypoints, MineZone zone, int amount)
             {
                 Id = id;
                 root = cartRoot;
                 waypoints = cartWaypoints;
+                returnWaypoints = new List<Vector3>(cartWaypoints);
+                returnWaypoints.Reverse();
+                cargo = cartRoot != null ? cartRoot.Find("Mine Cart Cargo") : null;
                 Zone = zone;
                 Amount = amount;
                 FaceNextWaypoint();
@@ -237,6 +251,8 @@ namespace Labyrinth.Core
 
             public int Amount { get; }
 
+            public bool IsReturning => returning;
+
             public Vector3 CurrentWorldPosition => root != null ? root.position : Vector3.zero;
 
             public Vector3 DestinationWorld => waypoints.Count > 0 ? waypoints[waypoints.Count - 1] : CurrentWorldPosition;
@@ -245,11 +261,11 @@ namespace Labyrinth.Core
 
             public int RemainingWaypoints => Mathf.Max(0, waypoints.Count - nextWaypoint);
 
-            public bool Move(float distance)
+            public MineCartArrival Move(float distance)
             {
                 if (root == null || nextWaypoint >= waypoints.Count)
                 {
-                    return true;
+                    return returning ? MineCartArrival.Returned : MineCartArrival.Delivered;
                 }
 
                 var remaining = distance;
@@ -273,8 +289,32 @@ namespace Labyrinth.Core
                     remaining = 0f;
                 }
 
-                return nextWaypoint >= waypoints.Count
-                    || (waypoints[waypoints.Count - 1] - root.position).sqrMagnitude <= ArrivalSqrDistance;
+                if (nextWaypoint < waypoints.Count
+                    && (waypoints[waypoints.Count - 1] - root.position).sqrMagnitude > ArrivalSqrDistance)
+                {
+                    return MineCartArrival.None;
+                }
+
+                return returning ? MineCartArrival.Returned : MineCartArrival.Delivered;
+            }
+
+            public void BeginReturn()
+            {
+                if (returning)
+                {
+                    return;
+                }
+
+                returning = true;
+                waypoints.Clear();
+                waypoints.AddRange(returnWaypoints);
+                nextWaypoint = waypoints.Count > 1 ? 1 : 0;
+                if (cargo != null)
+                {
+                    cargo.gameObject.SetActive(false);
+                }
+
+                FaceNextWaypoint();
             }
 
             public void Destroy()

@@ -34,20 +34,26 @@ namespace Labyrinth.Core
             if (!CanCreateHero())
             {
                 var cost = GetHeroCost();
-                if (baseDevelopment.HeroHouseCount >= baseDevelopment.MaxHeroCount)
+                if (!IsBuildingUnlocked(BuildingType.HeroHouse))
                 {
-                    baseDevelopment.ReportBuildBlocked($"дом героя: лимит домов {baseDevelopment.HeroHouseCount} / {baseDevelopment.MaxHeroCount}");
-                    GameDebugLog.Warning(
-                        "Hero",
-                        $"Hero creation blocked: house slots are full, houses={baseDevelopment.HeroHouseCount}, max={baseDevelopment.MaxHeroCount}.");
+                    var unlockHint = baseDevelopment.GetBuildingUnlockHint(BuildingType.HeroHouse);
+                    baseDevelopment.ReportBuildBlocked($"hero house: {unlockHint}");
+                    GameDebugLog.Warning("Hero", $"Hero creation blocked: locked, hint={unlockHint}.");
                     return;
                 }
 
-                if (currentMaze != null
-                    && heroes.Count < baseDevelopment.MaxHeroCount
-                    && !resources.CanAfford(cost))
+                if (baseDevelopment.HeroHouseCount + GetPendingBuildingCount(BuildingType.HeroHouse) >= baseDevelopment.MaxHeroCount)
                 {
-                    baseDevelopment.ReportBuildBlocked($"дом героя: нужно {cost.Format()}");
+                    baseDevelopment.ReportBuildBlocked($"hero house: limit {baseDevelopment.HeroHouseCount + GetPendingBuildingCount(BuildingType.HeroHouse)} / {baseDevelopment.MaxHeroCount}");
+                    GameDebugLog.Warning(
+                        "Hero",
+                        $"Hero creation blocked: house slots are full or planned, houses={baseDevelopment.HeroHouseCount}, pending={GetPendingBuildingCount(BuildingType.HeroHouse)}, max={baseDevelopment.MaxHeroCount}.");
+                    return;
+                }
+
+                if (!resources.CanAfford(cost))
+                {
+                    baseDevelopment.ReportBuildBlocked($"hero house: need {cost.Format()}");
                     GameDebugLog.Warning("Hero", $"Hero creation blocked: food={resources.Food}, gold={resources.Gold}, wood={resources.Wood}, required={cost.Format()}");
                 }
 
@@ -56,25 +62,28 @@ namespace Labyrinth.Core
 
             var heroCost = GetHeroCost();
             var heroNumber = nextHeroNumber;
-            if (!baseDevelopment.TryBuildHeroHouse(currentMaze, out var housePosition))
-            {
-                var blockMessage = baseDevelopment.LastBuildMessage;
-                baseDevelopment.ReportBuildBlocked($"дом героя: {blockMessage}");
-                GameDebugLog.Warning("Hero", $"Hero {heroNumber} creation blocked: {blockMessage}");
-                return;
-            }
-
-            if (!resources.TrySpend(heroCost))
-            {
-                baseDevelopment.RemoveHeroHouse(housePosition);
-                baseDevelopment.ReportBuildBlocked($"дом героя: нужно {heroCost.Format()}");
-                GameDebugLog.Warning("Hero", $"Hero {heroNumber} creation payment failed: food={resources.Food}, gold={resources.Gold}, wood={resources.Wood}, required={heroCost.Format()}");
-                return;
-            }
-
             var lineage = CreateHeroLineage(heroNumber);
+            if (!TryStartBaseBuildingConstruction(BuildingType.HeroHouse, heroCost, $"Hero house {heroNumber}", out var housePosition, heroNumber))
+            {
+                heroLineagesByHeroNumber.Remove(heroNumber);
+                return;
+            }
+
+            nextHeroNumber++;
+            GameDebugLog.Info(
+                "Hero",
+                $"Hero house construction started for hero #{heroNumber} ({lineage.CurrentDisplayName}): cost={heroCost.Format()}, house={GameDebugLog.Position(housePosition)}.");
+        }
+
+        private void CompleteHeroHouseConstruction(int heroNumber, Vector2Int housePosition)
+        {
+            if (currentMaze == null || heroNumber <= 0)
+            {
+                return;
+            }
+
+            var lineage = GetOrCreateHeroLineage(heroNumber);
             var heroName = lineage.CurrentDisplayName;
-            ClearTerrainDecorationsAround(housePosition, BaseDevelopment.HeroHouseFootprintRadiusCells);
             var houseView = mazeRenderer.RenderHeroHouse(housePosition, heroNumber);
             if (houseView != null)
             {
@@ -86,57 +95,18 @@ namespace Labyrinth.Core
             cityAmbience.RegisterBuilding(BuildingType.HeroHouse, housePosition);
             SyncPeasantHuts();
 
-            if (cartographerMemory == null)
+            var hero = CreateHeroControllerFromHouse(heroNumber, heroName, lineage, housePosition, out var trainingBonus);
+            if (hero == null)
             {
-                cartographerMemory = new HeroMemory(currentMaze.Grid);
-                cartographerMemory.Remember(currentMaze.EntrancePosition);
+                return;
             }
 
-            if (sharedHeroMemoryView == null)
-            {
-                sharedHeroMemoryView = HeroMemoryView.Create(mazeRenderer);
-                sharedHeroMemoryView.transform.SetParent(transform, true);
-            }
-
-            if (selectedHeroVisibilityView == null)
-            {
-                selectedHeroVisibilityView = HeroVisibilityView.Create(mazeRenderer);
-                selectedHeroVisibilityView.transform.SetParent(transform, true);
-            }
-
-            selectedHeroVisibilityView.SetMode(visibilityDisplayMode);
-
-            var personalMemory = new HeroMemory(currentMaze.Grid);
-            if (baseDevelopment.HasCartographerHouse)
-            {
-                personalMemory.MergeFrom(cartographerMemory);
-            }
-
-            var hero = HeroController.Create(
-                currentMaze,
-                currentMaze.EntrancePosition,
-                heroNumber,
-                heroName,
-                mazeRenderer,
-                personalMemory,
-                null,
-                goldIngotManager,
-                deathTokenManager,
-                SyncHeroKnowledgeAtEntrance,
-                HandleDownStairsOpened,
-                TryGetNearbyHeroMobInteractionCell,
-                explorationCoordinator,
-                BuildHeroStatSeed(heroNumber, lineage.Generation));
-            var trainingBonus = ApplyHeroLineageTraits(hero, lineage);
-            hero.SetFortifiedCellProvider(IsHeroMovementFortifiedCell);
-            heroes.Add(hero);
-            nextHeroNumber++;
-            SelectHero(hero);
-            GameAudioController.Play(GameSfx.HeroCreated, mazeRenderer.GridToWorld(currentMaze.EntrancePosition));
+            GameAudioController.Play(GameSfx.HeroCreated, mazeRenderer.GridToWorld(housePosition));
             StartAdventureMusicIfNeeded();
+            RefreshSelectedHeroVisibility();
             GameDebugLog.Info(
                 "Hero",
-                $"Created hero #{heroNumber} ({heroName}): cost={heroCost.Format()}, foodLeft={resources.Food}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, spawn={GameDebugLog.Position(currentMaze.EntrancePosition)}, house={GameDebugLog.Position(housePosition)}, training={trainingBonus.ToDisplayText()}, vengeance={hero.Model.VengeanceText}, trait={hero.Model.CharacterTrait}, scar={hero.Model.PersonalScar}, hp={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, atk={hero.Model.AttackPoints}, armor={hero.Model.ArmorPoints}, stamina={hero.Model.Stamina}/{hero.Model.MaxStamina}");
+                $"Created hero #{heroNumber} ({heroName}) after house construction: spawnHouse={GameDebugLog.Position(housePosition)}, entranceTarget={GameDebugLog.Position(currentMaze.EntrancePosition)}, training={trainingBonus.ToDisplayText()}, vengeance={hero.Model.VengeanceText}, trait={hero.Model.CharacterTrait}, scar={hero.Model.PersonalScar}, hp={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, atk={hero.Model.AttackPoints}, armor={hero.Model.ArmorPoints}, stamina={hero.Model.Stamina}/{hero.Model.MaxStamina}");
         }
 
         private void RebirthHeroFromHouse(int heroNumber)
@@ -162,49 +132,25 @@ namespace Labyrinth.Core
                 houseView.SetEffectText(BuildHeroHouseEffectText(heroName, lineage));
             }
 
-            if (cartographerMemory == null)
+            var housePosition = houseView != null ? houseView.GridPosition : currentMaze.BasePosition;
+            var hero = CreateHeroControllerFromHouse(heroNumber, heroName, lineage, housePosition, out var trainingBonus);
+            if (hero == null)
             {
-                cartographerMemory = new HeroMemory(currentMaze.Grid);
-                cartographerMemory.Remember(currentMaze.EntrancePosition);
+                return;
             }
 
-            var personalMemory = new HeroMemory(currentMaze.Grid);
-            if (baseDevelopment.HasCartographerHouse)
-            {
-                personalMemory.MergeFrom(cartographerMemory);
-            }
-
-            var hero = HeroController.Create(
-                currentMaze,
-                currentMaze.EntrancePosition,
-                heroNumber,
-                heroName,
-                mazeRenderer,
-                personalMemory,
-                null,
-                goldIngotManager,
-                deathTokenManager,
-                SyncHeroKnowledgeAtEntrance,
-                HandleDownStairsOpened,
-                TryGetNearbyHeroMobInteractionCell,
-                explorationCoordinator,
-                BuildHeroStatSeed(heroNumber, lineage.Generation));
-            var trainingBonus = ApplyHeroLineageTraits(hero, lineage);
-            hero.SetFortifiedCellProvider(IsHeroMovementFortifiedCell);
             var legacyExperience = lineage.ConsumePendingLegacyExperience();
             var gainedLevels = hero.Model.AddExperience(legacyExperience);
-            heroes.Add(hero);
-            SelectHero(hero);
-            GameAudioController.Play(GameSfx.HeroCreated, mazeRenderer.GridToWorld(currentMaze.EntrancePosition));
+            GameAudioController.Play(GameSfx.HeroCreated, mazeRenderer.GridToWorld(housePosition));
             if (gainedLevels > 0)
             {
-                GameAudioController.Play(GameSfx.LevelUp, mazeRenderer.GridToWorld(currentMaze.EntrancePosition), 0.85f);
+                GameAudioController.Play(GameSfx.LevelUp, mazeRenderer.GridToWorld(housePosition), 0.85f);
             }
 
             StartAdventureMusicIfNeeded();
             GameDebugLog.Info(
                 "Hero",
-                $"Reborn hero #{heroNumber} ({heroName}): generation={lineage.Generation}, legacyXp={legacyExperience}, gainedLevels={gainedLevels}, cost={heroCost.Format()}, foodLeft={resources.Food}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, spawn={GameDebugLog.Position(currentMaze.EntrancePosition)}, house={GameDebugLog.Position(houseView != null ? houseView.GridPosition : currentMaze.BasePosition)}, training={trainingBonus.ToDisplayText()}, vengeance={hero.Model.VengeanceText}, trait={hero.Model.CharacterTrait}, scar={hero.Model.PersonalScar}, hp={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, atk={hero.Model.AttackPoints}, armor={hero.Model.ArmorPoints}, stamina={hero.Model.Stamina}/{hero.Model.MaxStamina}.");
+                $"Reborn hero #{heroNumber} ({heroName}): generation={lineage.Generation}, legacyXp={legacyExperience}, gainedLevels={gainedLevels}, cost={heroCost.Format()}, foodLeft={resources.Food}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, spawnHouse={GameDebugLog.Position(housePosition)}, entranceTarget={GameDebugLog.Position(currentMaze.EntrancePosition)}, training={trainingBonus.ToDisplayText()}, vengeance={hero.Model.VengeanceText}, trait={hero.Model.CharacterTrait}, scar={hero.Model.PersonalScar}, hp={hero.Model.HitPoints}/{hero.Model.MaxHitPoints}, atk={hero.Model.AttackPoints}, armor={hero.Model.ArmorPoints}, stamina={hero.Model.Stamina}/{hero.Model.MaxStamina}.");
         }
 
         private static HeroLineageTrainingBonus ApplyHeroLineageTraits(HeroController hero, HeroLineageState lineage)
@@ -237,7 +183,10 @@ namespace Labyrinth.Core
 
             foreach (var hero in heroes)
             {
-                if (hero == null || hero.Model == null || !hero.Model.IsAlive)
+                if (hero == null
+                    || hero.Model == null
+                    || !hero.Model.IsAlive
+                    || hero.Model.State == HeroState.GoingToEntrance)
                 {
                     continue;
                 }
@@ -252,13 +201,15 @@ namespace Labyrinth.Core
 
         private bool CanCreateHero()
         {
-            if (currentMaze == null || !resources.CanAfford(GetHeroCost()))
+            if (currentMaze == null
+                || !IsBuildingUnlocked(BuildingType.HeroHouse)
+                || !resources.CanAfford(GetHeroCost()))
             {
                 return false;
             }
 
             return TryGetDefeatedHeroSlot(out _)
-                || baseDevelopment.HeroHouseCount < baseDevelopment.MaxHeroCount;
+                || baseDevelopment.HeroHouseCount + GetPendingBuildingCount(BuildingType.HeroHouse) < baseDevelopment.MaxHeroCount;
         }
 
         private bool IsHeroMovementFortifiedCell(UnityEngine.Vector2Int cell)
@@ -278,7 +229,8 @@ namespace Labyrinth.Core
 
         private string GetHeroHouseStatus()
         {
-            var status = $"активных: {heroes.Count} / {baseDevelopment.MaxHeroCount}, домов: {baseDevelopment.HeroHouseCount}, постройка {GetHeroCost().Format()}, замок ур. {baseDevelopment.CastleLevel}";
+            var pendingHouses = GetPendingBuildingCount(BuildingType.HeroHouse);
+            var status = $"active: {heroes.Count} / {baseDevelopment.MaxHeroCount}, houses: {baseDevelopment.HeroHouseCount}, building: {pendingHouses}, cost {GetHeroCost().Format()}, castle level {baseDevelopment.CastleLevel}";
             if (baseDevelopment.LastBuildMessage.Contains("дом героя")
                 || baseDevelopment.LastBuildMessage == "нет свободной клетки рядом")
             {
@@ -290,7 +242,7 @@ namespace Labyrinth.Core
                 status += $", возрождение: {BuildDefeatedHeroSlotsText()}";
             }
 
-            return status;
+            return AppendBuildingUnlockStatus(BuildingType.HeroHouse, status);
         }
 
         private void RetireDefeatedHeroes()
@@ -789,6 +741,7 @@ namespace Labyrinth.Core
 
         private void DestroyHeroes()
         {
+            ClearHeroEntranceCommutes();
             selectedHero = null;
             heroHouseViewsByHeroNumber.Clear();
             heroLineagesByHeroNumber.Clear();

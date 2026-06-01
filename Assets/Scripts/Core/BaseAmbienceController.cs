@@ -7,7 +7,9 @@ namespace Labyrinth.Core
 {
     public sealed partial class BaseAmbienceController : MonoBehaviour
     {
-        private const float RoadBuildInterval = 0.16f;
+        private const float RoadWorkerSpeedCellsPerSecond = 1.9f;
+        private const float RoadSegmentBuildSeconds = 0.55f;
+        private const float RoadWorkerYOffset = 0.06f;
         private const float RoadHeight = 0.028f;
         private const float RoadWidthRatio = 0.3f;
         private const float RoadYOffset = 0.018f;
@@ -35,8 +37,12 @@ namespace Labyrinth.Core
         private Material cartWoodMaterial;
         private Material cartWheelMaterial;
         private Material cartCargoMaterial;
+        private Material roadWorkerBodyMaterial;
+        private Material roadWorkerHeadMaterial;
+        private Material roadWorkerToolMaterial;
 
         public event System.Action<Vector2Int, Vector2Int, int> FarmCartDelivered;
+        public event System.Action<BuildingType, Vector2Int> RoadCompleted;
 
         public void Configure(TerrainDecorationController decorations)
         {
@@ -104,18 +110,41 @@ namespace Labyrinth.Core
 
         public bool TrySendFarmCart(Vector2Int farmPosition, int foodAmount)
         {
-            if (foodAmount <= 0 || carts.Count >= MaxActiveCarts)
+            return TrySendProductionCart(BuildingType.Farm, farmPosition, foodAmount);
+        }
+
+        public bool TrySendLumberCart(Vector2Int campPosition, int woodAmount)
+        {
+            return TrySendProductionCart(BuildingType.LumberjackCamp, campPosition, woodAmount);
+        }
+
+        private bool TrySendProductionCart(BuildingType type, Vector2Int buildingPosition, int amount)
+        {
+            if (amount <= 0 || carts.Count >= MaxActiveCarts || HasActiveCartFor(buildingPosition))
             {
                 return false;
             }
 
             foreach (var road in roads)
             {
-                if ((road.Type == BuildingType.Farm || road.Type == BuildingType.LumberjackCamp)
-                    && road.BuildingPosition == farmPosition
+                if (road.Type == type
+                    && road.BuildingPosition == buildingPosition
                     && road.IsComplete)
                 {
-                    SpawnCart(road, foodAmount);
+                    SpawnCart(road, amount);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool HasActiveCartFor(Vector2Int buildingPosition)
+        {
+            for (var i = 0; i < carts.Count; i++)
+            {
+                if (carts[i].FarmPosition == buildingPosition)
+                {
                     return true;
                 }
             }
@@ -193,17 +222,10 @@ namespace Labyrinth.Core
                 return;
             }
 
-            var road = new RoadConnection(BuildingType.Castle, result.BasePosition, path)
-            {
-                BuiltSegments = path.Count - 1
-            };
+            var road = new RoadConnection(BuildingType.Castle, result.BasePosition, path);
             roads.Add(road);
-            for (var i = 0; i < path.Count - 1; i++)
-            {
-                CreateRoadSegment(road, i);
-            }
 
-            GameDebugLog.Info("Base", $"Entrance road built: castle={GameDebugLog.Position(result.BasePosition)}, entrance={GameDebugLog.Position(result.EntrancePosition)}, segments={path.Count - 1}.");
+            GameDebugLog.Info("Base", $"Entrance road queued: castle={GameDebugLog.Position(result.BasePosition)}, entrance={GameDebugLog.Position(result.EntrancePosition)}, segments={path.Count - 1}.");
         }
 
         private void ClearRoadRuntime()
@@ -236,6 +258,7 @@ namespace Labyrinth.Core
 
         private void BuildRoads()
         {
+            var moveDistance = mazeRenderer.CellSize * RoadWorkerSpeedCellsPerSecond * Time.deltaTime;
             foreach (var road in roads)
             {
                 if (road.IsComplete)
@@ -243,21 +266,30 @@ namespace Labyrinth.Core
                     continue;
                 }
 
-                road.BuildTimer -= Time.deltaTime;
-                if (road.BuildTimer > 0f)
+                EnsureRoadWorker(road);
+                if (road.Worker == null)
                 {
                     continue;
                 }
 
-                road.BuildTimer = RoadBuildInterval;
-                CreateRoadSegment(road, road.BuiltSegments);
+                var segmentIndex = GetRoadBuildSegmentIndex(road);
+                var target = GetRoadWorkerTarget(road);
+                if (!road.Worker.Update(segmentIndex, target, moveDistance, Time.deltaTime, RoadSegmentBuildSeconds))
+                {
+                    continue;
+                }
+
+                CreateRoadSegment(road, segmentIndex);
                 road.BuiltSegments++;
 
                 if (road.IsComplete)
                 {
+                    road.Worker.Destroy();
+                    road.Worker = null;
                     GameDebugLog.Info(
                         "Base",
                         $"Ambient road completed for {road.Type} at {GameDebugLog.Position(road.BuildingPosition)}.");
+                    RoadCompleted?.Invoke(road.Type, road.BuildingPosition);
                 }
             }
         }
@@ -267,9 +299,21 @@ namespace Labyrinth.Core
             var speed = mazeRenderer.CellSize * CartSpeedCellsPerSecond * Time.deltaTime;
             for (var i = carts.Count - 1; i >= 0; i--)
             {
-                if (carts[i].Move(speed))
+                var arrival = carts[i].Move(speed);
+                if (arrival == CartArrival.None)
+                {
+                    continue;
+                }
+
+                if (arrival == CartArrival.Delivered)
                 {
                     FarmCartDelivered?.Invoke(carts[i].FarmPosition, result.BasePosition, carts[i].FoodAmount);
+                    carts[i].BeginReturn();
+                    continue;
+                }
+
+                if (arrival == CartArrival.Returned)
+                {
                     carts[i].Destroy();
                     carts.RemoveAt(i);
                 }
@@ -281,6 +325,20 @@ namespace Labyrinth.Core
             foreach (var building in buildings)
             {
                 if (building.Type == type && building.Position == buildingPosition)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public bool HasCompletedRoad(BuildingType type, Vector2Int buildingPosition)
+        {
+            for (var i = 0; i < roads.Count; i++)
+            {
+                var road = roads[i];
+                if (road.Type == type && road.BuildingPosition == buildingPosition && road.IsComplete)
                 {
                     return true;
                 }
@@ -338,6 +396,84 @@ namespace Labyrinth.Core
             terrainDecorations?.RegisterRoadSegment(from, to);
         }
 
+        private void EnsureRoadWorker(RoadConnection road)
+        {
+            if (road.Worker != null || road.Path.Count == 0)
+            {
+                return;
+            }
+
+            var startIndex = GetRoadWorkerStartIndex(road);
+            var start = mazeRenderer.GridToWorld(road.Path[startIndex]) + Vector3.up * mazeRenderer.CellSize * RoadWorkerYOffset;
+            var worker = BuildRoadWorker(start, road);
+            road.Worker = worker;
+            GameDebugLog.Info(
+                "Base",
+                $"Road worker started: type={road.Type}, building={GameDebugLog.Position(road.BuildingPosition)}, from={GameDebugLog.Position(road.Path[startIndex])}, nextSegment={road.BuiltSegments + 1}/{road.Path.Count - 1}.");
+        }
+
+        private int GetRoadBuildSegmentIndex(RoadConnection road)
+        {
+            return ShouldBuildRoadForward(road)
+                ? road.BuiltSegments
+                : road.Path.Count - 2 - road.BuiltSegments;
+        }
+
+        private int GetRoadWorkerStartIndex(RoadConnection road)
+        {
+            return ShouldBuildRoadForward(road)
+                ? Mathf.Clamp(road.BuiltSegments, 0, road.Path.Count - 1)
+                : Mathf.Clamp(road.Path.Count - 1 - road.BuiltSegments, 0, road.Path.Count - 1);
+        }
+
+        private Vector3 GetRoadWorkerTarget(RoadConnection road)
+        {
+            var nextIndex = ShouldBuildRoadForward(road)
+                ? Mathf.Clamp(road.BuiltSegments + 1, 0, road.Path.Count - 1)
+                : Mathf.Clamp(road.Path.Count - 2 - road.BuiltSegments, 0, road.Path.Count - 1);
+            return mazeRenderer.GridToWorld(road.Path[nextIndex]) + Vector3.up * mazeRenderer.CellSize * RoadWorkerYOffset;
+        }
+
+        private bool ShouldBuildRoadForward(RoadConnection road)
+        {
+            if (result != null && road.Path.Count > 0)
+            {
+                if (road.Path[0] == result.BasePosition)
+                {
+                    return true;
+                }
+
+                if (road.Path[road.Path.Count - 1] == result.BasePosition)
+                {
+                    return false;
+                }
+            }
+
+            return road.Type == BuildingType.Castle;
+        }
+
+        private RoadWorkerRuntime BuildRoadWorker(Vector3 position, RoadConnection road)
+        {
+            var worker = new GameObject("Road Construction Worker").transform;
+            worker.SetParent(root, false);
+            worker.position = position;
+            var unit = mazeRenderer.ModelUnitSize * 1.08f;
+            VoxelVisuals.CreateContactShadow(
+                "Road Worker Contact Shadow",
+                worker,
+                new Vector3(0f, 0.006f, 0f),
+                new Vector3(unit * 0.34f, 0.004f, unit * 0.27f),
+                0.3f);
+            CreateCartPart("Road Worker Body", worker, PrimitiveType.Capsule, new Vector3(0f, unit * 0.32f, 0f), new Vector3(unit * 0.2f, unit * 0.34f, unit * 0.2f), Quaternion.identity, roadWorkerBodyMaterial);
+            CreateCartPart("Road Worker Head", worker, PrimitiveType.Sphere, new Vector3(0f, unit * 0.74f, 0f), Vector3.one * unit * 0.16f, Quaternion.identity, roadWorkerHeadMaterial);
+            CreateCartPart("Road Worker Left Foot", worker, PrimitiveType.Cube, new Vector3(-unit * 0.09f, unit * 0.09f, unit * 0.05f), new Vector3(unit * 0.1f, unit * 0.08f, unit * 0.16f), Quaternion.identity, roadWorkerBodyMaterial);
+            CreateCartPart("Road Worker Right Foot", worker, PrimitiveType.Cube, new Vector3(unit * 0.09f, unit * 0.09f, unit * 0.05f), new Vector3(unit * 0.1f, unit * 0.08f, unit * 0.16f), Quaternion.identity, roadWorkerBodyMaterial);
+            AmbientWalkerMoveAnimator.Attach(worker, unit, BuildRoadWorkerAnimationSeed(road));
+            var shovel = CreateCartPart("Road Worker Shovel", worker, PrimitiveType.Cube, new Vector3(unit * 0.18f, unit * 0.48f, unit * 0.08f), new Vector3(unit * 0.055f, unit * 0.52f, unit * 0.055f), Quaternion.Euler(0f, 0f, 34f), roadWorkerToolMaterial);
+            CreateCartPart("Road Worker Shovel Blade", worker, PrimitiveType.Cube, new Vector3(unit * 0.28f, unit * 0.22f, unit * 0.08f), new Vector3(unit * 0.16f, unit * 0.06f, unit * 0.18f), Quaternion.Euler(0f, 0f, 34f), roadWorkerToolMaterial);
+            return new RoadWorkerRuntime(worker, shovel);
+        }
+
         private void SpawnCart(RoadConnection road, int foodAmount)
         {
             var waypoints = BuildCartWaypoints(road.Path);
@@ -346,11 +482,20 @@ namespace Labyrinth.Core
                 return;
             }
 
-            var cartRoot = new GameObject("Farm Cart");
+            var isLumber = road.Type == BuildingType.LumberjackCamp;
+            var cartRoot = new GameObject(isLumber ? "Lumber Cart" : "Farm Cart");
             cartRoot.transform.SetParent(root, false);
             cartRoot.transform.position = waypoints[0];
             var visuals = BuildCartModel(cartRoot.transform);
             carts.Add(new CartRuntime(cartRoot, waypoints, visuals, road.BuildingPosition, foodAmount));
+            if (isLumber)
+            {
+                GameDebugLog.Info(
+                    "Base",
+                    $"Lumber cart sent: camp={GameDebugLog.Position(road.BuildingPosition)}, wood={foodAmount}.");
+                return;
+            }
+
             GameDebugLog.Info(
                 "Base",
                 $"Farm cart sent: farm={GameDebugLog.Position(road.BuildingPosition)}, food={foodAmount}.");
@@ -385,7 +530,7 @@ namespace Labyrinth.Core
                 new Vector3(unit * 0.52f, unit * 0.18f, unit * 0.42f),
                 Quaternion.identity,
                 cartWoodMaterial);
-            CreateCartPart(
+            var cargo = CreateCartPart(
                 "Cart Cargo",
                 visualRoot,
                 PrimitiveType.Cube,
@@ -408,7 +553,7 @@ namespace Labyrinth.Core
             wheels[1] = CreateWheel(visualRoot, new Vector3(unit * 0.32f, unit * 0.1f, unit * -0.18f), rotation);
             wheels[2] = CreateWheel(visualRoot, new Vector3(unit * -0.32f, unit * 0.1f, unit * 0.18f), rotation);
             wheels[3] = CreateWheel(visualRoot, new Vector3(unit * 0.32f, unit * 0.1f, unit * 0.18f), rotation);
-            return new CartVisuals(visualRoot, wheels);
+            return new CartVisuals(visualRoot, cargo, wheels);
         }
 
         private Transform CreateWheel(Transform parent, Vector3 localPosition, Quaternion localRotation)
@@ -456,6 +601,9 @@ namespace Labyrinth.Core
             cartWoodMaterial = CreateMaterial("Ambient Cart Wood", new Color(0.38f, 0.2f, 0.08f));
             cartWheelMaterial = CreateMaterial("Ambient Cart Wheels", new Color(0.09f, 0.07f, 0.05f));
             cartCargoMaterial = CreateMaterial("Ambient Cart Cargo", new Color(0.7f, 0.56f, 0.22f));
+            roadWorkerBodyMaterial = CreateMaterial("Road Worker Body", new Color(0.31f, 0.25f, 0.18f));
+            roadWorkerHeadMaterial = CreateMaterial("Road Worker Head", new Color(0.73f, 0.58f, 0.4f));
+            roadWorkerToolMaterial = CreateMaterial("Road Worker Tool", new Color(0.42f, 0.37f, 0.29f));
         }
 
         private List<Vector2Int> BuildValidDirectPath(Vector2Int start, Vector2Int end, AmbientBuilding building)
@@ -825,6 +973,16 @@ namespace Labyrinth.Core
                 hash *= 1274126177;
                 hash ^= hash >> 16;
                 return hash & 0x7fffffff;
+            }
+        }
+
+        private static int BuildRoadWorkerAnimationSeed(RoadConnection road)
+        {
+            unchecked
+            {
+                return Hash(road.BuildingPosition)
+                    ^ ((int)road.Type * 83492791)
+                    ^ (road.Path.Count * 19349663);
             }
         }
 

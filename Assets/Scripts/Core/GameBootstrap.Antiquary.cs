@@ -8,49 +8,15 @@ namespace Labyrinth.Core
     {
         private void BuildAntiquaryFromBase()
         {
-            if (currentMaze == null)
-            {
-                return;
-            }
-
-            var cost = GetAntiquaryCost();
-            if (!resources.CanAfford(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"антиквариат: нужно {cost.Format()}");
-                GameDebugLog.Warning("Base", $"Antiquary build blocked: gold={resources.Gold}, wood={resources.Wood}, required={cost.Format()}");
-                return;
-            }
-
-            if (!baseDevelopment.TryBuildAntiquary(currentMaze, out var antiquaryPosition))
-            {
-                var blockMessage = baseDevelopment.LastBuildMessage;
-                baseDevelopment.ReportBuildBlocked($"антиквариат: {blockMessage}");
-                GameDebugLog.Warning("Base", $"Antiquary build blocked: {blockMessage}");
-                return;
-            }
-
-            if (!resources.TrySpend(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"антиквариат: нужно {cost.Format()}");
-                return;
-            }
-
-            ClearTerrainDecorationsAround(antiquaryPosition, BaseDevelopment.AntiquaryFootprintRadiusCells);
-            AntiquaryRenderer.Render(mazeRenderer, antiquaryPosition);
-            baseAmbience.RegisterBuilding(BuildingType.Antiquary, antiquaryPosition);
-            cityAmbience.RegisterBuilding(BuildingType.Antiquary, antiquaryPosition);
-            SyncPeasantHuts();
-            RefreshSelectedHeroVisibility();
-            GameAudioController.Play(GameSfx.Build, mazeRenderer.GridToWorld(antiquaryPosition));
-            GameDebugLog.Info(
-                "Base",
-                $"Antiquary built at {GameDebugLog.Position(antiquaryPosition)}. buildCost={cost.Format()}, goldLeft={resources.Gold}, woodLeft={resources.Wood}, returnStoneCost={BaseDevelopment.ReturnStoneGoldCost}.");
+            TryStartBaseBuildingConstruction(BuildingType.Antiquary, GetAntiquaryCost(), "Antiquary", out _);
         }
 
         private bool CanBuildAntiquary()
         {
             return currentMaze != null
                 && !baseDevelopment.HasAntiquary
+                && !HasPendingBuilding(BuildingType.Antiquary)
+                && IsBuildingUnlocked(BuildingType.Antiquary)
                 && resources.CanAfford(GetAntiquaryCost());
         }
 
@@ -64,7 +30,7 @@ namespace Labyrinth.Core
                 status += $", {baseDevelopment.LastBuildMessage}";
             }
 
-            return status;
+            return AppendBuildingUnlockStatus(BuildingType.Antiquary, status);
         }
     }
 }

@@ -104,6 +104,7 @@
     <Compile Include="Assets\Scripts\Core\GameBootstrap.Visibility.cs" />
     <Compile Include="Assets\Scripts\Combat\CombatController.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.Mines.cs" />
+    <Compile Include="Assets\Scripts\Core\BaseConstructionController.cs" />
     <Compile Include="Assets\Scripts\UI\VictoryHudView.cs" />
     <Compile Include="Assets\Scripts\Core\SubCellPathBuilder.cs" />
     <Compile Include="Assets\Scripts\Maze\CartographerHouseRenderer.cs" />
@@ -124,6 +125,7 @@
     <Compile Include="Assets\Scripts\Maze\MazeTerrain.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroExplorer.cs" />
     <Compile Include="Assets\Scripts\Hero\HeroExplorer.Pathfinding.cs" />
+    <Compile Include="Assets\Scripts\Core\BaseDevelopment.Balance.cs" />
     <Compile Include="Assets\Scripts\Core\VoxelBurstView.cs" />
     <Compile Include="Assets\Scripts\Maze\ChestModel.cs" />
     <Compile Include="Assets\Scripts\Core\VoxelVisuals.cs" />
@@ -157,6 +159,7 @@
     <Compile Include="Assets\Scripts\UI\BuildingServiceCatalog.cs" />
     <Compile Include="Assets\Scripts\Core\MineConstructionController.Runtime.cs" />
     <Compile Include="Assets\Scripts\Mobs\MobModel.cs" />
+    <Compile Include="Assets\Scripts\Core\GameBootstrap.Construction.cs" />
     <Compile Include="Assets\Scripts\Maze\MazeRenderer.Async.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.PeasantHuts.cs" />
     <Compile Include="Assets\Scripts\UI\GuiHudTransition.cs" />
@@ -166,6 +169,7 @@
     <Compile Include="Assets\Scripts\Core\GameBootstrap.Selection.cs" />
     <Compile Include="Assets\Scripts\UI\MobHudView.cs" />
     <Compile Include="Assets\Scripts\Core\MarketExchange.cs" />
+    <Compile Include="Assets\Scripts\Core\GameBootstrap.HeroCommute.cs" />
     <Compile Include="Assets\Scripts\UI\MainMenuUI.cs" />
     <Compile Include="Assets\Scripts\Maze\MazeRenderer.Visibility.cs" />
     <Compile Include="Assets\Scripts\Core\GameBootstrap.CartographerHouse.cs" />

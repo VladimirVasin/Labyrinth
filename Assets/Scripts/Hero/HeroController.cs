@@ -80,6 +80,8 @@ namespace Labyrinth.Hero
 
                 switch (Model.State)
                 {
+                    case HeroState.GoingToEntrance:
+                        return $"идет к входу: HP {Model.HitPoints}/{Model.MaxHitPoints}, выносл. {Model.Stamina}/{Model.MaxStamina}";
                     case HeroState.Exploring:
                         return $"исследует: ур. {Model.Level}, XP {Model.Experience}/{Model.ExperienceForNextLevel}, выносл. {Model.Stamina}/{Model.MaxStamina}";
                     case HeroState.SearchingKey:
@@ -117,6 +119,54 @@ namespace Labyrinth.Hero
             explorationPaused = paused;
         }
 
+        public void BeginEntranceCommute(Vector2Int housePosition)
+        {
+            if (Model == null || heroView == null)
+            {
+                return;
+            }
+
+            explorationPaused = true;
+            Model.SetState(HeroState.GoingToEntrance);
+            Model.SetPosition(housePosition);
+            RefreshVisibility();
+            heroView.SetGridPositionImmediate(housePosition);
+            timeUntilNextStep = GetCurrentStepInterval();
+            LogStateChangeIfNeeded("house-departure");
+        }
+
+        public void MoveEntranceCommuteTo(Vector2Int position)
+        {
+            if (Model == null || heroView == null || !Model.IsAlive)
+            {
+                return;
+            }
+
+            Model.SetState(HeroState.GoingToEntrance);
+            Model.SetPosition(position);
+            RefreshVisibility();
+            heroView.MoveTo(position);
+        }
+
+        public void CompleteEntranceCommute()
+        {
+            if (Model == null || heroView == null || !Model.IsAlive)
+            {
+                return;
+            }
+
+            Model.SetPosition(entrancePosition);
+            Model.Memory.Remember(entrancePosition);
+            Model.SetState(HeroState.Exploring);
+            explorationPaused = false;
+            stateBeforeCombat = HeroState.Exploring;
+            RefreshVisibility();
+            RefreshMemoryView();
+            heroView.MoveTo(entrancePosition);
+            timeUntilNextStep = GetCurrentStepInterval();
+            LogStateChangeIfNeeded("entrance-arrival");
+        }
+
         public void SetFortifiedCellProvider(Func<Vector2Int, bool> provider)
         {
             fortifiedCellProvider = provider;
@@ -145,6 +195,20 @@ namespace Labyrinth.Hero
                 timeUntilNextStep = GetCurrentStepInterval();
                 LogStateChangeIfNeeded("combat-end");
             }
+        }
+
+        public void RetreatFromCombatToCastle()
+        {
+            if (Model == null || !Model.IsAlive)
+            {
+                return;
+            }
+
+            explorer?.ReleaseExplorationTarget("combat retreat");
+            Model.SetState(HeroState.ReturningToCastle);
+            explorationPaused = false;
+            timeUntilNextStep = GetCurrentStepInterval();
+            LogStateChangeIfNeeded("combat-retreat");
         }
 
         public void SetGridPositionImmediate(Vector2Int position)
@@ -416,6 +480,11 @@ namespace Labyrinth.Hero
         private void LogActivityTrace()
         {
             if (Model == null || !Model.IsAlive)
+            {
+                return;
+            }
+
+            if (!GameDebugLog.VerboseTrace)
             {
                 return;
             }

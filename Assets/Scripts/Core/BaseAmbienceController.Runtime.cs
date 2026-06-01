@@ -6,6 +6,13 @@ namespace Labyrinth.Core
 {
     public sealed partial class BaseAmbienceController
     {
+        private enum CartArrival
+        {
+            None,
+            Delivered,
+            Returned
+        }
+
         private sealed class RoadConnection
         {
             public RoadConnection(BuildingType type, Vector2Int buildingPosition, List<Vector2Int> path)
@@ -25,7 +32,7 @@ namespace Labyrinth.Core
 
             public int BuiltSegments { get; set; }
 
-            public float BuildTimer { get; set; }
+            public RoadWorkerRuntime Worker { get; set; }
 
             public bool IsComplete => BuiltSegments >= Path.Count - 1;
 
@@ -40,6 +47,120 @@ namespace Labyrinth.Core
                 }
 
                 Segments.Clear();
+                if (Worker != null)
+                {
+                    Worker.Destroy();
+                    Worker = null;
+                }
+            }
+        }
+
+        private sealed class RoadWorkerRuntime
+        {
+            private const float ArrivalSqrDistance = 0.0025f;
+
+            private readonly Transform root;
+            private readonly Transform tool;
+            private readonly Quaternion toolBaseRotation;
+            private int activeSegmentIndex = -1;
+            private bool building;
+            private float buildProgress;
+
+            public RoadWorkerRuntime(Transform root, Transform tool)
+            {
+                this.root = root;
+                this.tool = tool;
+                toolBaseRotation = tool != null ? tool.localRotation : Quaternion.identity;
+            }
+
+            public bool Update(int segmentIndex, Vector3 target, float moveDistance, float deltaTime, float buildSeconds)
+            {
+                if (root == null)
+                {
+                    return true;
+                }
+
+                if (activeSegmentIndex != segmentIndex)
+                {
+                    activeSegmentIndex = segmentIndex;
+                    building = false;
+                    buildProgress = 0f;
+                    FaceTarget(target);
+                }
+
+                if (!building)
+                {
+                    MoveTo(target, moveDistance);
+                    if ((target - root.position).sqrMagnitude > ArrivalSqrDistance)
+                    {
+                        return false;
+                    }
+
+                    root.position = target;
+                    building = true;
+                    buildProgress = 0f;
+                }
+
+                buildProgress = Mathf.Clamp01(buildProgress + deltaTime / Mathf.Max(0.1f, buildSeconds));
+                AnimateBuild(buildProgress);
+                if (buildProgress < 1f)
+                {
+                    return false;
+                }
+
+                activeSegmentIndex = -1;
+                building = false;
+                buildProgress = 0f;
+                AnimateBuild(0f);
+                return true;
+            }
+
+            public void Destroy()
+            {
+                if (root != null)
+                {
+                    Object.Destroy(root.gameObject);
+                }
+            }
+
+            private void MoveTo(Vector3 target, float moveDistance)
+            {
+                var offset = target - root.position;
+                var distance = offset.magnitude;
+                if (distance <= Mathf.Max(moveDistance, 0.001f))
+                {
+                    root.position = target;
+                    return;
+                }
+
+                var direction = offset / distance;
+                root.position += direction * moveDistance;
+                root.rotation = Quaternion.Lerp(root.rotation, Quaternion.LookRotation(direction, Vector3.up), 0.25f);
+            }
+
+            private void FaceTarget(Vector3 target)
+            {
+                if (root == null)
+                {
+                    return;
+                }
+
+                var direction = target - root.position;
+                if (direction.sqrMagnitude > 0.0001f)
+                {
+                    root.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
+                }
+            }
+
+            private void AnimateBuild(float progress)
+            {
+                if (tool == null)
+                {
+                    return;
+                }
+
+                var swing = Mathf.Sin(progress * Mathf.PI * 6f) * 34f;
+                tool.localRotation = toolBaseRotation * Quaternion.Euler(swing, 0f, -Mathf.Abs(swing) * 0.45f);
             }
         }
 
@@ -73,12 +194,15 @@ namespace Labyrinth.Core
 
             private readonly GameObject root;
             private readonly List<Vector3> waypoints;
+            private readonly List<Vector3> returnWaypoints;
             private readonly Transform visualRoot;
+            private readonly Transform cargo;
             private readonly Transform[] wheels;
             private readonly Vector3 visualBaseLocalPosition;
             private readonly Quaternion visualBaseLocalRotation;
             private int nextWaypoint = 1;
             private float shakePhase;
+            private bool returning;
 
             public CartRuntime(
                 GameObject root,
@@ -89,7 +213,10 @@ namespace Labyrinth.Core
             {
                 this.root = root;
                 this.waypoints = waypoints;
+                returnWaypoints = new List<Vector3>(waypoints);
+                returnWaypoints.Reverse();
                 visualRoot = visuals.Root;
+                cargo = visuals.Cargo;
                 wheels = visuals.Wheels;
                 visualBaseLocalPosition = visualRoot != null ? visualRoot.localPosition : Vector3.zero;
                 visualBaseLocalRotation = visualRoot != null ? visualRoot.localRotation : Quaternion.identity;
@@ -102,11 +229,13 @@ namespace Labyrinth.Core
 
             public int FoodAmount { get; }
 
-            public bool Move(float distance)
+            public bool IsReturning => returning;
+
+            public CartArrival Move(float distance)
             {
                 if (root == null || nextWaypoint >= waypoints.Count)
                 {
-                    return true;
+                    return returning ? CartArrival.Returned : CartArrival.Delivered;
                 }
 
                 var remaining = distance;
@@ -136,8 +265,32 @@ namespace Labyrinth.Core
                 }
 
                 ApplyRideShake(traveled);
-                return nextWaypoint >= waypoints.Count
-                    || (waypoints[waypoints.Count - 1] - root.transform.position).sqrMagnitude <= ArrivalSqrDistance;
+                if (nextWaypoint < waypoints.Count
+                    && (waypoints[waypoints.Count - 1] - root.transform.position).sqrMagnitude > ArrivalSqrDistance)
+                {
+                    return CartArrival.None;
+                }
+
+                return returning ? CartArrival.Returned : CartArrival.Delivered;
+            }
+
+            public void BeginReturn()
+            {
+                if (returning)
+                {
+                    return;
+                }
+
+                returning = true;
+                waypoints.Clear();
+                waypoints.AddRange(returnWaypoints);
+                nextWaypoint = waypoints.Count > 1 ? 1 : 0;
+                if (cargo != null)
+                {
+                    cargo.gameObject.SetActive(false);
+                }
+
+                FaceNextWaypoint();
             }
 
             public void Destroy()
@@ -200,13 +353,15 @@ namespace Labyrinth.Core
 
         private readonly struct CartVisuals
         {
-            public CartVisuals(Transform root, Transform[] wheels)
+            public CartVisuals(Transform root, Transform cargo, Transform[] wheels)
             {
                 Root = root;
+                Cargo = cargo;
                 Wheels = wheels;
             }
 
             public Transform Root { get; }
+            public Transform Cargo { get; }
             public Transform[] Wheels { get; }
         }
     }

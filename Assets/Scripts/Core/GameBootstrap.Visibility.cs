@@ -229,6 +229,8 @@ namespace Labyrinth.Core
             var origins = new List<Vector2Int>();
             AddBuiltTorchLightOrigins(origins, dungeonFortificationController?.TorchPositions);
             AddBuiltTorchLightOrigins(origins, mineConstructionController?.TorchPositions);
+            AddBuiltTorchLightOrigins(origins, mineConstructionController?.CompletedMineLightPositions);
+            mineConstructionController?.AddActiveLightOrigins(origins);
             return origins;
         }
 

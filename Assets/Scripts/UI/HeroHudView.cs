@@ -323,6 +323,8 @@ namespace Labyrinth.UI
         {
             switch (hero.Model.State)
             {
+                case HeroState.GoingToEntrance:
+                    return "к входу";
                 case HeroState.Exploring:
                 case HeroState.SearchingKey:
                 case HeroState.ReturningToDoor:
@@ -343,6 +345,8 @@ namespace Labyrinth.UI
         {
             switch (state)
             {
+                case HeroState.GoingToEntrance:
+                    return "идет к входу";
                 case HeroState.Exploring:
                     return "исследует";
                 case HeroState.SearchingKey:
@@ -368,6 +372,8 @@ namespace Labyrinth.UI
         {
             switch (state)
             {
+                case HeroState.GoingToEntrance:
+                    return new Color(0.45f, 0.78f, 1f);
                 case HeroState.Exploring:
                 case HeroState.SearchingKey:
                     return new Color(0.62f, 0.88f, 0.58f);

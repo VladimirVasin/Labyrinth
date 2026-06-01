@@ -8,55 +8,21 @@ namespace Labyrinth.Core
     {
         private void BuildMarketFromBase()
         {
-            if (currentMaze == null)
-            {
-                return;
-            }
-
-            var cost = GetMarketCost();
-            if (!resources.CanAfford(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"рынок: нужно {cost.Format()}");
-                GameDebugLog.Warning("Base", $"Market build blocked: gold={resources.Gold}, wood={resources.Wood}, required={cost.Format()}");
-                return;
-            }
-
-            if (!baseDevelopment.TryBuildMarket(currentMaze, out var marketPosition))
-            {
-                var blockMessage = baseDevelopment.LastBuildMessage;
-                baseDevelopment.ReportBuildBlocked($"рынок: {blockMessage}");
-                GameDebugLog.Warning("Base", $"Market build blocked: {blockMessage}");
-                return;
-            }
-
-            if (!resources.TrySpend(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"рынок: нужно {cost.Format()}");
-                return;
-            }
-
-            ClearTerrainDecorationsAround(marketPosition, BaseDevelopment.MarketFootprintRadiusCells);
-            MarketRenderer.Render(mazeRenderer, marketPosition);
-            baseAmbience.RegisterBuilding(BuildingType.Market, marketPosition);
-            cityAmbience.RegisterBuilding(BuildingType.Market, marketPosition);
-            SyncPeasantHuts();
-            RefreshSelectedHeroVisibility();
-            GameAudioController.Play(GameSfx.Build, mazeRenderer.GridToWorld(marketPosition));
-            GameDebugLog.Info(
-                "Base",
-                $"Market built at {GameDebugLog.Position(marketPosition)}. buildCost={cost.Format()}, goldLeft={resources.Gold}, woodLeft={resources.Wood}.");
+            TryStartBaseBuildingConstruction(BuildingType.Market, GetMarketCost(), "Market", out _);
         }
 
         private bool CanBuildMarket()
         {
             return currentMaze != null
                 && !baseDevelopment.HasMarket
+                && !HasPendingBuilding(BuildingType.Market)
+                && IsBuildingUnlocked(BuildingType.Market)
                 && resources.CanAfford(GetMarketCost());
         }
 
         private BuildingCost GetMarketCost()
         {
-            return BaseDevelopment.MarketCost;
+            return GetDebugAdjustedBuildingCost(BaseDevelopment.MarketCost);
         }
 
         private string GetMarketStatus()
@@ -72,7 +38,7 @@ namespace Labyrinth.Core
                 status += $", {baseDevelopment.LastBuildMessage}";
             }
 
-            return status;
+            return AppendBuildingUnlockStatus(BuildingType.Market, status);
         }
 
         private BuildingServiceEntry[] GetBuildingMicroHudServices(BuildingType buildingType, int buildingLevel)

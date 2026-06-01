@@ -163,22 +163,10 @@ namespace Labyrinth.Hero
 
         private bool CanTargetNearbyGoldIngot()
         {
-            if (goldIngotManager == null
-                || model.Inventory == null
-                || model.Inventory.HasGoldIngot)
-            {
-                return false;
-            }
-
-            foreach (var slot in model.Inventory.Slots)
-            {
-                if (slot.Type == HeroInventorySlotType.Empty && !slot.HasItem)
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return goldIngotManager != null
+                && model.Inventory != null
+                && !model.Inventory.HasGoldIngot
+                && model.Inventory.HasEmptyCarrySlot;
         }
     }
 }

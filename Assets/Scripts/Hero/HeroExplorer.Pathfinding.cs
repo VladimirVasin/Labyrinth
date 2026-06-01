@@ -14,7 +14,8 @@ namespace Labyrinth.Hero
                 && GridDistance(position, reservedTarget) == 1
                 && grid.InBounds(reservedTarget)
                 && grid.Get(reservedTarget).IsWalkable
-                && !model.Memory.IsRemembered(reservedTarget))
+                && !model.Memory.IsRemembered(reservedTarget)
+                && IsWithinAllowedExplorationDepth(reservedTarget))
             {
                 next = reservedTarget;
                 return true;
@@ -23,7 +24,7 @@ namespace Labyrinth.Hero
             var candidates = new List<HeroExplorationCandidate>();
             foreach (var neighbor in grid.WalkableNeighbors(position))
             {
-                if (!model.Memory.IsRemembered(neighbor))
+                if (!model.Memory.IsRemembered(neighbor) && IsWithinAllowedExplorationDepth(neighbor))
                 {
                     candidates.Add(new HeroExplorationCandidate(
                         position,
@@ -142,7 +143,7 @@ namespace Labyrinth.Hero
             {
                 var current = queue.Dequeue();
                 var currentDistance = GridDistance(model.Position, current);
-                if (currentDistance > farthestDistance)
+                if (currentDistance > farthestDistance && IsWithinAllowedPatrolDepth(current))
                 {
                     farthestDistance = currentDistance;
                     farthest = current;
@@ -231,6 +232,11 @@ namespace Labyrinth.Hero
                     continue;
                 }
 
+                if (!IsWithinAllowedExplorationDepth(neighbor))
+                {
+                    continue;
+                }
+
                 candidates.Add(new HeroExplorationCandidate(
                     approachCell,
                     neighbor,
@@ -295,6 +301,62 @@ namespace Labyrinth.Hero
             return weight;
         }
 
+        private bool IsWithinAllowedExplorationDepth(Vector2Int position)
+        {
+            if (maxDistanceFromEntrance <= 0 || distancesFromEntrance == null)
+            {
+                return true;
+            }
+
+            if (!distancesFromEntrance.TryGetValue(position, out var distance))
+            {
+                return false;
+            }
+
+            return distance <= GetAllowedExplorationDistance();
+        }
+
+        private bool IsWithinAllowedPatrolDepth(Vector2Int position)
+        {
+            if (maxDistanceFromEntrance <= 0 || distancesFromEntrance == null)
+            {
+                return true;
+            }
+
+            if (!distancesFromEntrance.TryGetValue(position, out var distance))
+            {
+                return false;
+            }
+
+            var patrolSlack = Mathf.Max(4, Mathf.RoundToInt(maxDistanceFromEntrance * 0.08f));
+            return distance <= Mathf.Min(maxDistanceFromEntrance, GetAllowedExplorationDistance() + patrolSlack);
+        }
+
+        private int GetAllowedExplorationDistance()
+        {
+            if (maxDistanceFromEntrance <= 0)
+            {
+                return int.MaxValue;
+            }
+
+            var level = model != null ? model.Level : 1;
+            var gearBonus = model?.Inventory != null
+                ? (model.Inventory.AttackBonus + model.Inventory.ArmorBonus) * 2
+                : 0;
+            var ratio = level <= 2
+                ? 0.32f
+                : level <= 4
+                    ? 0.45f
+                    : level <= 7
+                        ? 0.62f
+                        : level <= 10
+                            ? 0.82f
+                            : 1f;
+            var ratioDistance = Mathf.RoundToInt(maxDistanceFromEntrance * ratio);
+            var minimumDistance = 24 + level * 4 + gearBonus;
+            return Mathf.Clamp(Mathf.Max(ratioDistance, minimumDistance), 6, maxDistanceFromEntrance);
+        }
+
         private static Queue<Vector2Int> BuildPath(
             IReadOnlyDictionary<Vector2Int, Vector2Int> cameFrom,
             Vector2Int start,
@@ -316,6 +378,22 @@ namespace Labyrinth.Hero
         private static int GridDistance(Vector2Int a, Vector2Int b)
         {
             return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+        }
+
+        private static int CalculateMaxEntranceDistance(Dictionary<Vector2Int, int> distances)
+        {
+            var maxDistance = 0;
+            if (distances == null)
+            {
+                return maxDistance;
+            }
+
+            foreach (var distance in distances.Values)
+            {
+                maxDistance = Mathf.Max(maxDistance, distance);
+            }
+
+            return maxDistance;
         }
     }
 }

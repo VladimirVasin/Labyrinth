@@ -200,7 +200,9 @@ namespace Labyrinth.Mobs
             Model.SetPosition(next);
             view.MoveTo(next);
             wanderSteps++;
-            if (Model.Rank != MobRank.Regular && wanderSteps % EliteWanderLogStep == 0)
+            if (GameDebugLog.VerboseTrace
+                && Model.Rank != MobRank.Regular
+                && wanderSteps % EliteWanderLogStep == 0)
             {
                 GameDebugLog.Info("Mobs", $"{DebugName} patrol trace: pos={GameDebugLog.Position(Model.Position)}, steps={wanderSteps}, candidates={candidates.Count}.");
             }

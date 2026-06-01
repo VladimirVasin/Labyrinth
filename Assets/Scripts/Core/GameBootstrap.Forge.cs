@@ -7,45 +7,15 @@ namespace Labyrinth.Core
     {
         private void BuildForgeFromBase()
         {
-            if (currentMaze == null)
-            {
-                return;
-            }
-
-            var cost = GetForgeCost();
-            if (!resources.CanAfford(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"кузница: нужно {cost.Format()}");
-                GameDebugLog.Warning("Base", $"Forge build blocked: gold={resources.Gold}, wood={resources.Wood}, required={cost.Format()}");
-                return;
-            }
-
-            if (!baseDevelopment.TryBuildForge(currentMaze, out var forgePosition))
-            {
-                var blockMessage = baseDevelopment.LastBuildMessage;
-                baseDevelopment.ReportBuildBlocked($"кузница: {blockMessage}");
-                GameDebugLog.Warning("Base", $"Forge build blocked: {blockMessage}");
-                return;
-            }
-
-            if (resources.TrySpend(cost))
-            {
-                ClearTerrainDecorationsAround(forgePosition, BaseDevelopment.ForgeFootprintRadiusCells);
-                ForgeRenderer.Render(mazeRenderer, forgePosition);
-                RefreshAllBuildingUpgradeVisuals();
-                baseAmbience.RegisterBuilding(BuildingType.Forge, forgePosition);
-                cityAmbience.RegisterBuilding(BuildingType.Forge, forgePosition);
-                SyncPeasantHuts();
-                RefreshSelectedHeroVisibility();
-                GameAudioController.Play(GameSfx.Build, mazeRenderer.GridToWorld(forgePosition));
-                GameDebugLog.Info("Base", $"Forge built at {GameDebugLog.Position(forgePosition)}. buildCost={cost.Format()}, goldLeft={resources.Gold}, woodLeft={resources.Wood}.");
-            }
+            TryStartBaseBuildingConstruction(BuildingType.Forge, GetForgeCost(), "Forge", out _);
         }
 
         private bool CanBuildForge()
         {
             return currentMaze != null
                 && !baseDevelopment.HasForge
+                && !HasPendingBuilding(BuildingType.Forge)
+                && IsBuildingUnlocked(BuildingType.Forge)
                 && resources.CanAfford(GetForgeCost());
         }
 
@@ -59,7 +29,7 @@ namespace Labyrinth.Core
                 status += $", {baseDevelopment.LastBuildMessage}";
             }
 
-            return status;
+            return AppendBuildingUnlockStatus(BuildingType.Forge, status);
         }
 
         private string GetForgeLevelText()

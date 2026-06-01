@@ -19,8 +19,11 @@ namespace Labyrinth.UI
         private bool visible;
         private Action<MazeGenerationSettings> startRequested;
         private GUIStyle titleStyle;
+        private GUIStyle pauseTitleStyle;
         private GUIStyle subtitleStyle;
+        private GUIStyle pauseSubtitleStyle;
         private GUIStyle kickerStyle;
+        private GUIStyle pauseKickerStyle;
         private GUIStyle sectionStyle;
         private GUIStyle bodyStyle;
         private GUIStyle mutedStyle;
@@ -98,9 +101,11 @@ namespace Labyrinth.UI
 
             DrawMenuPanel(rect);
 
-            GUILayout.BeginArea(new Rect(rect.x + 34f, rect.y + 28f, rect.width - 68f, rect.height - 56f));
+            var innerPaddingX = pauseMode ? 28f : 34f;
+            var innerPaddingY = pauseMode ? 18f : 28f;
+            GUILayout.BeginArea(new Rect(rect.x + innerPaddingX, rect.y + innerPaddingY, rect.width - innerPaddingX * 2f, rect.height - innerPaddingY * 2f));
             DrawHeader();
-            GUILayout.Space(20f);
+            GUILayout.Space(pauseMode ? 12f : 20f);
 
             if (loading)
             {
@@ -110,9 +115,9 @@ namespace Labyrinth.UI
             }
 
             DrawCustomSizeControls();
-            GUILayout.Space(16f);
+            GUILayout.Space(pauseMode ? 10f : 16f);
             DrawSeedControls();
-            GUILayout.Space(16f);
+            GUILayout.Space(pauseMode ? 10f : 16f);
             DrawSummaryAndStart();
 
             GUILayout.EndArea();
@@ -182,6 +187,12 @@ namespace Labyrinth.UI
 
         private void DrawCustomSizeControls()
         {
+            if (pauseMode)
+            {
+                DrawCompactSizeControls();
+                return;
+            }
+
             var rect = DrawCard(172f);
             GUI.Label(new Rect(rect.x, rect.y, rect.width, 26f), "Размер подземелья", sectionStyle);
             GUI.Label(
@@ -206,8 +217,39 @@ namespace Labyrinth.UI
             DrawSizeStatus(new Rect(rect.x, rect.y + 144f, rect.width, 22f));
         }
 
+        private void DrawCompactSizeControls()
+        {
+            var rect = DrawCard(116f);
+            GUI.Label(new Rect(rect.x, rect.y, rect.width, 24f), "Размер подземелья", sectionStyle);
+
+            var fieldY = rect.y + 34f;
+            var fieldWidth = Mathf.Min(160f, (rect.width - 36f) * 0.5f);
+            var nextWidth = DrawNumberField(new Rect(rect.x, fieldY, fieldWidth, 54f), "Ширина", customWidthText);
+            var nextHeight = DrawNumberField(
+                new Rect(rect.x + fieldWidth + 24f, fieldY, fieldWidth, 54f),
+                "Высота",
+                customHeightText);
+
+            if (nextWidth != customWidthText || nextHeight != customHeightText)
+            {
+                customWidthText = nextWidth;
+                customHeightText = nextHeight;
+            }
+
+            if (!TryParseCustomSize(out _, out _))
+            {
+                GUI.Label(new Rect(rect.x, rect.y + 88f, rect.width, 20f), sizeError, errorStyle);
+            }
+        }
+
         private void DrawSeedControls()
         {
+            if (pauseMode)
+            {
+                DrawCompactSeedControls();
+                return;
+            }
+
             var rect = DrawCard(122f);
             GUI.Label(new Rect(rect.x, rect.y, rect.width, 26f), "Seed мира", sectionStyle);
             GUI.Label(new Rect(rect.x, rect.y + 29f, rect.width, 22f), "Одинаковый seed повторяет ту же карту.", mutedStyle);
@@ -232,20 +274,47 @@ namespace Labyrinth.UI
             }
         }
 
+        private void DrawCompactSeedControls()
+        {
+            var rect = DrawCard(96f);
+            GUI.Label(new Rect(rect.x, rect.y, rect.width, 24f), "Seed мира", sectionStyle);
+
+            var fieldY = rect.y + 34f;
+            var buttonWidth = 150f;
+            seedText = GUI.TextField(
+                new Rect(rect.x, fieldY, rect.width - buttonWidth - 12f, 36f),
+                seedText,
+                textFieldStyle);
+
+            if (GUI.Button(new Rect(rect.xMax - buttonWidth, fieldY, buttonWidth, 36f), "Случайный", buttonStyle))
+            {
+                GameAudioController.PlayUi(GameSfx.HudClick);
+                seedText = GenerateSeedText();
+                seedError = null;
+            }
+
+            if (!TryParseSeed(out _))
+            {
+                GUI.Label(new Rect(rect.x, rect.y + 74f, rect.width, 18f), seedError, errorStyle);
+            }
+        }
+
         private void DrawSummaryAndStart()
         {
             var canStart = TryBuildSettings(out var selected);
-            var rect = DrawCard(pauseMode ? 132f : 154f);
+            var rect = DrawCard(pauseMode ? 128f : 154f);
             GUI.Label(new Rect(rect.x, rect.y, rect.width, 26f), pauseMode ? "Новая попытка" : "Готово к экспедиции", sectionStyle);
 
             var summaryText = selected == null
                 ? "Проверьте параметры генерации."
                 : $"Карта {selected.Width} x {selected.Height}    Seed {selected.Seed}";
-            GUI.Label(new Rect(rect.x, rect.y + 38f, rect.width, 28f), summaryText, selected == null ? errorStyle : summaryStyle);
+            GUI.Label(new Rect(rect.x, rect.y + (pauseMode ? 32f : 38f), rect.width, 28f), summaryText, selected == null ? errorStyle : summaryStyle);
 
             GUI.enabled = canStart;
-            var startButtonText = pauseMode ? "Начать заново" : "Начать экспедицию";
-            if (GUI.Button(new Rect(rect.x, rect.y + 82f, rect.width, 56f), startButtonText, primaryButtonStyle))
+            var startButtonText = "Начать экспедицию";
+            var buttonY = pauseMode ? 68f : 82f;
+            var buttonHeight = pauseMode ? 42f : 56f;
+            if (GUI.Button(new Rect(rect.x, rect.y + buttonY, rect.width, buttonHeight), startButtonText, primaryButtonStyle))
             {
                 GameAudioController.PlayUi(GameSfx.HudConfirm);
                 startRequested?.Invoke(selected);
@@ -287,21 +356,23 @@ namespace Labyrinth.UI
 
         private void DrawHeader()
         {
-            GUILayout.Label(pauseMode ? "Меню паузы" : "Labyrinth", titleStyle);
-            GUILayout.Space(4f);
-            GUILayout.Label(pauseMode ? "Игра остановлена" : "Подготовка вылазки", kickerStyle);
-            GUILayout.Space(8f);
+            GUILayout.Label(pauseMode ? "Меню паузы" : "Labyrinth", pauseMode ? pauseTitleStyle : titleStyle);
+            GUILayout.Space(pauseMode ? 2f : 4f);
+            GUILayout.Label(pauseMode ? "Игра остановлена" : "Подготовка вылазки", pauseMode ? pauseKickerStyle : kickerStyle);
+            GUILayout.Space(pauseMode ? 6f : 8f);
             GUILayout.Label(
                 pauseMode
-                    ? "Можно закрыть меню Escape или создать новый лабиринт."
+                    ? "Escape закроет меню; кнопка ниже начнет новую экспедицию."
                     : "Настрой размер подземелья и seed перед стартом.",
-                subtitleStyle);
+                pauseMode ? pauseSubtitleStyle : subtitleStyle);
         }
 
         private string DrawNumberField(Rect rect, string label, string value)
         {
-            GUI.Label(new Rect(rect.x, rect.y, rect.width, 20f), label, bodyStyle);
-            return GUI.TextField(new Rect(rect.x, rect.y + 22f, rect.width, 44f), value, textFieldStyle);
+            var labelHeight = pauseMode ? 18f : 20f;
+            var fieldHeight = pauseMode ? 34f : 44f;
+            GUI.Label(new Rect(rect.x, rect.y, rect.width, labelHeight), label, bodyStyle);
+            return GUI.TextField(new Rect(rect.x, rect.y + labelHeight + 2f, rect.width, fieldHeight), value, textFieldStyle);
         }
 
         private void DrawSizeStatus(Rect rect)
@@ -416,6 +487,10 @@ namespace Labyrinth.UI
                 alignment = TextAnchor.MiddleLeft
             };
             titleStyle.normal.textColor = new Color(0.96f, 0.9f, 0.78f);
+            pauseTitleStyle = new GUIStyle(titleStyle)
+            {
+                fontSize = 42
+            };
             subtitleStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 18,
@@ -423,6 +498,10 @@ namespace Labyrinth.UI
                 wordWrap = true
             };
             subtitleStyle.normal.textColor = new Color(0.82f, 0.82f, 0.76f);
+            pauseSubtitleStyle = new GUIStyle(subtitleStyle)
+            {
+                fontSize = 16
+            };
             kickerStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 17,
@@ -430,6 +509,10 @@ namespace Labyrinth.UI
                 alignment = TextAnchor.MiddleLeft
             };
             kickerStyle.normal.textColor = new Color(0.82f, 0.7f, 0.42f);
+            pauseKickerStyle = new GUIStyle(kickerStyle)
+            {
+                fontSize = 15
+            };
             sectionStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 21,

@@ -469,6 +469,7 @@ namespace Labyrinth.Core
                 && hero.Model != null
                 && hero.Model.IsAlive
                 && hero.Model.State != HeroState.Fighting
+                && hero.Model.State != HeroState.GoingToEntrance
                 && !HasActiveQuest(hero.Model.DisplayNumber);
         }
 

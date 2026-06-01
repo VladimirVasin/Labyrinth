@@ -1,11 +1,28 @@
 using System;
 using System.Collections.Generic;
+using Labyrinth.Base;
 using Labyrinth.Maze;
 using UnityEngine;
 
 namespace Labyrinth.Core
 {
-    public sealed class BaseDevelopment
+    public readonly struct PendingBuildingSite
+    {
+        public PendingBuildingSite(BuildingType type, Vector2Int position, int footprintRadius)
+        {
+            Type = type;
+            Position = position;
+            FootprintRadius = footprintRadius;
+        }
+
+        public BuildingType Type { get; }
+
+        public Vector2Int Position { get; }
+
+        public int FootprintRadius { get; }
+    }
+
+    public sealed partial class BaseDevelopment
     {
         public const int FarmGoldCost = 25;
         public const int FarmWoodCost = 5;
@@ -85,6 +102,7 @@ namespace Labyrinth.Core
         private readonly List<Vector2Int> lumberjackCampPositions = new List<Vector2Int>();
         private readonly List<Vector2Int> heroHousePositions = new List<Vector2Int>();
         private readonly List<Vector2Int> peasantHutPositions = new List<Vector2Int>();
+        private readonly List<PendingBuildingSite> pendingBuildingSites = new List<PendingBuildingSite>();
         private Vector2Int? alchemistShopPosition;
         private Vector2Int? tavernPosition;
         private Vector2Int? forgePosition;
@@ -190,6 +208,8 @@ namespace Labyrinth.Core
 
         public IReadOnlyList<Vector2Int> PeasantHutPositions => peasantHutPositions;
 
+        public IReadOnlyList<PendingBuildingSite> PendingBuildingSites => pendingBuildingSites;
+
         public Vector2Int AlchemistShopPosition => alchemistShopPosition ?? Vector2Int.zero;
 
         public Vector2Int TavernPosition => tavernPosition ?? Vector2Int.zero;
@@ -285,6 +305,163 @@ namespace Labyrinth.Core
             return new BuildingCost(
                 LumberjackCampGoldCost,
                 existingCampCount <= 0 ? 0 : LumberjackCampWoodCost);
+        }
+
+        public bool TryReserveBuildingSite(MazeGenerationResult result, BuildingType type, out Vector2Int position)
+        {
+            position = Vector2Int.zero;
+            if (!IsBuildingUnlocked(type))
+            {
+                LastBuildMessage = $"{type}: {GetBuildingUnlockHint(type)}";
+                return false;
+            }
+
+            if (IsUniqueBuildingType(type) && (HasBuiltBuilding(type) || HasPendingBuilding(type)))
+            {
+                LastBuildMessage = $"{type}: already planned";
+                return false;
+            }
+
+            if (!TryBuild(result, GetFootprintRadius(type), GetBuildSeedSalt(type), out position))
+            {
+                return false;
+            }
+
+            pendingBuildingSites.Add(new PendingBuildingSite(type, position, GetFootprintRadius(type)));
+            LastBuildMessage = $"{type}: construction site planned ({position.x}, {position.y})";
+            return true;
+        }
+
+        public bool TryCompleteReservedBuilding(BuildingType type, Vector2Int position)
+        {
+            var pendingIndex = FindPendingBuildingIndex(type, position);
+            if (pendingIndex < 0)
+            {
+                LastBuildMessage = $"{type}: construction site missing";
+                return false;
+            }
+
+            pendingBuildingSites.RemoveAt(pendingIndex);
+            switch (type)
+            {
+                case BuildingType.Farm:
+                    farmPositions.Add(position);
+                    break;
+                case BuildingType.LumberjackCamp:
+                    lumberjackCampPositions.Add(position);
+                    break;
+                case BuildingType.HeroHouse:
+                    heroHousePositions.Add(position);
+                    break;
+                case BuildingType.PeasantHut:
+                    peasantHutPositions.Add(position);
+                    break;
+                case BuildingType.AlchemistShop:
+                    alchemistShopPosition = position;
+                    break;
+                case BuildingType.Tavern:
+                    tavernPosition = position;
+                    break;
+                case BuildingType.Forge:
+                    forgePosition = position;
+                    break;
+                case BuildingType.Infirmary:
+                    infirmaryPosition = position;
+                    break;
+                case BuildingType.CartographerHouse:
+                    cartographerHousePosition = position;
+                    break;
+                case BuildingType.Chapel:
+                    chapelPosition = position;
+                    break;
+                case BuildingType.MinersGuild:
+                    minersGuildPosition = position;
+                    break;
+                case BuildingType.Market:
+                    marketPosition = position;
+                    break;
+                case BuildingType.Antiquary:
+                    antiquaryPosition = position;
+                    break;
+                case BuildingType.HeroesGuild:
+                    heroesGuildPosition = position;
+                    break;
+                default:
+                    LastBuildMessage = $"{type}: cannot complete this building";
+                    return false;
+            }
+
+            LastBuildMessage = $"{type}: completed ({position.x}, {position.y})";
+            return true;
+        }
+
+        public bool CancelReservedBuilding(BuildingType type, Vector2Int position)
+        {
+            var pendingIndex = FindPendingBuildingIndex(type, position);
+            if (pendingIndex < 0)
+            {
+                return false;
+            }
+
+            pendingBuildingSites.RemoveAt(pendingIndex);
+            return true;
+        }
+
+        public bool HasPendingBuilding(BuildingType type)
+        {
+            return GetPendingBuildingCount(type) > 0;
+        }
+
+        public int GetPendingBuildingCount(BuildingType type)
+        {
+            var count = 0;
+            for (var i = 0; i < pendingBuildingSites.Count; i++)
+            {
+                if (pendingBuildingSites[i].Type == type)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        public static int GetFootprintRadius(BuildingType type)
+        {
+            switch (type)
+            {
+                case BuildingType.Farm:
+                    return FarmFootprintRadiusCells;
+                case BuildingType.LumberjackCamp:
+                    return LumberjackCampFootprintRadiusCells;
+                case BuildingType.HeroHouse:
+                    return HeroHouseFootprintRadiusCells;
+                case BuildingType.PeasantHut:
+                    return PeasantHutFootprintRadiusCells;
+                case BuildingType.AlchemistShop:
+                    return AlchemistShopFootprintRadiusCells;
+                case BuildingType.Tavern:
+                    return TavernFootprintRadiusCells;
+                case BuildingType.Forge:
+                    return ForgeFootprintRadiusCells;
+                case BuildingType.Infirmary:
+                    return InfirmaryFootprintRadiusCells;
+                case BuildingType.CartographerHouse:
+                    return CartographerHouseFootprintRadiusCells;
+                case BuildingType.Chapel:
+                    return ChapelFootprintRadiusCells;
+                case BuildingType.MinersGuild:
+                    return MinersGuildFootprintRadiusCells;
+                case BuildingType.Market:
+                    return MarketFootprintRadiusCells;
+                case BuildingType.Antiquary:
+                    return AntiquaryFootprintRadiusCells;
+                case BuildingType.HeroesGuild:
+                    return HeroesGuildFootprintRadiusCells;
+                case BuildingType.Castle:
+                default:
+                    return CastleFootprintRadiusCells;
+            }
         }
 
         public bool TryBuildFarm(MazeGenerationResult result, out Vector2Int farmPosition)
@@ -546,6 +723,7 @@ namespace Labyrinth.Core
             lumberjackCampPositions.Clear();
             heroHousePositions.Clear();
             peasantHutPositions.Clear();
+            pendingBuildingSites.Clear();
             alchemistShopPosition = null;
             tavernPosition = null;
             forgePosition = null;
@@ -915,6 +1093,15 @@ namespace Labyrinth.Core
                 return false;
             }
 
+            for (var i = 0; i < pendingBuildingSites.Count; i++)
+            {
+                var pending = pendingBuildingSites[i];
+                if (IsTooClose(pending.Position, pending.FootprintRadius, position, footprintRadius))
+                {
+                    return false;
+                }
+            }
+
             return true;
         }
 
@@ -938,7 +1125,117 @@ namespace Labyrinth.Core
                     ^ (HasMarket ? 86028121 : 0)
                     ^ (HasAntiquary ? 98602363 : 0)
                     ^ (HasHeroesGuild ? 104395303 : 0)
+                    ^ ((pendingBuildingSites.Count + 1) * 514229)
                     ^ (result.BasePosition.y * 1274126177);
+            }
+        }
+
+        private int FindPendingBuildingIndex(BuildingType type, Vector2Int position)
+        {
+            for (var i = 0; i < pendingBuildingSites.Count; i++)
+            {
+                var pending = pendingBuildingSites[i];
+                if (pending.Type == type && pending.Position == position)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private bool HasBuiltBuilding(BuildingType type)
+        {
+            switch (type)
+            {
+                case BuildingType.Farm:
+                    return FarmCount > 0;
+                case BuildingType.LumberjackCamp:
+                    return LumberjackCampCount > 0;
+                case BuildingType.HeroHouse:
+                    return HeroHouseCount > 0;
+                case BuildingType.PeasantHut:
+                    return PeasantHutCount > 0;
+                case BuildingType.AlchemistShop:
+                    return HasAlchemistShop;
+                case BuildingType.Tavern:
+                    return HasTavern;
+                case BuildingType.Forge:
+                    return HasForge;
+                case BuildingType.Infirmary:
+                    return HasInfirmary;
+                case BuildingType.CartographerHouse:
+                    return HasCartographerHouse;
+                case BuildingType.Chapel:
+                    return HasChapel;
+                case BuildingType.MinersGuild:
+                    return HasMinersGuild;
+                case BuildingType.Market:
+                    return HasMarket;
+                case BuildingType.Antiquary:
+                    return HasAntiquary;
+                case BuildingType.HeroesGuild:
+                    return HasHeroesGuild;
+                case BuildingType.Castle:
+                default:
+                    return true;
+            }
+        }
+
+        private static bool IsUniqueBuildingType(BuildingType type)
+        {
+            switch (type)
+            {
+                case BuildingType.AlchemistShop:
+                case BuildingType.Tavern:
+                case BuildingType.Forge:
+                case BuildingType.Infirmary:
+                case BuildingType.CartographerHouse:
+                case BuildingType.Chapel:
+                case BuildingType.MinersGuild:
+                case BuildingType.Market:
+                case BuildingType.Antiquary:
+                case BuildingType.HeroesGuild:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static int GetBuildSeedSalt(BuildingType type)
+        {
+            switch (type)
+            {
+                case BuildingType.Farm:
+                    return 101;
+                case BuildingType.LumberjackCamp:
+                    return 151;
+                case BuildingType.HeroHouse:
+                    return 211;
+                case BuildingType.PeasantHut:
+                    return 263;
+                case BuildingType.AlchemistShop:
+                    return 317;
+                case BuildingType.Tavern:
+                    return 419;
+                case BuildingType.Forge:
+                    return 523;
+                case BuildingType.Infirmary:
+                    return 577;
+                case BuildingType.CartographerHouse:
+                    return 631;
+                case BuildingType.Chapel:
+                    return 683;
+                case BuildingType.MinersGuild:
+                    return 739;
+                case BuildingType.Market:
+                    return 811;
+                case BuildingType.Antiquary:
+                    return 887;
+                case BuildingType.HeroesGuild:
+                    return 947;
+                default:
+                    return 997;
             }
         }
 

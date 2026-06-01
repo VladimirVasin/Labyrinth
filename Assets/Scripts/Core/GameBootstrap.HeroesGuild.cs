@@ -10,50 +10,15 @@ namespace Labyrinth.Core
     {
         private void BuildHeroesGuildFromBase()
         {
-            if (currentMaze == null)
-            {
-                return;
-            }
-
-            var cost = GetHeroesGuildCost();
-            if (!resources.CanAfford(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"гильдия героев: нужно {cost.Format()}");
-                GameDebugLog.Warning("Base", $"Heroes guild build blocked: gold={resources.Gold}, wood={resources.Wood}, required={cost.Format()}");
-                return;
-            }
-
-            if (!baseDevelopment.TryBuildHeroesGuild(currentMaze, out var guildPosition))
-            {
-                var blockMessage = baseDevelopment.LastBuildMessage;
-                baseDevelopment.ReportBuildBlocked($"гильдия героев: {blockMessage}");
-                GameDebugLog.Warning("Base", $"Heroes guild build blocked: {blockMessage}");
-                return;
-            }
-
-            if (!resources.TrySpend(cost))
-            {
-                baseDevelopment.ReportBuildBlocked($"гильдия героев: нужно {cost.Format()}");
-                return;
-            }
-
-            ClearTerrainDecorationsAround(guildPosition, BaseDevelopment.HeroesGuildFootprintRadiusCells);
-            heroesGuildView = HeroesGuildRenderer.Render(mazeRenderer, guildPosition);
-            heroGuildQuestController.SetGuildView(heroesGuildView);
-            baseAmbience.RegisterBuilding(BuildingType.HeroesGuild, guildPosition);
-            cityAmbience.RegisterBuilding(BuildingType.HeroesGuild, guildPosition);
-            SyncPeasantHuts();
-            RefreshSelectedHeroVisibility();
-            GameAudioController.Play(GameSfx.Build, mazeRenderer.GridToWorld(guildPosition));
-            GameDebugLog.Info(
-                "Base",
-                $"Heroes guild built at {GameDebugLog.Position(guildPosition)}. buildCost={cost.Format()}, goldLeft={resources.Gold}, woodLeft={resources.Wood}.");
+            TryStartBaseBuildingConstruction(BuildingType.HeroesGuild, GetHeroesGuildCost(), "Heroes guild", out _);
         }
 
         private bool CanBuildHeroesGuild()
         {
             return currentMaze != null
                 && !baseDevelopment.HasHeroesGuild
+                && !HasPendingBuilding(BuildingType.HeroesGuild)
+                && IsBuildingUnlocked(BuildingType.HeroesGuild)
                 && resources.CanAfford(GetHeroesGuildCost());
         }
 
@@ -67,7 +32,7 @@ namespace Labyrinth.Core
                 status += $", {baseDevelopment.LastBuildMessage}";
             }
 
-            return status;
+            return AppendBuildingUnlockStatus(BuildingType.HeroesGuild, status);
         }
 
         private BuildingServiceEntry[] GetHeroesGuildServiceEntries()

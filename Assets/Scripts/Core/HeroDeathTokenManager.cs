@@ -10,7 +10,7 @@ namespace Labyrinth.Core
 {
     public sealed class HeroDeathTokenManager : MonoBehaviour
     {
-        public const int DeliveryExperienceReward = 10;
+        public const int DeliveryExperienceReward = 14;
 
         private readonly List<HeroDeathTokenModel> tokens = new List<HeroDeathTokenModel>();
         private readonly Dictionary<HeroModel, HeroDeathTokenModel> carriedTokens =
@@ -129,6 +129,11 @@ namespace Labyrinth.Core
 
             var token = FindAvailableAt(hero.Position);
             if (token == null)
+            {
+                return false;
+            }
+
+            if (!hero.Inventory.HasEmptyCarrySlot)
             {
                 return false;
             }

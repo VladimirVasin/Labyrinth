@@ -133,38 +133,9 @@ namespace Labyrinth.Core
         private List<Vector2Int> BuildMineRouteWithCaveFootprint(CaveInfo cave, List<Vector2Int> pathToCenter)
         {
             var route = new List<Vector2Int>(pathToCenter);
-            var coverage = new[]
-            {
-                Vector2Int.zero,
-                Vector2Int.left,
-                Vector2Int.left + Vector2Int.up,
-                Vector2Int.up,
-                Vector2Int.right + Vector2Int.up,
-                Vector2Int.right,
-                Vector2Int.right + Vector2Int.down,
-                Vector2Int.down,
-                Vector2Int.left + Vector2Int.down,
-                Vector2Int.left,
-                Vector2Int.zero
-            };
-
-            var uniqueCells = new HashSet<Vector2Int>();
-            for (var i = 0; i < coverage.Length; i++)
-            {
-                var cell = cave.Center + coverage[i];
-                if (!result.Grid.InBounds(cell) || !result.Grid.Get(cell).IsWalkable)
-                {
-                    GameDebugLog.Warning("Mine", $"Mine cave footprint cell skipped: {GameDebugLog.Position(cell)} is not walkable.");
-                    continue;
-                }
-
-                uniqueCells.Add(cell);
-                AddRouteStep(route, cell);
-            }
-
             GameDebugLog.Info(
                 "Mine",
-                $"Mine cave footprint route prepared: cave={GameDebugLog.Position(cave.Center)}, uniqueFootprintCells={uniqueCells.Count}/9, routeLength={route.Count}.");
+                $"Mine center route prepared: cave={GameDebugLog.Position(cave.Center)}, routeLength={route.Count}.");
             return route;
         }
 

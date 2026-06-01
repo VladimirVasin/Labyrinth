@@ -340,6 +340,7 @@ namespace Labyrinth.Core
             terrainDecorations.Clear();
             mazeRenderer.Clear();
             fogOfWarView.Clear();
+            baseConstructionController.Clear();
             heroesGuildView = null;
             heroGuildQuestController.SetGuildView(null);
             mobManager.Clear();
@@ -372,6 +373,7 @@ namespace Labyrinth.Core
                 dungeonFortificationController.Initialize(target, cartographerMemory);
                 mineConstructionController.Initialize(target);
                 RestoreBaseBuildingsForLevelOne();
+                RestorePendingBaseConstructionSites();
             }
 
             mobManager.Spawn(target, mazeRenderer);
