@@ -14,6 +14,10 @@ namespace Labyrinth.Hero
             Vector2Int heroPosition,
             Vector2Int interactionCell,
             int radius);
+        public delegate bool PriorityDungeonTargetProvider(
+            HeroModel hero,
+            out Vector2Int targetCell,
+            out string label);
 
         private const int StaminaPerNewCell = 1;
         private const int DuplicateEquipmentGoldCompensation = 5;
@@ -32,10 +36,15 @@ namespace Labyrinth.Hero
         private readonly Action<HeroModel, int> entranceKnowledgeSync;
         private readonly Action<HeroModel, int, DungeonStairsModel> downStairsOpened;
         private readonly NearbyMobInteractionCellProvider nearbyMobInteractionCellProvider;
+        private readonly PriorityDungeonTargetProvider priorityDungeonTargetProvider;
         private readonly HeroExplorationCoordinator explorationCoordinator;
         private readonly HashSet<Vector2Int> doorPathWarningPositions = new HashSet<Vector2Int>();
         private Queue<Vector2Int> returnPath = new Queue<Vector2Int>();
         private Queue<Vector2Int> doorPath = new Queue<Vector2Int>();
+        private Queue<Vector2Int> patrolPath = new Queue<Vector2Int>();
+        private Queue<Vector2Int> priorityTargetPath = new Queue<Vector2Int>();
+        private Vector2Int priorityTargetCell;
+        private string priorityTargetLabel = string.Empty;
         private CentralDoorModel targetDoor;
         private DungeonStairsModel targetStairs;
         private int nextExplorationProgressLog = ExplorationProgressLogStep;
@@ -51,6 +60,7 @@ namespace Labyrinth.Hero
             Action<HeroModel, int> entranceKnowledgeSync,
             Action<HeroModel, int, DungeonStairsModel> downStairsOpened,
             NearbyMobInteractionCellProvider nearbyMobInteractionCellProvider,
+            PriorityDungeonTargetProvider priorityDungeonTargetProvider,
             HeroExplorationCoordinator explorationCoordinator)
         {
             this.result = result;
@@ -66,6 +76,7 @@ namespace Labyrinth.Hero
             this.entranceKnowledgeSync = entranceKnowledgeSync;
             this.downStairsOpened = downStairsOpened;
             this.nearbyMobInteractionCellProvider = nearbyMobInteractionCellProvider;
+            this.priorityDungeonTargetProvider = priorityDungeonTargetProvider;
             this.explorationCoordinator = explorationCoordinator;
         }
 
@@ -87,6 +98,8 @@ namespace Labyrinth.Hero
                 if (TryPursueNearbyInteraction())
                 {
                     doorPath.Clear();
+                    patrolPath.Clear();
+                    priorityTargetPath.Clear();
                     return;
                 }
 
@@ -99,6 +112,8 @@ namespace Labyrinth.Hero
                 if (model.Position != entrancePosition && TryPursueNearbyInteraction())
                 {
                     returnPath.Clear();
+                    patrolPath.Clear();
+                    priorityTargetPath.Clear();
                     return;
                 }
 
@@ -145,6 +160,8 @@ namespace Labyrinth.Hero
             if (TryPursueNearbyInteraction())
             {
                 ReleaseExplorationTarget("nearby interaction");
+                patrolPath.Clear();
+                priorityTargetPath.Clear();
                 return;
             }
 
@@ -191,13 +208,27 @@ namespace Labyrinth.Hero
 
             if (TryFindUnrememberedNeighbor(model.Position, out var next))
             {
+                patrolPath.Clear();
+                priorityTargetPath.Clear();
                 MoveToNewCell(next);
                 return;
             }
 
             if (TryBuildPathToNearestFrontier(out var frontierPath) && frontierPath.Count > 0)
             {
+                patrolPath.Clear();
+                priorityTargetPath.Clear();
                 MoveAlongRememberedPath(frontierPath.Dequeue());
+                return;
+            }
+
+            if (TryContinuePriorityDungeonTarget() || TryBeginPriorityDungeonTargetFallback())
+            {
+                return;
+            }
+
+            if (TryContinuePatrolFallback())
+            {
                 return;
             }
 
@@ -229,6 +260,8 @@ namespace Labyrinth.Hero
         private void BeginReturnToCastle()
         {
             ReleaseExplorationTarget("return to entrance");
+            patrolPath.Clear();
+            priorityTargetPath.Clear();
             if (model.Position == entrancePosition)
             {
                 RestoreAtCastle();
@@ -329,6 +362,8 @@ namespace Labyrinth.Hero
             model.RestoreStamina();
             SetExplorationState();
             returnPath.Clear();
+            patrolPath.Clear();
+            priorityTargetPath.Clear();
             GameDebugLog.Info(
                 "Hero",
                 $"{HeroLogName} restored at entrance: stamina {staminaBefore}->{model.Stamina}/{model.MaxStamina}, state={model.State}, memory={model.Memory.RememberedCount}, gold={model.Gold}, xp={model.Experience}/{model.ExperienceForNextLevel}.");
@@ -393,6 +428,7 @@ namespace Labyrinth.Hero
 
         private void SetExplorationState()
         {
+            patrolPath.Clear();
             model.SetState(HasCentralRoomKey() || model.Memory.KnownClosedDoorCount == 0
                 ? HeroState.Exploring
                 : HeroState.SearchingKey);
@@ -621,6 +657,8 @@ namespace Labyrinth.Hero
                 }
 
                 ReleaseExplorationTarget("return to known door");
+                patrolPath.Clear();
+                priorityTargetPath.Clear();
                 doorPathWarningPositions.Remove(door.Position);
                 targetDoor = door;
                 model.SetState(HeroState.ReturningToDoor);
@@ -649,6 +687,8 @@ namespace Labyrinth.Hero
             }
 
             ReleaseExplorationTarget("return to known stairs");
+            patrolPath.Clear();
+            priorityTargetPath.Clear();
             doorPathWarningPositions.Remove(stairs.Position);
             targetDoor = null;
             targetStairs = stairs;
@@ -675,6 +715,8 @@ namespace Labyrinth.Hero
                 }
 
                 ReleaseExplorationTarget("reachable door fallback");
+                patrolPath.Clear();
+                priorityTargetPath.Clear();
                 model.Memory.RememberClosedDoor(door.Position);
                 doorPathWarningPositions.Remove(door.Position);
                 targetDoor = door;
@@ -698,6 +740,8 @@ namespace Labyrinth.Hero
             }
 
             ReleaseExplorationTarget("reachable stairs fallback");
+            patrolPath.Clear();
+            priorityTargetPath.Clear();
             model.Memory.RememberClosedDoor(stairs.Position);
             doorPathWarningPositions.Remove(stairs.Position);
             targetDoor = null;
@@ -731,8 +775,9 @@ namespace Labyrinth.Hero
                 return;
             }
 
-            if (TryBuildPathToFarthestRememberedCell(out var patrolPath) && patrolPath.Count > 0)
+            if (TryBuildPathToFarthestRememberedCell(out var newPatrolPath) && newPatrolPath.Count > 0)
             {
+                patrolPath = newPatrolPath;
                 ReleaseExplorationTarget("patrol fallback");
                 GameDebugLog.Info(
                     "Hero",
@@ -745,6 +790,114 @@ namespace Labyrinth.Hero
                 "Hero",
                 $"{HeroLogName} has no frontier and no patrol target: state={model.State}, memory={model.Memory.RememberedCount}, knownDoors={model.Memory.KnownClosedDoorCount}.");
             SetExplorationState();
+        }
+
+        private bool TryContinuePatrolFallback()
+        {
+            while (patrolPath.Count > 0)
+            {
+                var next = patrolPath.Dequeue();
+                if (next == model.Position)
+                {
+                    continue;
+                }
+
+                if (!grid.InBounds(next)
+                    || !grid.Get(next).IsWalkable
+                    || !model.Memory.IsRemembered(next)
+                    || GridDistance(model.Position, next) != 1)
+                {
+                    GameDebugLog.Warning(
+                        "Hero",
+                        $"{HeroLogName} canceled no-frontier patrol: next={GameDebugLog.Position(next)}, from={GameDebugLog.Position(model.Position)}, remaining={patrolPath.Count}, memory={model.Memory.RememberedCount}.");
+                    patrolPath.Clear();
+                    return false;
+                }
+
+                MoveAlongRememberedPath(next);
+                if (patrolPath.Count == 0)
+                {
+                    GameDebugLog.Info(
+                        "Hero",
+                        $"{HeroLogName} completed no-frontier patrol at {GameDebugLog.Position(model.Position)}, memory={model.Memory.RememberedCount}.");
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryBeginPriorityDungeonTargetFallback()
+        {
+            if (priorityDungeonTargetProvider == null
+                || !priorityDungeonTargetProvider.Invoke(model, out var target, out var label)
+                || !TryBuildRememberedPath(model.Position, target, out var path)
+                || path.Count == 0)
+            {
+                priorityTargetPath.Clear();
+                return false;
+            }
+
+            priorityTargetPath = path;
+            priorityTargetCell = target;
+            priorityTargetLabel = string.IsNullOrWhiteSpace(label) ? "priority dungeon target" : label;
+            ReleaseExplorationTarget("priority dungeon target");
+            patrolPath.Clear();
+            GameDebugLog.Info(
+                "Hero",
+                $"{HeroLogName} targets {priorityTargetLabel} after frontier exhaustion: target={GameDebugLog.Position(priorityTargetCell)}, pathSteps={priorityTargetPath.Count}, from={GameDebugLog.Position(model.Position)}, memory={model.Memory.RememberedCount}.");
+            return TryContinuePriorityDungeonTarget();
+        }
+
+        private bool TryContinuePriorityDungeonTarget()
+        {
+            if (priorityTargetPath.Count == 0)
+            {
+                return false;
+            }
+
+            if (priorityDungeonTargetProvider == null
+                || !priorityDungeonTargetProvider.Invoke(model, out var target, out var label)
+                || target != priorityTargetCell)
+            {
+                priorityTargetPath.Clear();
+                return false;
+            }
+
+            priorityTargetLabel = string.IsNullOrWhiteSpace(label) ? priorityTargetLabel : label;
+            while (priorityTargetPath.Count > 0)
+            {
+                var next = priorityTargetPath.Dequeue();
+                if (next == model.Position)
+                {
+                    continue;
+                }
+
+                if (!grid.InBounds(next)
+                    || !grid.Get(next).IsWalkable
+                    || !model.Memory.IsRemembered(next)
+                    || GridDistance(model.Position, next) != 1)
+                {
+                    GameDebugLog.Warning(
+                        "Hero",
+                        $"{HeroLogName} canceled priority dungeon target: label={priorityTargetLabel}, target={GameDebugLog.Position(priorityTargetCell)}, next={GameDebugLog.Position(next)}, from={GameDebugLog.Position(model.Position)}, remaining={priorityTargetPath.Count}, memory={model.Memory.RememberedCount}.");
+                    priorityTargetPath.Clear();
+                    return false;
+                }
+
+                MoveAlongRememberedPath(next);
+                if (priorityTargetPath.Count == 0)
+                {
+                    GameDebugLog.Info(
+                        "Hero",
+                        $"{HeroLogName} reached priority dungeon target approach: label={priorityTargetLabel}, target={GameDebugLog.Position(priorityTargetCell)}, position={GameDebugLog.Position(model.Position)}, memory={model.Memory.RememberedCount}.");
+                }
+
+                return true;
+            }
+
+            return false;
         }
 
         private void LogExplorationProgress(Vector2Int position, int gainedLevels)

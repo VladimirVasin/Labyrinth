@@ -43,6 +43,7 @@ namespace Labyrinth.Core
                 SyncHeroKnowledgeAtEntrance,
                 HandleDownStairsOpened,
                 TryGetNearbyHeroMobInteractionCell,
+                TryGetPriorityDungeonHeroTarget,
                 explorationCoordinator,
                 BuildHeroStatSeed(heroNumber, lineage.Generation));
             trainingBonus = ApplyHeroLineageTraits(hero, lineage);

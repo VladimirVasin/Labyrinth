@@ -15,7 +15,7 @@ namespace Labyrinth.Maze
         private static readonly Color VoxelIronLight = new Color(0.62f, 0.72f, 0.84f, 1f);
         private static readonly Color DungeonBlackTint = new Color(0.008f, 0.006f, 0.004f, 1f);
         private static readonly Color DungeonBoundaryTint = new Color(1.55f, 1.45f, 1.22f, 1f);
-        private const float BuiltTorchLightRadius = 2.35f;
+        private const float BuiltTorchLightRadius = DungeonLampProfile.RangeCells;
 
         private readonly Dictionary<Vector2Int, Color> staticVoxelLightByCell = new Dictionary<Vector2Int, Color>();
 
@@ -262,7 +262,7 @@ namespace Labyrinth.Maze
 
                 var t = Mathf.Clamp01(1f - distance / BuiltTorchLightRadius);
                 var falloff = t * t * (3f - 2f * t);
-                brightness = Mathf.Max(brightness, Mathf.Lerp(0.18f, 0.72f, falloff));
+                brightness = Mathf.Max(brightness, falloff);
             }
 
             return Mathf.Clamp01(brightness);

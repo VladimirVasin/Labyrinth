@@ -4,6 +4,45 @@ using UnityEngine;
 
 namespace Labyrinth.Core
 {
+    internal static class DungeonLampProfile
+    {
+        public const float BaseIntensity = 9.2f;
+        public const float RangeCells = 6.8f;
+        public const float EmissiveIntensity = 1.55f;
+        public static readonly Color LightColor = new Color(1f, 0.68f, 0.34f);
+        public static readonly Color EmissiveColor = new Color(1f, 0.58f, 0.16f);
+
+        public static Material CreateEmissiveMaterial(string materialName)
+        {
+            return VoxelVisuals.CreateEmissiveMaterial(materialName, EmissiveColor, EmissiveIntensity);
+        }
+
+        public static Light ConfigurePointLight(Light light, float cellSize)
+        {
+            light.type = LightType.Point;
+            light.color = LightColor;
+            light.range = cellSize * RangeCells;
+            light.intensity = BaseIntensity;
+            light.shadows = LightShadows.Soft;
+            light.shadowStrength = 0.34f;
+            light.shadowBias = 0.04f;
+            light.shadowNormalBias = 0.24f;
+            light.bounceIntensity = 0.55f;
+            light.renderMode = LightRenderMode.ForcePixel;
+            return light;
+        }
+
+        public static float CalculatePulse(float time)
+        {
+            return 1f + Mathf.Sin(time * 7.3f) * 0.08f + Mathf.Sin(time * 11.7f) * 0.035f;
+        }
+
+        public static float CalculateIntensity(float pulse)
+        {
+            return BaseIntensity * Mathf.Clamp(pulse, 0.88f, 1.1f);
+        }
+    }
+
     public sealed class DungeonFortificationRenderer
     {
         private readonly Dictionary<Vector2Int, GameObject> cellRoots = new Dictionary<Vector2Int, GameObject>();
@@ -29,7 +68,7 @@ namespace Labyrinth.Core
             queuedMaterial = CreateMaterial("Fortification Queued Cell", new Color(0.25f, 0.72f, 1f));
             plankMaterial = CreateMaterial("Fortification Planks", new Color(0.48f, 0.29f, 0.12f));
             beamMaterial = CreateMaterial("Fortification Beams", new Color(0.25f, 0.13f, 0.05f));
-            flameMaterial = VoxelVisuals.CreateEmissiveMaterial("Fortification Flame", new Color(1f, 0.5f, 0.12f), 1.35f);
+            flameMaterial = DungeonLampProfile.CreateEmissiveMaterial("Fortification Flame");
             workerBodyMaterial = CreateMaterial("Fortification Worker Body", new Color(0.42f, 0.34f, 0.22f));
             workerHeadMaterial = CreateMaterial("Fortification Worker Head", new Color(0.76f, 0.62f, 0.42f));
         }
@@ -168,17 +207,7 @@ namespace Labyrinth.Core
             var lightObject = new GameObject("Wall Torch Light");
             lightObject.transform.SetParent(cellRoot, false);
             lightObject.transform.position = flamePosition;
-            var light = lightObject.AddComponent<Light>();
-            light.type = LightType.Point;
-            light.color = new Color(1f, 0.68f, 0.34f);
-            light.range = mazeRenderer.CellSize * 5.15f;
-            light.intensity = 4.85f;
-            light.shadows = LightShadows.Soft;
-            light.shadowStrength = 0.24f;
-            light.shadowBias = 0.045f;
-            light.shadowNormalBias = 0.28f;
-            light.bounceIntensity = 0.35f;
-            light.renderMode = LightRenderMode.ForcePixel;
+            var light = DungeonLampProfile.ConfigurePointLight(lightObject.AddComponent<Light>(), mazeRenderer.CellSize);
             TorchLightFlicker.Attach(light, flame.transform, BuildTorchFlickerSeed(cell));
         }
 
@@ -291,7 +320,6 @@ namespace Labyrinth.Core
         private Transform flame;
         private Vector3 baseLocalPosition;
         private Vector3 baseFlameScale;
-        private float baseIntensity;
         private float baseRange;
         private float seed;
 
@@ -312,7 +340,6 @@ namespace Labyrinth.Core
             flame = flameTransform;
             baseLocalPosition = transform.localPosition;
             baseFlameScale = flame != null ? flame.localScale : Vector3.one;
-            baseIntensity = torchLight.intensity;
             baseRange = torchLight.range;
             seed = Mathf.Abs(seedValue % 10000) * 0.017f;
         }
@@ -325,20 +352,15 @@ namespace Labyrinth.Core
             }
 
             var t = Time.time + seed;
-            var fast = Mathf.Sin(t * 11.7f) * 0.5f + 0.5f;
-            var slow = Mathf.Sin(t * 3.1f + Mathf.Sin(t * 0.83f)) * 0.5f + 0.5f;
-            var flicker = Mathf.Clamp01(fast * 0.58f + slow * 0.42f);
-            torchLight.intensity = baseIntensity * Mathf.Lerp(0.74f, 1.12f, flicker);
-            torchLight.range = baseRange * Mathf.Lerp(0.88f, 1.04f, slow);
-            torchLight.color = Color.Lerp(new Color(1f, 0.48f, 0.2f), new Color(1f, 0.72f, 0.32f), flicker);
-            transform.localPosition = baseLocalPosition + new Vector3(
-                Mathf.Sin(t * 7.3f) * 0.018f,
-                Mathf.Sin(t * 9.1f) * 0.012f,
-                Mathf.Cos(t * 6.4f) * 0.018f);
+            var pulse = DungeonLampProfile.CalculatePulse(t);
+            torchLight.intensity = DungeonLampProfile.CalculateIntensity(pulse);
+            torchLight.range = baseRange;
+            torchLight.color = DungeonLampProfile.LightColor;
+            transform.localPosition = baseLocalPosition;
 
             if (flame != null)
             {
-                flame.localScale = baseFlameScale * Mathf.Lerp(0.86f, 1.08f, flicker);
+                flame.localScale = new Vector3(baseFlameScale.x, baseFlameScale.y * pulse, baseFlameScale.z);
             }
         }
     }

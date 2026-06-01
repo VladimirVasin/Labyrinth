@@ -22,6 +22,7 @@ namespace Labyrinth.Core
         private readonly Material stoneMaterial;
         private readonly Material metalMaterial;
         private readonly Material lampMaterial;
+        private readonly Material labelBackgroundMaterial;
         private readonly Material workerBodyMaterial;
         private readonly Material workerHeadMaterial;
 
@@ -42,7 +43,8 @@ namespace Labyrinth.Core
             beamMaterial = CreateMaterial("Mine Route Beams", new Color(0.22f, 0.12f, 0.05f));
             stoneMaterial = CreateMaterial("Mine Stone", new Color(0.28f, 0.29f, 0.31f));
             metalMaterial = CreateMaterial("Mine Metal", new Color(0.62f, 0.64f, 0.66f));
-            lampMaterial = VoxelVisuals.CreateEmissiveMaterial("Mine Lamp", new Color(1f, 0.5f, 0.12f), 1.35f);
+            lampMaterial = DungeonLampProfile.CreateEmissiveMaterial("Mine Lamp");
+            labelBackgroundMaterial = CreateTransparentMaterial("Mine Label Background", new Color(0.05f, 0.06f, 0.05f, 0.78f));
             workerBodyMaterial = CreateMaterial("Mine Worker Body", new Color(0.34f, 0.25f, 0.17f));
             workerHeadMaterial = CreateMaterial("Mine Worker Head", new Color(0.76f, 0.62f, 0.42f));
         }
@@ -249,8 +251,9 @@ namespace Labyrinth.Core
             CreatePart("Mine Cart", PrimitiveType.Cube, caveRoot, center + new Vector3(unit * 0.06f, unit * 0.26f, unit * 0.48f), new Vector3(unit * 0.62f, unit * 0.26f, unit * 0.42f), metalMaterial);
             CreatePart("Mine Ore Cargo", PrimitiveType.Sphere, caveRoot, center + new Vector3(unit * 0.06f, unit * 0.48f, unit * 0.48f), new Vector3(unit * 0.3f, unit * 0.16f, unit * 0.26f), accent);
             CreatePart("Mine Lamp", PrimitiveType.Sphere, caveRoot, center + new Vector3(0f, unit * 1.05f, unit * -0.42f), Vector3.one * unit * 0.13f, lampMaterial);
-            CreatePointLight("Mine Shaft Light", caveRoot, center + new Vector3(0f, unit * 1.02f, unit * -0.42f), unit * 5.4f, 6.6f, 0.18f);
+            CreatePointLight("Mine Shaft Light", caveRoot, center + new Vector3(0f, unit * 1.02f, unit * -0.42f));
             RenderMineUpgradeDetails(caveRoot, center, unit, oreType, level);
+            CreateMineWorldLabel(caveRoot, center, unit, oreType);
             AddCaveCollider(caveRootObject, cave.Center);
             return caveRootObject;
         }
@@ -296,7 +299,7 @@ namespace Labyrinth.Core
             {
                 CreatePart(oreType == OreDepositType.Iron ? "Iron Mine Build Ore" : "Gold Mine Build Ore", PrimitiveType.Sphere, caveRoot, center + new Vector3(unit * 0.46f, unit * 0.34f, unit * 0.38f), new Vector3(unit * 0.28f, unit * 0.16f, unit * 0.24f), accent);
                 CreatePart("Mine Build Lamp", PrimitiveType.Sphere, caveRoot, center + new Vector3(0f, unit * 0.86f, unit * -0.42f), Vector3.one * unit * 0.11f, lampMaterial);
-                CreatePointLight("Mine Build Light", caveRoot, center + new Vector3(0f, unit * 0.86f, unit * -0.42f), unit * 4.2f, 4.8f, 0.14f);
+                CreatePointLight("Mine Build Light", caveRoot, center + new Vector3(0f, unit * 0.86f, unit * -0.42f));
             }
 
             AddCaveCollider(caveRootObject, cave.Center);
@@ -316,7 +319,7 @@ namespace Labyrinth.Core
             CreateLocalPart("Mine Cart Wheel L", PrimitiveType.Sphere, cart, new Vector3(-unit * 0.24f, unit * 0.04f, -unit * 0.16f), Vector3.one * unit * 0.13f, metalMaterial);
             CreateLocalPart("Mine Cart Wheel R", PrimitiveType.Sphere, cart, new Vector3(unit * 0.24f, unit * 0.04f, -unit * 0.16f), Vector3.one * unit * 0.13f, metalMaterial);
             CreateLocalPart("Mine Cart Lamp", PrimitiveType.Sphere, cart, new Vector3(0f, unit * 0.34f, -unit * 0.28f), Vector3.one * unit * 0.095f, lampMaterial);
-            CreateLocalPointLight("Mine Cart Light", cart, new Vector3(0f, unit * 0.36f, -unit * 0.3f), unit * 3.6f, 3.8f, 0.08f);
+            CreateLocalPointLight("Mine Cart Light", cart, new Vector3(0f, unit * 0.36f, -unit * 0.3f));
             return cart;
         }
 
@@ -351,17 +354,7 @@ namespace Labyrinth.Core
             var lightObject = new GameObject("Mine Wall Torch Light");
             lightObject.transform.SetParent(cellRoot, false);
             lightObject.transform.position = flamePosition;
-            var light = lightObject.AddComponent<Light>();
-            light.type = LightType.Point;
-            light.color = new Color(1f, 0.68f, 0.34f);
-            light.range = mazeRenderer.CellSize * 6.2f;
-            light.intensity = 7.15f;
-            light.shadows = LightShadows.Soft;
-            light.shadowStrength = 0.24f;
-            light.shadowBias = 0.045f;
-            light.shadowNormalBias = 0.28f;
-            light.bounceIntensity = 0.48f;
-            light.renderMode = LightRenderMode.ForcePixel;
+            var light = DungeonLampProfile.ConfigurePointLight(lightObject.AddComponent<Light>(), mazeRenderer.CellSize);
             TorchLightFlicker.Attach(light, flame.transform, BuildTorchFlickerSeed(cell));
         }
 
@@ -387,7 +380,7 @@ namespace Labyrinth.Core
             CreateLocalPart("Worker Right Foot", PrimitiveType.Cube, worker, new Vector3(unit * 0.09f, unit * 0.09f, unit * 0.05f), new Vector3(unit * 0.1f, unit * 0.08f, unit * 0.17f), workerBodyMaterial);
             CreateLocalPart("Worker Head", PrimitiveType.Sphere, worker, new Vector3(0f, unit * 0.76f, 0f), Vector3.one * unit * 0.17f, workerHeadMaterial);
             CreateLocalPart("Worker Helmet Lamp", PrimitiveType.Sphere, worker, new Vector3(0f, unit * 0.8f, unit * 0.16f), Vector3.one * unit * 0.055f, lampMaterial);
-            CreateLocalPointLight("Worker Headlamp", worker, new Vector3(0f, unit * 0.82f, unit * 0.18f), mazeRenderer.CellSize * 2.7f, 2.4f, 0.05f);
+            CreateLocalPointLight("Worker Headlamp", worker, new Vector3(0f, unit * 0.82f, unit * 0.18f));
             var timber = CreateLocalPart("Worker Timber", PrimitiveType.Cube, worker, new Vector3(0f, unit * 0.46f, -unit * 0.18f), new Vector3(unit * 0.42f, unit * 0.13f, unit * 0.12f), plankMaterial);
             timber.SetActive(carryingWood);
             CreateLocalPart("Worker Pick", PrimitiveType.Cube, worker, new Vector3(unit * 0.2f, unit * 0.5f, unit * 0.08f), new Vector3(unit * 0.05f, unit * 0.52f, unit * 0.05f), beamMaterial).transform.localRotation = Quaternion.Euler(0f, 0f, 32f);
@@ -524,6 +517,66 @@ namespace Labyrinth.Core
                 accent);
         }
 
+        private void CreateMineWorldLabel(Transform caveRoot, Vector3 center, float unit, OreDepositType oreType)
+        {
+            var labelText = GetMineDisplayName(oreType);
+            var labelRoot = new GameObject("Mine Label").transform;
+            labelRoot.SetParent(caveRoot, false);
+            labelRoot.position = center + Vector3.up * unit * 2.35f;
+            labelRoot.gameObject.AddComponent<MineWorldLabel>();
+
+            var background = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            background.name = "Mine Label Background";
+            background.transform.SetParent(labelRoot, false);
+            background.transform.localPosition = Vector3.zero;
+            background.transform.localScale = new Vector3(Mathf.Clamp(1.55f + labelText.Length * 0.18f, 2.25f, 5.2f), 0.56f, 1f);
+            background.GetComponent<Renderer>().sharedMaterial = labelBackgroundMaterial;
+            var collider = background.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Object.Destroy(collider);
+            }
+
+            CreateWorldLabelText(
+                labelRoot,
+                "Mine Label Shadow",
+                labelText,
+                new Vector3(0.045f, -0.045f, -0.034f),
+                new Color(0f, 0f, 0f, 0.92f));
+            CreateWorldLabelText(
+                labelRoot,
+                "Mine Label Text",
+                labelText,
+                new Vector3(0f, 0f, -0.045f),
+                oreType == OreDepositType.Iron ? new Color(0.88f, 0.93f, 0.98f, 1f) : new Color(1f, 0.92f, 0.55f, 1f));
+        }
+
+        private static string GetMineDisplayName(OreDepositType oreType)
+        {
+            return oreType == OreDepositType.Iron ? "Железная шахта" : "Золотая шахта";
+        }
+
+        private static void CreateWorldLabelText(Transform parent, string objectName, string text, Vector3 localPosition, Color color)
+        {
+            var textObject = new GameObject(objectName);
+            textObject.transform.SetParent(parent, false);
+            textObject.transform.localPosition = localPosition;
+            var textMesh = textObject.AddComponent<TextMesh>();
+            textMesh.text = text;
+            textMesh.anchor = TextAnchor.MiddleCenter;
+            textMesh.alignment = TextAlignment.Center;
+            textMesh.fontSize = 72;
+            textMesh.characterSize = 0.085f;
+            textMesh.fontStyle = FontStyle.Bold;
+            textMesh.color = color;
+
+            var meshRenderer = textObject.GetComponent<MeshRenderer>();
+            if (meshRenderer != null)
+            {
+                meshRenderer.sortingOrder = 44;
+            }
+        }
+
         private void AddCaveCollider(GameObject caveRoot, Vector2Int centerCell)
         {
             if (caveRoot == null)
@@ -580,35 +633,20 @@ namespace Labyrinth.Core
             return part;
         }
 
-        private static Light CreatePointLight(string name, Transform parent, Vector3 position, float range, float intensity, float shadowStrength)
+        private Light CreatePointLight(string name, Transform parent, Vector3 position)
         {
             var lightObject = new GameObject(name);
             lightObject.transform.SetParent(parent, false);
             lightObject.transform.position = position;
-            return ConfigureMinePointLight(lightObject.AddComponent<Light>(), range, intensity, shadowStrength);
+            return DungeonLampProfile.ConfigurePointLight(lightObject.AddComponent<Light>(), mazeRenderer.CellSize);
         }
 
-        private static Light CreateLocalPointLight(string name, Transform parent, Vector3 localPosition, float range, float intensity, float shadowStrength)
+        private Light CreateLocalPointLight(string name, Transform parent, Vector3 localPosition)
         {
             var lightObject = new GameObject(name);
             lightObject.transform.SetParent(parent, false);
             lightObject.transform.localPosition = localPosition;
-            return ConfigureMinePointLight(lightObject.AddComponent<Light>(), range, intensity, shadowStrength);
-        }
-
-        private static Light ConfigureMinePointLight(Light light, float range, float intensity, float shadowStrength)
-        {
-            light.type = LightType.Point;
-            light.color = new Color(1f, 0.68f, 0.34f);
-            light.range = range;
-            light.intensity = intensity;
-            light.shadows = LightShadows.Soft;
-            light.shadowStrength = shadowStrength;
-            light.shadowBias = 0.045f;
-            light.shadowNormalBias = 0.28f;
-            light.bounceIntensity = 0.42f;
-            light.renderMode = LightRenderMode.ForcePixel;
-            return light;
+            return DungeonLampProfile.ConfigurePointLight(lightObject.AddComponent<Light>(), mazeRenderer.CellSize);
         }
 
         private void ResetWorkerTimberTransform(Transform timber)
@@ -657,6 +695,45 @@ namespace Labyrinth.Core
             }
 
             return material;
+        }
+
+        private static Material CreateTransparentMaterial(string materialName, Color color)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null)
+            {
+                shader = Shader.Find("Standard");
+            }
+
+            var material = new Material(shader) { name = materialName, color = color };
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", color);
+            }
+
+            if (material.HasProperty("_Color"))
+            {
+                material.SetColor("_Color", color);
+            }
+
+            material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+            material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+            material.SetInt("_ZWrite", 0);
+            material.renderQueue = (int)RenderQueue.Transparent;
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            return material;
+        }
+    }
+
+    internal sealed class MineWorldLabel : MonoBehaviour
+    {
+        private void LateUpdate()
+        {
+            var camera = Camera.main;
+            if (camera != null)
+            {
+                transform.rotation = camera.transform.rotation;
+            }
         }
     }
 }

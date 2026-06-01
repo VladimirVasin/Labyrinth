@@ -11,8 +11,6 @@ namespace Labyrinth.Hero
         private const float RotationSpeed = 720f;
         private const float WalkAnimationSpeed = 10f;
         private const float MapClickColliderHeight = 1.42f;
-        private const float LanternLightBaseIntensity = 9.2f;
-        private const float LanternLightRangeCells = 6.8f;
         private static readonly Vector3 VisualFootprintScale = new Vector3(0.78f, 0.92f, 0.78f);
 
         private static int nextLaneSerial;
@@ -253,7 +251,7 @@ namespace Labyrinth.Hero
             var leather = CreateMaterial("Knight Leather", new Color(0.22f, 0.12f, 0.05f));
             var blade = CreateMaterial("Knight Sword", new Color(0.88f, 0.9f, 0.95f));
             var shield = CreateMaterial("Knight Shield", new Color(0.7f, 0.04f, 0.05f));
-            var lantern = VoxelVisuals.CreateEmissiveMaterial("Knight Lantern", new Color(1f, 0.58f, 0.16f), 1.55f);
+            var lantern = DungeonLampProfile.CreateEmissiveMaterial("Knight Lantern");
             var selection = CreateSelectionMaterial("Hero Selection", new Color(1f, 0.82f, 0.22f, 0.36f));
 
             VoxelVisuals.CreateContactShadow(
@@ -391,12 +389,12 @@ namespace Labyrinth.Hero
                 return;
             }
 
-            var pulse = 1f + Mathf.Sin(Time.time * 7.3f) * 0.08f + Mathf.Sin(Time.time * 11.7f) * 0.035f;
+            var pulse = DungeonLampProfile.CalculatePulse(Time.time);
             lanternGlow.localScale = new Vector3(0.12f, 0.16f * pulse, 0.12f);
             lanternGlow.localRotation = Quaternion.Euler(0f, Time.time * 35f, 0f);
             if (lanternLight != null)
             {
-                lanternLight.intensity = LanternLightBaseIntensity * Mathf.Clamp(pulse, 0.88f, 1.1f);
+                lanternLight.intensity = DungeonLampProfile.CalculateIntensity(pulse);
             }
         }
 
@@ -512,18 +510,7 @@ namespace Labyrinth.Hero
             var lightObject = new GameObject("Knight Lantern Point Light");
             lightObject.transform.SetParent(parent, false);
             lightObject.transform.localPosition = localPosition;
-            var light = lightObject.AddComponent<Light>();
-            light.type = LightType.Point;
-            light.color = new Color(1f, 0.68f, 0.34f);
-            light.range = mazeRenderer.CellSize * LanternLightRangeCells;
-            light.intensity = LanternLightBaseIntensity;
-            light.shadows = LightShadows.Soft;
-            light.shadowStrength = 0.34f;
-            light.shadowBias = 0.04f;
-            light.shadowNormalBias = 0.24f;
-            light.bounceIntensity = 0.55f;
-            light.renderMode = LightRenderMode.ForcePixel;
-            return light;
+            return DungeonLampProfile.ConfigurePointLight(lightObject.AddComponent<Light>(), mazeRenderer.CellSize);
         }
 
         private Vector3 ToWorldPosition(Vector2Int gridPosition)

@@ -426,7 +426,7 @@ namespace Labyrinth.Core
                     continue;
                 }
 
-                hero.TransferToLevel(currentMaze, start, mazeRenderer, goldIngotManager, deathTokenManager, SyncHeroKnowledgeAtEntrance, HandleDownStairsOpened, TryGetNearbyHeroMobInteractionCell, explorationCoordinator);
+                hero.TransferToLevel(currentMaze, start, mazeRenderer, goldIngotManager, deathTokenManager, SyncHeroKnowledgeAtEntrance, HandleDownStairsOpened, TryGetNearbyHeroMobInteractionCell, TryGetPriorityDungeonHeroTarget, explorationCoordinator);
                 hero.SetFortifiedCellProvider(IsHeroMovementFortifiedCell);
             }
         }

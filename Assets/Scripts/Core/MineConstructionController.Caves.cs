@@ -139,6 +139,21 @@ namespace Labyrinth.Core
             return route;
         }
 
+        private IEnumerable<Vector2Int> EnumerateCaveCells(CaveInfo cave)
+        {
+            for (var x = cave.Center.x - 1; x <= cave.Center.x + 1; x++)
+            {
+                for (var y = cave.Center.y - 1; y <= cave.Center.y + 1; y++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (result.Grid.InBounds(cell) && result.Grid.Get(cell).IsWalkable)
+                    {
+                        yield return cell;
+                    }
+                }
+            }
+        }
+
         private static void AddRouteStep(List<Vector2Int> route, Vector2Int cell)
         {
             if (route.Count == 0 || route[route.Count - 1] != cell)
@@ -209,6 +224,11 @@ namespace Labyrinth.Core
         private static string GetOreTypeName(OreDepositType oreType)
         {
             return oreType == OreDepositType.Iron ? "железная" : "золотая";
+        }
+
+        private static string GetOreMineDisplayName(OreDepositType oreType)
+        {
+            return oreType == OreDepositType.Iron ? "Железная шахта" : "Золотая шахта";
         }
 
         private static string GetOreResourceName(OreDepositType oreType)

@@ -227,6 +227,17 @@ namespace Labyrinth.Core
                 && mobManager.HasInteractableMobNear(heroPosition, interactionCell, radius);
         }
 
+        private bool TryGetPriorityDungeonHeroTarget(
+            HeroModel hero,
+            out Vector2Int targetCell,
+            out string label)
+        {
+            targetCell = default;
+            label = string.Empty;
+            return mobManager != null
+                && mobManager.TryGetCentralMiniBossTarget(hero, out targetCell, out label);
+        }
+
         private string GetHeroHouseStatus()
         {
             var pendingHouses = GetPendingBuildingCount(BuildingType.HeroHouse);

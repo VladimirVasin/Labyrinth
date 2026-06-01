@@ -344,13 +344,42 @@ namespace Labyrinth.Core
             zone.State = MineZoneState.Completed;
             zone.AssignedRouteCells.Clear();
             var mineRoot = constructionRenderer.RenderMine(zone.Cave, zone.OreType, zone.Level);
+            var caveFortifiedCells = FortifyCompletedMineCave(zone);
             completedMineLightPositions.Add(zone.Cave.Center);
             RefreshTorchLight();
             ConfigureMineHud(zone, mineRoot);
             mazeRenderer.TrackExternalCellRenderer(zone.Cave.Center, constructionRenderer.GetCellRoot(zone.Cave.Center));
             lastStatus = $"{GetOreTypeName(zone.OreType)} шахта готова {GameDebugLog.Position(zone.Cave.Center)}";
             GameAudioController.Play(GameSfx.Build, mazeRenderer.GridToWorld(zone.Cave.Center), 1f);
-            GameDebugLog.Info("Mine", $"Mine completed at {GameDebugLog.Position(zone.Cave.Center)}. ore={zone.OreType}, completedZones={CountCompletedZones()}.");
+            GameDebugLog.Info("Mine", $"Mine completed at {GameDebugLog.Position(zone.Cave.Center)}. ore={zone.OreType}, caveFortifiedCells={caveFortifiedCells}, completedZones={CountCompletedZones()}.");
+        }
+
+        private int FortifyCompletedMineCave(MineZone zone)
+        {
+            if (zone == null)
+            {
+                return 0;
+            }
+
+            var newlyFortified = 0;
+            foreach (var cell in EnumerateCaveCells(zone.Cave))
+            {
+                var alreadyFortified = !fortifiedCells.Add(cell);
+                if (!alreadyFortified)
+                {
+                    newlyFortified++;
+                }
+
+                if (!alreadyFortified || cell == zone.Cave.Center)
+                {
+                    constructionRenderer.RenderFortifiedCell(cell);
+                }
+
+                mazeRenderer.TrackExternalCellRenderer(cell, constructionRenderer.GetCellRoot(cell));
+                RenderAdjacentWallReinforcements(cell);
+            }
+
+            return newlyFortified;
         }
 
         private void ConfigureMineHud(MineZone zone, GameObject mineRoot)
@@ -368,7 +397,7 @@ namespace Labyrinth.Core
 
             var completed = zone.State == MineZoneState.Completed;
             hudTarget.Configure(
-                completed ? "Шахта" : "Стройзона шахты",
+                completed ? GetOreMineDisplayName(zone.OreType) : "Стройзона шахты",
                 completed ? $"{GetOreTypeName(zone.OreType)} залежь" : $"{GetOreTypeName(zone.OreType)} шахта строится",
                 "Шахта",
                 zone.Cave.Center,

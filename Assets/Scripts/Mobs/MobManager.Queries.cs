@@ -1,3 +1,4 @@
+using Labyrinth.Hero;
 using UnityEngine;
 
 namespace Labyrinth.Mobs
@@ -32,6 +33,78 @@ namespace Labyrinth.Mobs
             }
 
             return false;
+        }
+
+        public bool TryGetCentralMiniBossTarget(HeroModel hero, out Vector2Int target, out string label)
+        {
+            target = default;
+            label = string.Empty;
+            if (hero == null
+                || hero.Memory == null
+                || !HasCentralMiniBossAlive
+                || centralMiniBoss.Model.State != MobState.Wandering
+                || result == null
+                || result.Grid == null
+                || !result.CentralRoom.IsValid
+                || !IsCentralRoomOpen())
+            {
+                return false;
+            }
+
+            var bestScore = int.MaxValue;
+            var room = result.CentralRoom;
+            for (var x = room.Min.x; x <= room.Max.x; x++)
+            {
+                for (var y = room.Min.y; y <= room.Max.y; y++)
+                {
+                    var candidate = new Vector2Int(x, y);
+                    if (!result.Grid.InBounds(candidate)
+                        || !result.Grid.Get(candidate).IsWalkable
+                        || !hero.Memory.IsRemembered(candidate))
+                    {
+                        continue;
+                    }
+
+                    var score = GridDistance(hero.Position, candidate) * 3
+                        + GridDistance(candidate, centralMiniBoss.Position);
+                    if (score >= bestScore)
+                    {
+                        continue;
+                    }
+
+                    bestScore = score;
+                    target = candidate;
+                }
+            }
+
+            if (bestScore == int.MaxValue)
+            {
+                return false;
+            }
+
+            label = centralMiniBoss.DebugName;
+            return true;
+        }
+
+        private bool IsCentralRoomOpen()
+        {
+            if (result?.CentralDoors == null || result.CentralDoors.Count == 0)
+            {
+                return true;
+            }
+
+            for (var i = 0; i < result.CentralDoors.Count; i++)
+            {
+                var door = result.CentralDoors[i];
+                if (door != null && door.Position == result.CentralRoom.EntrancePosition)
+                {
+                    return door.IsOpen;
+                }
+            }
+
+            return result.Grid != null
+                && result.Grid.InBounds(result.CentralRoom.EntrancePosition)
+                && result.Grid.Get(result.CentralRoom.EntrancePosition).IsWalkable;
         }
     }
 }
